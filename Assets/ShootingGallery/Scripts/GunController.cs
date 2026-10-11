@@ -23,6 +23,8 @@ namespace ShootingGallery
         public float gaugeWidth = 0.12f;
         public XRNode hapticNode = XRNode.RightHand;
         public LayerMask hitMask = ~0;
+        [Tooltip("エイム補正の太さ (m)。射線からこの距離までにある的にも当たる。0 で補正なし (真っすぐ線上の的だけ)")]
+        public float aimAssistRadius = 0.12f;
 
         WeaponType current;
         float nextFireTime;
@@ -130,14 +132,53 @@ namespace ShootingGallery
                 }
 
                 Vector3 end = origin + dir * def.range;
-                if (Physics.Raycast(origin, dir, out var hit, def.range, hitMask, QueryTriggerInteraction.Ignore))
+                // 弾が多いショットガンは補正を小さく (全弾に大きな補正がつくと強すぎるため)
+                float assist = def.pellets > 1 ? aimAssistRadius * 0.5f : aimAssistRadius;
+                if (TryHitTarget(origin, dir, def.range, assist, out var target, out var point))
                 {
-                    end = hit.point;
-                    var target = hit.collider.GetComponentInParent<Target>();
-                    if (target != null) target.Hit(hit.point);
+                    end = point;
+                    target.Hit(point);
                 }
+                else if (Physics.Raycast(origin, dir, out var wall, def.range, hitMask, QueryTriggerInteraction.Ignore))
+                    end = wall.point;
                 SpawnTracer(origin, end);
             }
+        }
+
+        /// <summary>
+        /// 当たる的を探す。まず細い線で調べ、外れていたら太さ assist (m) の線で、射線の近くにある的を拾う (エイム補正)。
+        /// 壁や屋台の板の向こうにある的は拾わない。
+        /// </summary>
+        bool TryHitTarget(Vector3 origin, Vector3 dir, float range, float assist, out Target target, out Vector3 point)
+        {
+            target = null;
+            point = Vector3.zero;
+            float blockDist = range;
+            if (Physics.Raycast(origin, dir, out var hit, range, hitMask, QueryTriggerInteraction.Ignore))
+            {
+                var t = hit.collider.GetComponentInParent<Target>();
+                if (t != null && t.IsUp)
+                {
+                    target = t;
+                    point = hit.point;
+                    return true;
+                }
+                blockDist = hit.distance;
+            }
+            if (assist <= 0f) return false;
+
+            // 細い線が当たった物 (壁など) より少し奥までなら、的の縁がはみ出していれば当てる
+            float best = float.MaxValue;
+            foreach (var h in Physics.SphereCastAll(origin, assist, dir, Mathf.Min(range, blockDist + 0.25f), hitMask, QueryTriggerInteraction.Ignore))
+            {
+                if (h.distance <= 0f || h.distance >= best) continue; // 0 = 発射位置ですでに重なっている物
+                var t = h.collider.GetComponentInParent<Target>();
+                if (t == null || !t.IsUp) continue;
+                best = h.distance;
+                target = t;
+                point = h.point;
+            }
+            return target != null;
         }
 
         void SpawnTracer(Vector3 from, Vector3 to)
