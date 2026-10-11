@@ -545,10 +545,10 @@ namespace ShootingGallery
             // 下段: 10点
             for (int s = 0; s < 5; s++) targets.Add(PointTarget(root, 10, Slot(0, s)));
 
-            // 中段: 10, 50, (左右に動く300), 50, 10
+            // 中段: 10, 50, (左右に動く100), 50, 10
             targets.Add(PointTarget(root, 10, Slot(1, 0)));
             targets.Add(PointTarget(root, 50, Slot(1, 1)));
-            var slider = PointTarget(root, 300, Slot(1, 2));
+            var slider = PointTarget(root, 100, Slot(1, 2));
             slider.moving = true;
             slider.moveAmplitude = 0.28f;
             slider.moveSpeed = 2.5f;
@@ -556,16 +556,16 @@ namespace ShootingGallery
             targets.Add(PointTarget(root, 50, Slot(1, 3)));
             targets.Add(PointTarget(root, 10, Slot(1, 4)));
 
-            // 上段: 100, 200, フィーバー(赤), 200, 100
+            // 上段: 50, 100, フィーバー(赤), 100, 50
             // (武器の的は WeaponDropper が全屋台にランダムで出す)
-            targets.Add(PointTarget(root, 100, Slot(2, 0)));
-            targets.Add(PointTarget(root, 200, Slot(2, 1)));
+            targets.Add(PointTarget(root, 50, Slot(2, 0)));
+            targets.Add(PointTarget(root, 100, Slot(2, 1)));
             targets.Add(FeverTarget(root, Slot(2, 2)));
-            targets.Add(PointTarget(root, 200, Slot(2, 3)));
-            targets.Add(PointTarget(root, 100, Slot(2, 4)));
+            targets.Add(PointTarget(root, 100, Slot(2, 3)));
+            targets.Add(PointTarget(root, 50, Slot(2, 4)));
 
-            // 一番上のレールを高速で往復する500点
-            var runner = PointTarget(root, 500, new Vector3(0f, 2.45f, 0.65f), 5f);
+            // 一番上のレールを高速で往復する200点 (メイン屋台で一番高い)
+            var runner = PointTarget(root, 200, new Vector3(0f, 2.45f, 0.65f), 5f);
             runner.moving = true;
             runner.moveAmplitude = 1.3f;
             runner.moveSpeed = 1.6f;
@@ -580,8 +580,8 @@ namespace ShootingGallery
             var metal = Mat("Metal", new Color(0.5f, 0.5f, 0.55f));
             var tunnelMat = Mat("Tunnel", new Color(0.85f, 0.75f, 0.2f));
 
-            BuildBelt(t, targets, "Belt_Lower", 0.95f, 0.05f, 0.5f, new[] { 10, 50, 10, 100, 10, 50 }, beltMat, slatMat, metal, tunnelMat);
-            BuildBelt(t, targets, "Belt_Upper", 1.65f, 0.4f, -0.85f, new[] { 100, 200, 50, 300, 100, 500 }, beltMat, slatMat, metal, tunnelMat);
+            BuildBelt(t, targets, "Belt_Lower", 0.95f, 0.05f, 0.5f, new[] { 100, 200, 100, 300, 100, 200 }, beltMat, slatMat, metal, tunnelMat);
+            BuildBelt(t, targets, "Belt_Upper", 1.65f, 0.4f, -0.85f, new[] { 200, 300, 200, 500, 300, 500 }, beltMat, slatMat, metal, tunnelMat);
         }
 
         void BuildBelt(Transform t, List<Target> targets, string name, float y, float z, float speed, int[] values,
@@ -662,7 +662,7 @@ namespace ShootingGallery
                 RemoveCollider(seg);
             }
 
-            int[] values = { 50, 100, 200, 50, 300, 100 };
+            int[] values = { 200, 300, 500, 200, 500, 300 };
             for (int i = 0; i < values.Length; i++)
             {
                 float a = i * Mathf.PI * 2f / values.Length;
@@ -684,9 +684,9 @@ namespace ShootingGallery
             float[] colX = { -1.05f, -0.35f, 0.35f, 1.05f };
             int[][] values =
             {
-                new[] { 50, 100, 50, 100 },
                 new[] { 100, 200, 100, 200 },
-                new[] { 200, 300, 500, 300 },
+                new[] { 200, 300, 200, 300 },
+                new[] { 300, 500, 500, 300 },
             };
             var hole = Mat("Hole", new Color(0.05f, 0.04f, 0.04f));
 
@@ -722,7 +722,7 @@ namespace ShootingGallery
 
             float[] xs = { -1.2f, -0.6f, 0f, 0.6f, 1.2f };
             float[] lengths = { 0.85f, 1.1f, 0.7f, 1.1f, 0.85f };
-            int[] values = { 50, 100, 500, 200, 50 };
+            int[] values = { 200, 300, 500, 300, 200 };
             float[] speeds = { 1.8f, 1.5f, 2.6f, 1.6f, 2.0f };
 
             for (int i = 0; i < xs.Length; i++)
@@ -752,8 +752,8 @@ namespace ShootingGallery
             Prim(PrimitiveType.Cylinder, "Pole", t, center + Vector3.up * 1.65f, new Vector3(0.06f, 0.75f, 0.06f), gold);
             RemoveCollider(Prim(PrimitiveType.Sphere, "Top", t, center + Vector3.up * 2.45f, Vector3.one * 0.18f, gold));
 
-            BuildTurntable(t, targets, "Turntable_Lower", center + Vector3.up * 0.92f, 0.75f, 0.62f, 35f, new[] { 10, 50, 100, 50, 10, 200, 50, 100 }, cloth);
-            BuildTurntable(t, targets, "Turntable_Upper", center + Vector3.up * 1.55f, 0.5f, 0.38f, -50f, new[] { 100, 300, 200, 500, 200 }, white);
+            BuildTurntable(t, targets, "Turntable_Lower", center + Vector3.up * 0.92f, 0.75f, 0.62f, 35f, new[] { 100, 200, 300, 200, 100, 500, 200, 300 }, cloth);
+            BuildTurntable(t, targets, "Turntable_Upper", center + Vector3.up * 1.55f, 0.5f, 0.38f, -50f, new[] { 300, 500, 300, 500, 300 }, white);
         }
 
         void BuildTurntable(Transform t, List<Target> targets, string name, Vector3 pos, float discRadius, float targetRadius, float speed, int[] values, Material discMat)
@@ -781,7 +781,7 @@ namespace ShootingGallery
             const float CenterY = 1.45f, Range = 0.5f, Z = 0.25f;
             var metal = Mat("Metal", new Color(0.5f, 0.5f, 0.55f));
             float[] xs = { -1.2f, -0.6f, 0f, 0.6f, 1.2f };
-            int[] values = { 50, 100, 500, 200, 50 };
+            int[] values = { 200, 300, 500, 300, 200 };
             float[] speeds = { 1.2f, 1.7f, 2.6f, 1.5f, 1.1f };
 
             for (int i = 0; i < xs.Length; i++)
@@ -807,8 +807,8 @@ namespace ShootingGallery
             var wood = Mat("Wood", new Color(0.55f, 0.36f, 0.2f));
             var tunnelMat = Mat("Tunnel", new Color(0.85f, 0.75f, 0.2f));
 
-            BuildChannel(t, targets, "Channel_Lower", 0.9f, 0.0f, 0.45f, new[] { 10, 50, 10, 100, 10, 50, 10 }, water, wood, tunnelMat);
-            BuildChannel(t, targets, "Channel_Upper", 1.5f, 0.4f, -0.7f, new[] { 50, 200, 100, 300, 50, 200 }, water, wood, tunnelMat);
+            BuildChannel(t, targets, "Channel_Lower", 0.9f, 0.0f, 0.45f, new[] { 100, 200, 100, 300, 100, 200, 100 }, water, wood, tunnelMat);
+            BuildChannel(t, targets, "Channel_Upper", 1.5f, 0.4f, -0.7f, new[] { 200, 500, 300, 500, 200, 300 }, water, wood, tunnelMat);
         }
 
         void BuildChannel(Transform t, List<Target> targets, string name, float y, float z, float speed, int[] values,
@@ -884,7 +884,7 @@ namespace ShootingGallery
             }
 
             // 的: 円の中心が円盤上のその位置に来るように、根元を TargetDiscY だけ下げて置く
-            int[] values = { 50, 100, 200, 50, 300, 100 };
+            int[] values = { 200, 300, 500, 200, 500, 300 };
             for (int i = 0; i < values.Length; i++)
             {
                 float a = i * Mathf.PI * 2f / values.Length;
@@ -902,7 +902,7 @@ namespace ShootingGallery
             float[] xs = { -1.1f, -0.37f, 0.37f, 1.1f };
             float[] ys = { 1.25f, 1.75f, 1.25f, 1.75f };
             float[] speeds = { 70f, -90f, 110f, -60f };
-            int[][] values = { new[] { 10, 100 }, new[] { 50, 200 }, new[] { 100, 300 }, new[] { 50, 500 } };
+            int[][] values = { new[] { 100, 300 }, new[] { 200, 500 }, new[] { 300, 500 }, new[] { 200, 500 } };
 
             for (int i = 0; i < xs.Length; i++)
             {
