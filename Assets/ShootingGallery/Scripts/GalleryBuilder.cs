@@ -191,6 +191,7 @@ namespace ShootingGallery
             BuildUfo();
             var bonusStage = BuildBonusStage();
             var sniper = BuildSniperChallenge();
+            var machineGunChallenge = BuildMachineGunChallenge();
             LogStep("武器の的 / UFO", step);
 
             // ---- 5. ゲーム開始 ----
@@ -203,6 +204,7 @@ namespace ShootingGallery
             gm.feverStalls = feverStalls;
             gm.bonusStage = bonusStage;
             gm.sniper = sniper;
+            gm.machineGunChallenge = machineGunChallenge;
             gm.stallRadius = stallRadius;
             gm.startTarget = startTarget;
             gm.hudText = hudText;
@@ -474,10 +476,9 @@ namespace ShootingGallery
 
             if (gimmick == Gimmick.Classic)
             {
-                // ひな壇とレールも外観に含めておくと、準備中でも完成形に近く見える
+                // ひな壇も外観に含めておくと、準備中でも完成形に近く見える
                 for (int i = 0; i < TierHeights.Length; i++)
                     Prim(PrimitiveType.Cube, $"Tier_{i + 1}", t, new Vector3(0f, TierHeights[i] / 2f, TierZ[i]), new Vector3(3.0f, TierHeights[i], 0.25f), cloth);
-                Prim(PrimitiveType.Cube, "TopRail", t, new Vector3(0f, 2.43f, 0.65f), new Vector3(3.2f, 0.03f, 0.08f), Mat("Metal", new Color(0.5f, 0.5f, 0.55f)));
             }
             return t;
         }
@@ -510,34 +511,37 @@ namespace ShootingGallery
             return stall;
         }
 
-        /// <summary>カウンター・奥の壁・柱・屋根・幕・提灯・看板。どの屋台も共通。</summary>
-        void BuildStallFrame(Transform t, Material cloth, string sign)
+        /// <summary>カウンター・奥の壁・柱・屋根・幕・提灯・看板。どの屋台も共通。wide = 横幅の倍率 (マシンガンチャレンジの横長の屋台用)</summary>
+        void BuildStallFrame(Transform t, Material cloth, string sign, float wide = 1f)
         {
             var wood = Mat("Wood", new Color(0.55f, 0.36f, 0.2f));
             var woodDark = Mat("Wood_Dark", new Color(0.25f, 0.16f, 0.1f));
             var white = Mat("Cloth_White", new Color(0.92f, 0.9f, 0.85f));
 
-            Prim(PrimitiveType.Cube, "Counter", t, new Vector3(0f, 0.5f, -1.2f), new Vector3(2.4f, 1.0f, 0.4f), wood);
-            Prim(PrimitiveType.Cube, "CounterTop", t, new Vector3(0f, 1.02f, -1.2f), new Vector3(2.5f, 0.05f, 0.5f), woodDark);
+            Prim(PrimitiveType.Cube, "Counter", t, new Vector3(0f, 0.5f, -1.2f), new Vector3(2.4f * wide, 1.0f, 0.4f), wood);
+            Prim(PrimitiveType.Cube, "CounterTop", t, new Vector3(0f, 1.02f, -1.2f), new Vector3(2.5f * wide, 0.05f, 0.5f), woodDark);
 
-            Prim(PrimitiveType.Cube, "BackWall", t, new Vector3(0f, 1.4f, 0.8f), new Vector3(3.6f, 2.8f, 0.08f), white);
-            foreach (var p in new[] { new Vector3(-1.7f, 0f, -0.9f), new Vector3(1.7f, 0f, -0.9f), new Vector3(-1.7f, 0f, 0.75f), new Vector3(1.7f, 0f, 0.75f) })
+            float px = 1.7f * wide; // 柱の位置
+            Prim(PrimitiveType.Cube, "BackWall", t, new Vector3(0f, 1.4f, 0.8f), new Vector3(3.6f * wide, 2.8f, 0.08f), white);
+            foreach (var p in new[] { new Vector3(-px, 0f, -0.9f), new Vector3(px, 0f, -0.9f), new Vector3(-px, 0f, 0.75f), new Vector3(px, 0f, 0.75f) })
                 Prim(PrimitiveType.Cylinder, "Pillar", t, p + Vector3.up * 1.4f, new Vector3(0.1f, 1.4f, 0.1f), woodDark);
             // 屋根と看板は当たり判定なし (空の UFO を狙う弾をさえぎらないように)
-            Prim(PrimitiveType.Cube, "Roof", t, new Vector3(0f, 2.8f, -0.05f), new Vector3(3.7f, 0.08f, 1.8f), woodDark, false);
+            Prim(PrimitiveType.Cube, "Roof", t, new Vector3(0f, 2.8f, -0.05f), new Vector3(3.7f * wide, 0.08f, 1.8f), woodDark, false);
 
-            for (int i = 0; i < 8; i++)
-                RemoveCollider(Prim(PrimitiveType.Cube, $"Awning_{i}", t, new Vector3(-1.575f + i * 0.45f, 2.58f, -0.95f), new Vector3(0.45f, 0.38f, 0.04f), i % 2 == 0 ? cloth : white));
+            int awnings = Mathf.Max(2, Mathf.RoundToInt(8 * wide));
+            float awningW = 3.6f * wide / awnings; // 幕は奥の壁と同じ幅に並べる (普通の屋台は 0.45m × 8枚)
+            for (int i = 0; i < awnings; i++)
+                RemoveCollider(Prim(PrimitiveType.Cube, $"Awning_{i}", t, new Vector3(-1.8f * wide + (i + 0.5f) * awningW, 2.58f, -0.95f), new Vector3(awningW, 0.38f, 0.04f), i % 2 == 0 ? cloth : white));
 
-            foreach (float x in new[] { -1.7f, 1.7f })
+            foreach (float x in new[] { -px, px })
                 RemoveCollider(Prim(PrimitiveType.Sphere, "Lantern", t, new Vector3(x, 2.2f, -1.0f), new Vector3(0.28f, 0.36f, 0.28f), LanternMat()));
 
-            Prim(PrimitiveType.Cube, "SignBoard", t, new Vector3(0f, 3.15f, -0.9f), new Vector3(2.6f, 0.55f, 0.06f), Mat("Sign", new Color(0.1f, 0.08f, 0.06f)), false);
+            Prim(PrimitiveType.Cube, "SignBoard", t, new Vector3(0f, 3.15f, -0.9f), new Vector3(2.6f * wide, 0.55f, 0.06f), Mat("Sign", new Color(0.1f, 0.08f, 0.06f)), false);
             MakeText(t, "SignText", sign, new Vector3(0f, 3.15f, -0.94f), 0.22f, new Color(1f, 0.85f, 0.35f));
         }
 
         // ---- メイン: ひな壇 (特殊な的はここにだけある) ----
-        // (ひな壇とレールは BuildStallShell で作成済み)
+        // (ひな壇は BuildStallShell で作成済み)
         void BuildClassic(Transform root, List<Target> targets)
         {
             Vector3 Slot(int tier, int s) => new Vector3(SlotX[s], TierHeights[tier], TierZ[tier]);
@@ -563,13 +567,6 @@ namespace ShootingGallery
             targets.Add(FeverTarget(root, Slot(2, 2)));
             targets.Add(PointTarget(root, 100, Slot(2, 3)));
             targets.Add(PointTarget(root, 50, Slot(2, 4)));
-
-            // 一番上のレールを高速で往復する200点 (メイン屋台で一番高い)
-            var runner = PointTarget(root, 200, new Vector3(0f, 2.45f, 0.65f), 5f);
-            runner.moving = true;
-            runner.moveAmplitude = 1.3f;
-            runner.moveSpeed = 1.6f;
-            targets.Add(runner);
         }
 
         // ---- ベルトコンベアー: 上下2本のベルトが逆向きに流れる ----
@@ -869,29 +866,30 @@ namespace ShootingGallery
 
             var disc = Prim(PrimitiveType.Cylinder, "Disc", wheel, new Vector3(0f, 0f, 0.03f), new Vector3(Radius * 2f, 0.02f, Radius * 2f), white);
             disc.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-            for (int k = 0; k < 8; k++) // 放射状の縞模様
+            for (int k = 0; k < 8; k++) // 放射状の縞模様 (中心で重なる板は少しずつ手前にずらして、ちらつかないようにする)
             {
-                var stripe = Prim(PrimitiveType.Cube, "Stripe", wheel, new Vector3(0f, 0f, 0.005f), new Vector3(Radius * 2f - 0.05f, 0.12f, 0.01f), k % 2 == 0 ? cloth : gold, false);
+                var stripe = Prim(PrimitiveType.Cube, "Stripe", wheel, new Vector3(0f, 0f, 0.005f - k * 0.003f), new Vector3(Radius * 2f - 0.05f, 0.12f, 0.01f), k % 2 == 0 ? cloth : gold, false);
                 stripe.transform.localRotation = Quaternion.Euler(0f, 0f, k * 22.5f);
             }
             const int RimSegments = 24;
             for (int i = 0; i < RimSegments; i++)
             {
                 float a = i * Mathf.PI * 2f / RimSegments;
-                var seg = Prim(PrimitiveType.Cube, "Rim", wheel, new Vector3(Mathf.Cos(a), Mathf.Sin(a), 0f) * Radius,
+                // となりの節と重なる端がちらつかないよう、1つおきに少し手前へずらす
+                var seg = Prim(PrimitiveType.Cube, "Rim", wheel, new Vector3(Mathf.Cos(a), Mathf.Sin(a), 0f) * Radius + Vector3.back * (i % 2 * 0.003f),
                                new Vector3(0.04f, 2f * Mathf.PI * Radius / RimSegments + 0.01f, 0.06f), gold, false);
                 seg.transform.localRotation = Quaternion.Euler(0f, 0f, a * Mathf.Rad2Deg);
             }
 
-            // 的: 円の中心が円盤上のその位置に来るように、根元を TargetDiscY だけ下げて置く
+            // 的: 円の中心が円盤上のその位置に来るように、根元を TargetDiscY だけ下げて置く (縞模様より手前)
             int[] values = { 200, 300, 500, 200, 500, 300 };
             for (int i = 0; i < values.Length; i++)
             {
                 float a = i * Mathf.PI * 2f / values.Length;
                 var pos = new Vector3(Mathf.Cos(a), Mathf.Sin(a), 0f) * 0.62f;
-                targets.Add(PointTarget(wheel, values[i], pos + new Vector3(0f, -TargetDiscY, -0.03f)));
+                targets.Add(PointTarget(wheel, values[i], pos + new Vector3(0f, -TargetDiscY, -0.04f)));
             }
-            targets.Add(PointTarget(wheel, 500, new Vector3(0f, -TargetDiscY, -0.03f))); // 真ん中は500点
+            targets.Add(PointTarget(wheel, 500, new Vector3(0f, -TargetDiscY, -0.04f))); // 真ん中は500点
         }
 
         // ---- 回転扉: くるくる回る板の表と裏に的。板が横を向いた瞬間は当てにくい ----
@@ -965,7 +963,7 @@ namespace ShootingGallery
 
             // 武器の的の見た目 (箱 + 文字)。普通の的の「顔」と付け替えて使い回す。同時に出るのは最大2個
             var looks = new List<GameObject>();
-            foreach (var kind in new[] { TargetKind.MachineGun, TargetKind.Shotgun, TargetKind.Bomb, TargetKind.Explosive, TargetKind.BlueOrb, TargetKind.Sniper })
+            foreach (var kind in new[] { TargetKind.MachineGun, TargetKind.Shotgun, TargetKind.Bomb, TargetKind.Explosive, TargetKind.BlueOrb, TargetKind.Sniper, TargetKind.MachineGunChallenge })
                 for (int i = 0; i < 2; i++)
                     looks.Add(WeaponLook(go.transform, kind));
 
@@ -1028,6 +1026,24 @@ namespace ShootingGallery
                 Prim(PrimitiveType.Cube, "CrossH", look, c + new Vector3(0f, 0.02f, -0.026f), new Vector3(0.2f, 0.012f, 0.002f), red, false);
                 Prim(PrimitiveType.Cube, "CrossV", look, c + new Vector3(0f, 0.02f, -0.026f), new Vector3(0.012f, 0.2f, 0.002f), red, false);
                 MakeText(look, "Label", "SNIPER", c + new Vector3(0f, -0.105f, -0.025f), 0.05f, Color.white);
+                return look.gameObject;
+            }
+
+            if (kind == TargetKind.MachineGunChallenge)
+            {
+                // マシンガンチャレンジの的: 紺の板に小さな金の的がずらりと並び、「MG CHALLENGE」の文字
+                var c = new Vector3(0f, TargetDiscY, 0f);
+                Prim(PrimitiveType.Cube, "Plate", look, c, new Vector3(0.3f, 0.28f, 0.04f),
+                     Mat("MgChallenge_Plate", new Color(0.08f, 0.14f, 0.4f), new Color(0.03f, 0.08f, 0.3f)));
+                var dot = Mat("MgChallenge_Gold", new Color(1f, 0.8f, 0.15f), new Color(1.2f, 0.85f, 0.1f));
+                for (int row = 0; row < 3; row++)
+                    for (int column = 0; column < 4; column++)
+                    {
+                        var d = Prim(PrimitiveType.Cylinder, "Dot", look, c + new Vector3(-0.09f + column * 0.06f + (row % 2) * 0.015f, 0.095f - row * 0.05f, -0.022f),
+                                     new Vector3(0.035f, 0.002f, 0.035f), dot, false);
+                        d.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+                    }
+                MakeText(look, "Label", "MG CHALLENGE", c + new Vector3(0f, -0.09f, -0.025f), 0.04f, Color.white);
                 return look.gameObject;
             }
 
@@ -1098,14 +1114,18 @@ namespace ShootingGallery
             }
 
             // ---- 底の大きな的 (上を向いて寝かせてある。当てても倒れず揺れるだけ) ----
+            // 当たると中心を軸に傾くので、傾いた端が床に埋まらない高さまで浮かせておく
+            const float BigWobbleDeg = 10f;
+            float floatHeight = TargetDiameter / 2f * Mathf.Sin(BigWobbleDeg * Mathf.Deg2Rad) + 0.04f;
             var root = Group(room, "BigTarget");
-            root.localPosition = new Vector3(0f, -PitDepth + 0.02f, 0f);
+            root.localPosition = new Vector3(0f, -PitDepth + floatHeight, 0f);
             root.localRotation = Quaternion.Euler(90f, 0f, 0f); // 的の表 (-Z) を真上に向ける。文字の上はメイン屋台側
             var target = root.gameObject.AddComponent<Target>();
             target.kind = TargetKind.BigBonus;
             target.points = 100;
             target.manualControl = true;
             target.stayUpOnHit = true;
+            target.hitWobbleDeg = BigWobbleDeg;
             var pivot = Group(root, "Pivot");
             target.visual = pivot;
             var blue = Mat("Target_BigBlue", new Color(0.15f, 0.4f, 1f), new Color(0.05f, 0.15f, 0.5f));
@@ -1142,15 +1162,19 @@ namespace ShootingGallery
         }
 
         /// <summary>
-        /// スナイパーチャレンジの遠くの大きな的。宙に浮かぶ金と赤の的 + 光る輪 + 「3000」。
+        /// スナイパーチャレンジの遠くの大きな的。宙に浮かぶ赤と白の縞の的 (真ん中ほど高い点数) + 光る輪。
         /// 編集中はメイン屋台の奥の遠くに置いておく (再生時は隠れていて、チャレンジのたびに SniperChallenge が動かす)。
         /// </summary>
         SniperChallenge BuildSniperChallenge()
         {
-            const float Diameter = 2.2f;
             var go = new GameObject("SniperChallenge");
             go.SetActive(false);
             go.transform.SetParent(world, false);
+            // 輪の半径と点数は SniperChallenge の設定を使う (点数の判定と見た目をそろえる)
+            var challenge = go.AddComponent<SniperChallenge>();
+            float[] radii = challenge.ringRadii;
+            int[] ringPoints = challenge.ringPoints;
+            float Diameter = radii[radii.Length - 1] * 2f;
 
             var root = Group(go.transform, "FarTarget");
             root.localPosition = new Vector3(0f, 3.5f, 22f);
@@ -1160,14 +1184,30 @@ namespace ShootingGallery
             targetRoot.localPosition = new Vector3(0f, -Diameter / 2f, 0f);
             var target = targetRoot.gameObject.AddComponent<Target>();
             target.kind = TargetKind.SniperBig;
-            target.points = 3000;
+            target.points = ringPoints[0]; // 実際の点数は当たった所で GameManager が決める
             target.manualControl = true;
             var pivot = Group(targetRoot, "Pivot");
             target.visual = pivot;
             var gold = Mat("Sniper_Gold", new Color(1f, 0.75f, 0.15f), new Color(0.9f, 0.55f, 0.05f));
             var red = Mat("Sniper_BigRed", new Color(1f, 0.12f, 0.1f), new Color(1.1f, 0.08f, 0.05f));
-            Bullseye(pivot, Diameter / 2f, Diameter, red, Mat("Target_White", Color.white), gold);
-            MakeText(pivot, "Label", "3000", new Vector3(0f, Diameter / 2f, -0.03f), 0.28f, new Color(0.15f, 0.05f, 0.05f));
+            var white = Mat("Target_White", Color.white);
+
+            // 外側から赤・白・赤…の縞。真ん中だけ金。内側の円盤ほど手前に重ねる
+            float cy = Diameter / 2f;
+            for (int i = radii.Length - 1; i >= 0; i--)
+            {
+                int fromOuter = radii.Length - 1 - i;
+                var mat = i == 0 ? gold : fromOuter % 2 == 0 ? red : white;
+                var disc = Disc(pivot, $"Ring_{ringPoints[i]}", cy, radii[i] * 2f, -0.006f * fromOuter, mat);
+                if (i == radii.Length - 1) disc.AddComponent<BoxCollider>();
+
+                // 点数の数字: 真ん中は中央、外の輪は帯の上側に置く
+                float labelY = i == 0 ? 0f : (radii[i] + radii[i - 1]) / 2f;
+                float bandWidth = i == 0 ? radii[0] : radii[i] - radii[i - 1];
+                var textColor = mat == red ? Color.white : new Color(0.15f, 0.05f, 0.05f);
+                MakeText(pivot, $"Label_{ringPoints[i]}", ringPoints[i].ToString(), new Vector3(0f, cy + labelY, -0.03f),
+                         Mathf.Min(0.24f, bandWidth * 0.7f), textColor);
+            }
 
             // 飾り: 的のまわりの光る輪と、照準の目盛り (当たり判定なし)
             var glow = Mat("Sniper_Glow", new Color(1f, 0.3f, 0.3f), new Color(2f, 0.3f, 0.25f), true);
@@ -1179,10 +1219,115 @@ namespace ShootingGallery
             }
             MakeText(root, "Title", "SNIPER CHALLENGE", new Vector3(0f, Diameter / 2f + 0.75f, 0f), 0.3f, new Color(1f, 0.85f, 0.3f));
 
-            var challenge = go.AddComponent<SniperChallenge>();
             challenge.root = root;
             challenge.bigTarget = target;
             root.gameObject.SetActive(false); // チャレンジの時だけ出る
+            go.SetActive(true);
+            return challenge;
+        }
+
+        /// <summary>
+        /// マシンガンチャレンジの横長の屋台 (普通の屋台の 1.8 倍の幅)。3段の棚にカップがすき間なく 26 個ずつ並ぶ (全部 100 点)。
+        /// チャレンジのたびに、ランダムな3個のカップが爆弾に変わる (MachineGunChallenge.bombLooks の数)。
+        /// カップは撃たれると棚の後ろへ弾き飛ばされて床まで落ちる。屋台は隠れた状態で作り、チャレンジのたびに
+        /// MachineGunChallenge が撃った屋台の方向に置いてせり上げる。
+        /// </summary>
+        MachineGunChallenge BuildMachineGunChallenge()
+        {
+            const float Wide = 1.8f;
+            const int CupsPerShelf = 26;
+            const float CupSpacing = 0.17f;             // カップどうしの間隔 (m)。カップの縁の直径は 0.132 なので、すき間は 4cm くらい
+            const int BombCount = 3;                    // 毎回まぎれこむ爆弾の数
+            const float ShelfHalfWidth = CupSpacing * (CupsPerShelf - 1) / 2f + 0.15f; // 棚はカップが並ぶ幅に合わせる
+            float[] shelfY = { 1.15f, 1.5f, 1.85f };   // 棚板の中心の高さ (手前ほど低い)
+            float[] shelfZ = { -0.75f, -0.25f, 0.25f }; // 棚板の奥行きの位置 (奥の壁は 0.8)
+
+            var go = new GameObject("MachineGunChallenge");
+            go.SetActive(false);
+            go.transform.SetParent(world, false);
+            var challenge = go.AddComponent<MachineGunChallenge>();
+
+            var t = Group(go.transform, "Stall_MachineGunChallenge");
+            t.localPosition = new Vector3(0f, 0f, stallRadius); // 仮の置き場所 (再生時は MachineGunChallenge が置き直す)
+            var cloth = Mat("Cloth_MgChallenge", new Color(0.12f, 0.2f, 0.55f));
+            BuildStallFrame(t, cloth, "MACHINE GUN CHALLENGE", Wide);
+
+            // 棚: 板と細い脚だけ (カップが板の後ろへ落ちていくのが見えるように、下はふさがない)
+            var wood = Mat("Wood", new Color(0.55f, 0.36f, 0.2f));
+            var woodDark = Mat("Wood_Dark", new Color(0.25f, 0.16f, 0.1f));
+            for (int s = 0; s < shelfY.Length; s++)
+            {
+                Prim(PrimitiveType.Cube, $"Shelf_{s + 1}", t, new Vector3(0f, shelfY[s], shelfZ[s]), new Vector3(ShelfHalfWidth * 2f, 0.04f, 0.24f), wood);
+                foreach (float x in new[] { -ShelfHalfWidth + 0.1f, 0f, ShelfHalfWidth - 0.1f })
+                    Prim(PrimitiveType.Cube, "Leg", t, new Vector3(x, shelfY[s] / 2f, shelfZ[s] + 0.08f), new Vector3(0.05f, shelfY[s], 0.05f), woodDark, false);
+            }
+
+            // カップ: 紙コップ風 (色つきの胴 + 白い帯と縁 + 暗い中)。色は順番に変える
+            var cupColors = new[]
+            {
+                Mat("Cup_Red", new Color(0.9f, 0.15f, 0.15f)), Mat("Cup_Blue", new Color(0.2f, 0.45f, 1f)),
+                Mat("Cup_Yellow", new Color(1f, 0.8f, 0.15f)), Mat("Cup_Green", new Color(0.2f, 0.75f, 0.3f))
+            };
+            var white = Mat("Target_White", Color.white);
+            var inside = Mat("Cup_Inside", new Color(0.25f, 0.2f, 0.18f));
+            var targets = new List<Target>();
+            for (int s = 0; s < shelfY.Length; s++)
+            {
+                float top = shelfY[s] + 0.02f;
+                float shift = s % 2 == 1 ? CupSpacing * 0.25f : -CupSpacing * 0.25f; // 段ごとに少しずらす
+                for (int c = 0; c < CupsPerShelf; c++)
+                {
+                    var root = Group(t, $"Cup_{s + 1}_{c + 1}");
+                    root.localPosition = new Vector3((c - (CupsPerShelf - 1) / 2f) * CupSpacing + shift, top, shelfZ[s]);
+                    var target = root.gameObject.AddComponent<Target>();
+                    target.kind = TargetKind.MachineGunChallengeTarget;
+                    target.points = 100;
+                    target.manualControl = true;
+                    target.knockOffOnHit = true;
+                    target.knockDropHeight = top;                    // 床まで落ちる
+                    target.knockMaxBack = 0.8f - 0.1f - shelfZ[s];    // 奥の壁の手前まで
+                    var pivot = Group(root, "Pivot");
+                    target.visual = pivot;
+                    // カップの見た目は「顔」にまとめる (爆弾に変わる時は、ここを隠して爆弾の見た目を付ける)
+                    var cup = Group(pivot, "Cup");
+                    target.face = cup.gameObject;
+
+                    Prim(PrimitiveType.Cylinder, "Body", cup, new Vector3(0f, 0.085f, 0f), new Vector3(0.12f, 0.085f, 0.12f), cupColors[(s + c) % cupColors.Length]);
+                    Prim(PrimitiveType.Cylinder, "Band", cup, new Vector3(0f, 0.09f, 0f), new Vector3(0.123f, 0.012f, 0.123f), white, false);
+                    Prim(PrimitiveType.Cylinder, "Rim", cup, new Vector3(0f, 0.172f, 0f), new Vector3(0.132f, 0.008f, 0.132f), white, false);
+                    Prim(PrimitiveType.Cylinder, "Inside", cup, new Vector3(0f, 0.178f, 0f), new Vector3(0.11f, 0.002f, 0.11f), inside, false);
+                    target.SetAvailable(false); // チャレンジの時だけ出る
+                    targets.Add(target);
+                }
+            }
+
+            // カップは Stall.targets に入れない (沈む時にカップを消さず、乗せたまま沈めるため)
+            var stall = t.gameObject.AddComponent<Stall>();
+            stall.targets = new Target[0];
+            challenge.stall = stall;
+            challenge.targets = targets.ToArray();
+
+            // 爆弾の見た目 (カップと同じくらいの大きさの黒い爆弾 + 赤い帯 + 導火線 + 火花)。根元 (棚の上) が原点
+            var bombLooks = new GameObject[BombCount];
+            for (int i = 0; i < BombCount; i++)
+            {
+                var look = Group(go.transform, $"Look_Bomb_{i}");
+                const float R = 0.075f; // 爆弾の半径
+                Prim(PrimitiveType.Sphere, "BombBody", look, new Vector3(0f, R, 0f), Vector3.one * R * 2f, Mat("Explosive_Body", new Color(0.08f, 0.08f, 0.1f)));
+                var band = Prim(PrimitiveType.Cylinder, "Band", look, new Vector3(0f, R, 0f), new Vector3(R * 2.05f, 0.012f, R * 2.05f),
+                                Mat("Explosive_Band", new Color(0.9f, 0.1f, 0.05f), new Color(0.8f, 0.05f, 0f)), false);
+                band.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+                Prim(PrimitiveType.Cylinder, "Cap", look, new Vector3(0f, R * 2f, 0f), new Vector3(0.04f, 0.012f, 0.04f), Mat("Gun_Metal", new Color(0.18f, 0.18f, 0.2f)), false);
+                var fuse = Prim(PrimitiveType.Cylinder, "Fuse", look, new Vector3(0.012f, R * 2f + 0.03f, 0f), new Vector3(0.01f, 0.03f, 0.01f),
+                                Mat("Rope", new Color(0.85f, 0.8f, 0.65f)), false);
+                fuse.transform.localRotation = Quaternion.Euler(0f, 0f, -25f);
+                Prim(PrimitiveType.Sphere, "Spark", look, new Vector3(0.028f, R * 2f + 0.06f, 0f), Vector3.one * 0.035f,
+                     Mat("Explosive_Spark", new Color(1f, 0.85f, 0.3f), new Color(2f, 1.4f, 0.3f)), false);
+                look.gameObject.SetActive(false);
+                bombLooks[i] = look.gameObject;
+            }
+            challenge.bombLooks = bombLooks;
+            t.gameObject.SetActive(false); // チャレンジの時だけせり上がる
             go.SetActive(true);
             return challenge;
         }

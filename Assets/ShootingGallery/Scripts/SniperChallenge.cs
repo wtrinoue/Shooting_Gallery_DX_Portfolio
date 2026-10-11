@@ -25,6 +25,12 @@ namespace ShootingGallery
         public float bobAmplitude = 0.15f;
         public float bobSpeed = 1.2f;
 
+        [Header("Score Rings (真ん中ほど高い)")]
+        [Tooltip("各輪の外側の半径 (m)。真ん中から順に。GalleryBuilder はこの半径で縞模様を作る")]
+        public float[] ringRadii = { 0.22f, 0.5f, 0.8f, 1.1f };
+        [Tooltip("各輪の点数。ringRadii と同じ順 (真ん中から)")]
+        public int[] ringPoints = { 3000, 2000, 1000, 500 };
+
         [Header("Timing")]
         [Tooltip("撃たずにこの秒数たつと失敗")]
         public float timeLimit = 10f;
@@ -38,6 +44,20 @@ namespace ShootingGallery
 
         public bool IsActive { get; private set; }
         public float TimeLeft => IsActive ? Mathf.Max(0f, timeLimit - (Time.time - startTime)) : 0f;
+        /// <summary>真ん中に当てた時の点数</summary>
+        public int MaxPoints => ringPoints.Length > 0 ? ringPoints[0] : 0;
+
+        /// <summary>的に当たった所 (ワールド座標) の点数。的の中心からの距離で決まる</summary>
+        public int PointsAt(Vector3 worldPoint)
+        {
+            if (ringPoints.Length == 0) return 0;
+            // root は的の中心にあり、的の面は root の XY 平面 (撃たれた瞬間はまだ倒れていない)
+            Vector3 p = root.InverseTransformPoint(worldPoint);
+            float r = new Vector2(p.x, p.y).magnitude;
+            for (int i = 0; i < ringPoints.Length && i < ringRadii.Length; i++)
+                if (r <= ringRadii[i]) return ringPoints[i];
+            return ringPoints[ringPoints.Length - 1]; // 当たり判定の四角の角 (円の外) も一番外の輪とする
+        }
 
         float startTime;
         Vector3 basePos;

@@ -2,7 +2,7 @@ using UnityEngine;
 
 namespace ShootingGallery
 {
-    public enum TargetKind { Normal, MachineGun, Shotgun, Bomb, Fever, Start, Ufo, Explosive, BlueOrb, BigBonus, Sniper, SniperBig }
+    public enum TargetKind { Normal, MachineGun, Shotgun, Bomb, Fever, Start, Ufo, Explosive, BlueOrb, BigBonus, Sniper, SniperBig, MachineGunChallenge, MachineGunChallengeTarget }
 
     /// <summary>
     /// 的。撃たれると後ろに倒れて消え、一定時間後に起き上がる。
@@ -27,6 +27,19 @@ namespace ShootingGallery
         public bool stayUpOnHit;
         [Tooltip("stayUpOnHit の時、次に当たりとして数えるまでの間隔 (ショットガンの散弾で一度に何回も数えないように)")]
         public float multiHitInterval = 0.15f;
+        [Tooltip("stayUpOnHit の時、当たってぐらっと揺れる角度 (度)")]
+        public float hitWobbleDeg = 18f;
+        [Header("Knock Off (台に置いたカップ用)")]
+        [Tooltip("ONなら当たっても倒れず、後ろへ弾き飛ばされ、くるくる回りながら台の後ろへ落ちる")]
+        public bool knockOffOnHit;
+        [Tooltip("後ろへ飛ぶ速さ (m/秒)")]
+        public float knockBackSpeed = 1.1f;
+        [Tooltip("上へ跳ねる速さ (m/秒)")]
+        public float knockUpSpeed = 1.2f;
+        [Tooltip("後ろへ動ける最大の距離 (m)。奥の壁を突き抜けないように、そこからは壁ぞいに落ちる")]
+        public float knockMaxBack = 0.4f;
+        [Tooltip("根元からどれだけ下まで落ちたら消えるか (m)。台の高さにすると床まで落ちる")]
+        public float knockDropHeight = 1f;
 
         /// <summary>的が起き上がり始めた瞬間に呼ばれる (WeaponDropper が武器の的に化けさせるのに使う)</summary>
         public static event System.Action<Target> Rising;
@@ -51,12 +64,17 @@ namespace ShootingGallery
         float respawnTimer;
         float lowerTimer;
         float nextMultiHitTime;
+        // 弾き飛ばされている間の状態 (knockOffOnHit)
+        bool knocking;
+        float knockTime;
+        Vector3 knockVel, knockStart, knockBackDir, knockSpinAxis, knockHome;
+        float knockSpin, knockFloorY;
 
         public bool IsUp => up && available;
         /// <summary>見た目が表示されているか (倒れるアニメーション中も true)</summary>
         public bool IsVisible => visual != null && visual.gameObject.activeSelf;
         bool Animating => !Mathf.Approximately(angle, targetAngle);
-        public bool CanRaise => manualControl && available && !up && !Animating && gameObject.activeInHierarchy;
+        public bool CanRaise => manualControl && available && !up && !Animating && !knocking && gameObject.activeInHierarchy;
 
         void Awake()
         {
@@ -70,6 +88,7 @@ namespace ShootingGallery
                 transform.localPosition = basePos + Vector3.right * Mathf.Sin((Time.time + phase) * moveSpeed) * moveAmplitude;
             if (spinner != null)
                 spinner.Rotate(0f, spinSpeed * Time.deltaTime, 0f, Space.Self);
+            if (knocking) UpdateKnockOff();
 
             // 起き上がり / 倒れるアニメーション
             if (Animating)
@@ -188,9 +207,9 @@ namespace ShootingGallery
                 if (GameManager.I != null) GameManager.I.OnTargetHit(this, point);
                 if (up) // ぐらっと後ろに揺れて戻る (OnTargetHit の中で Lower() された時は揺らさない)
                 {
-                    angle = 18f;
+                    angle = hitWobbleDeg;
                     targetAngle = 0f;
-                    animSpeed = 18f / 0.15f;
+                    animSpeed = hitWobbleDeg / 0.15f;
                     SetPose(true, angle);
                 }
                 return;
@@ -199,7 +218,8 @@ namespace ShootingGallery
             up = false;
             lowerTimer = 0f;
             if (GameManager.I != null) GameManager.I.OnTargetHit(this, point);
-            StartFall(FallTime);
+            if (knockOffOnHit) StartKnockOff();
+            else StartFall(FallTime);
             if (!manualControl)
             {
                 pendingRespawn = true;
@@ -209,7 +229,7 @@ namespace ShootingGallery
 
         bool CanRespawn()
         {
-            if (!available) return false;
+            if (!available || knocking) return false;
             if (kind == TargetKind.Fever && GameManager.I != null && GameManager.I.IsFever) return false;
             return true;
         }
@@ -228,8 +248,58 @@ namespace ShootingGallery
             animSpeed = 90f / duration;
         }
 
+        /// <summary>
+        /// 弾き飛ばされる (knockOffOnHit)。奥 (+Z。表の -Z がプレイヤー向き) へ跳ねて、回りながら落ち、
+        /// 根元から knockDropHeight だけ下まで落ちたら消える。見た目 (visual) だけを動かし、消える時に元の位置へ戻す。
+        /// </summary>
+        void StartKnockOff()
+        {
+            knocking = true;
+            knockTime = 0f;
+            angle = targetAngle = 90f; // 倒れた扱い (見た目は落ちきるまで出しておく)
+            knockHome = visual.localPosition;
+            knockStart = visual.position;
+            knockBackDir = Vector3.ProjectOnPlane(transform.forward, Vector3.up).normalized;
+            knockSpinAxis = transform.right; // この軸の正の回転で、上が奥へ倒れる
+            knockVel = knockBackDir * knockBackSpeed * Random.Range(0.85f, 1.15f)
+                     + Vector3.up * knockUpSpeed * Random.Range(0.8f, 1.2f)
+                     + transform.right * Random.Range(-0.25f, 0.25f);
+            knockSpin = Random.Range(450f, 750f);
+            knockFloorY = transform.position.y - knockDropHeight;
+        }
+
+        void UpdateKnockOff()
+        {
+            float dt = Time.deltaTime;
+            knockTime += dt;
+            knockVel += Physics.gravity * dt;
+            Vector3 p = visual.position + knockVel * dt;
+            // 奥へは knockMaxBack まで (奥の壁に当たったら、そこから壁ぞいに落ちる)
+            float back = Vector3.Dot(p - knockStart, knockBackDir);
+            if (back > knockMaxBack)
+            {
+                p -= knockBackDir * (back - knockMaxBack);
+                knockVel -= knockBackDir * Mathf.Max(0f, Vector3.Dot(knockVel, knockBackDir));
+            }
+            visual.position = p;
+            visual.rotation = Quaternion.AngleAxis(knockSpin * dt, knockSpinAxis) * visual.rotation;
+            if (p.y < knockFloorY || knockTime > 3f) EndKnockOff();
+        }
+
+        void EndKnockOff()
+        {
+            knocking = false;
+            visual.localPosition = knockHome;
+            SetPose(false, 90f);
+        }
+
         void SnapTo(float a)
         {
+            if (knocking) // 飛んでいる途中でも、見た目を元の位置へ戻してから
+            {
+                knocking = false;
+                visual.localPosition = knockHome;
+            }
             angle = targetAngle = a;
             SetPose(a < 90f, a);
         }

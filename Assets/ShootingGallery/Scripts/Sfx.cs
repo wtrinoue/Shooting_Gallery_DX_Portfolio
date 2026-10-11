@@ -16,6 +16,8 @@ namespace ShootingGallery
         public AudioClip door, complete;
         [Header("ステージアップ (屋台が増える時)")]
         public AudioClip stageUp;
+        [Header("マシンガンチャレンジ (カップを倒した音。空なら自動生成。複数入れると毎回ランダムに選ぶ)")]
+        public AudioClip[] canHits = new AudioClip[0];
         [Header("同時に鳴る音の抑え方")]
         [Tooltip("同じ種類の音がこの秒数以内に続いたら、2回目以降は鳴らさない (複数の的を同時に倒した時など)")]
         public float sameSoundGap = 0.07f;
@@ -58,6 +60,8 @@ namespace ShootingGallery
             if (sniperShot == null) sniperShot = Noise("SniperShot", 0.9f, 4.5f, 2.2f, 0.5f); // 乾いた大きな発砲音が長く尾を引く
             if (sniperReady == null) sniperReady = Tones("SniperReady", new[] { 1760f, 0f, 1760f, 0f, 2349f }, 0.07f); // ピッ ピッ ピーン (照準)
             if (sniperMiss == null) sniperMiss = Tones("SniperMiss", new[] { 392f, 330f, 262f }, 0.16f); // ざんねん…
+            if (canHits == null || canHits.Length == 0) // カーン、カラン… (高さを変えて3種類。続けて当てても単調にならないように)
+                canHits = new[] { CanHit("CanHit0", 1250f, 1), CanHit("CanHit1", 1080f, 2), CanHit("CanHit2", 1420f, 3) };
             if (scaleNotes == null || scaleNotes.Length < ScaleHz.Length)
             {
                 scaleNotes = new AudioClip[ScaleHz.Length];
@@ -111,6 +115,12 @@ namespace ShootingGallery
         public static void Play(string name)
         {
             if (instance == null) return;
+            if (name == "can")
+            {
+                var cans = instance.canHits;
+                if (cans != null && cans.Length > 0) instance.PlayLimited("can", cans[Random.Range(0, cans.Length)], 0.7f);
+                return;
+            }
             // 的に当たった音 (hit / bonus) は同じ種類として扱い、同時に倒しても1回だけ鳴らす
             string group = name == "bonus" ? "hit" : name;
             bool limited = name == "hit" || name == "bonus" || name == "explosion" || name == "pickup" || name == "ufo";
@@ -250,6 +260,45 @@ namespace ShootingGallery
             for (int i = 0; i < data.Length; i++) data[i] = Mathf.Clamp(data[i], -1f, 1f);
 
             var clip = AudioClip.Create("Complete", data.Length, 1, Rate, false);
+            clip.SetData(data, 0);
+            return clip;
+        }
+
+        /// <summary>
+        /// 空き缶を倒した音: 「カーン」(金属らしい、倍音が整数倍でない響き + 当たった瞬間のノイズ) の後に、
+        /// 台に落ちて跳ねる「カラン、カラ」を小さく2回重ねる。baseHz で音の高さ、seed で跳ねる間隔を変える。
+        /// </summary>
+        static AudioClip CanHit(string name, float baseHz, int seed)
+        {
+            var rng = new System.Random(seed);
+            float[] ratios = { 1f, 1.58f, 2.31f, 3.17f, 4.43f };
+            float[] amps = { 1f, 0.7f, 0.5f, 0.35f, 0.25f };
+            float[] decays = { 14f, 18f, 24f, 30f, 38f };
+            // (始まる秒数, 音量, 高さの倍率): 当たった音 → 跳ねる音2回
+            var strikes = new[]
+            {
+                (0f, 1f, 1f),
+                (0.15f + 0.05f * (float)rng.NextDouble(), 0.45f, 0.96f),
+                (0.29f + 0.05f * (float)rng.NextDouble(), 0.2f, 1.03f)
+            };
+            int n = (int)(Rate * 0.6f);
+            var data = new float[n];
+            foreach (var (startSec, gain, pitch) in strikes)
+            {
+                int s0 = (int)(startSec * Rate);
+                for (int i = 0; s0 + i < n; i++)
+                {
+                    float t = i / (float)Rate;
+                    float v = 0f;
+                    for (int k = 0; k < ratios.Length; k++)
+                        v += amps[k] * Mathf.Exp(-t * decays[k] * (gain < 1f ? 1.6f : 1f)) * Mathf.Sin(2f * Mathf.PI * baseHz * pitch * ratios[k] * t);
+                    // 当たった瞬間の「カッ」 (ごく短いノイズ)
+                    v += ((float)rng.NextDouble() * 2f - 1f) * 1.2f * Mathf.Exp(-t * 400f);
+                    data[s0 + i] += v * gain * 0.22f * Mathf.Clamp01(i / 20f);
+                }
+            }
+            for (int i = 0; i < n; i++) data[i] = Mathf.Clamp(data[i], -1f, 1f);
+            var clip = AudioClip.Create(name, n, 1, Rate, false);
             clip.SetData(data, 0);
             return clip;
         }

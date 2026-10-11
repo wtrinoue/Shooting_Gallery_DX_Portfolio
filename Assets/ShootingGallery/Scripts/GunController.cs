@@ -50,6 +50,14 @@ namespace ShootingGallery
             SetGauge(0f, Color.white);
         }
 
+        // 非表示になるとコルーチンが途中で止まるので、付いたままのマズルフラッシュを消しておく
+        void OnDisable()
+        {
+            flashRoutine = null;
+            foreach (var m in muzzles)
+                if (m != null && m.childCount > 0) m.GetChild(0).gameObject.SetActive(false);
+        }
+
         public void SetWeapon(WeaponType type)
         {
             current = type;
@@ -159,7 +167,8 @@ namespace ShootingGallery
                 FireHitscan(def, muzzle, origin);
 
             if (flashRoutine != null) StopCoroutine(flashRoutine);
-            flashRoutine = StartCoroutine(Flash(muzzle));
+            // 自分の弾でスナイパーの的を取ると左手の銃はその場で非表示になるので、その時はフラッシュを出さない
+            flashRoutine = isActiveAndEnabled ? StartCoroutine(Flash(muzzle)) : null;
             Sfx.PlayShot(current);
             bool heavy = current == WeaponType.Shotgun || current == WeaponType.Bomb || current == WeaponType.Sniper;
             InputDevices.GetDeviceAtXRNode(hapticNode).SendHapticImpulse(0, heavy ? 0.9f : 0.5f, heavy ? 0.12f : 0.06f);
@@ -210,7 +219,7 @@ namespace ShootingGallery
 
         /// <summary>
         /// 当たる的を探す。まず細い線で調べ、外れていたら太さ assist (m) の線で、射線の近くにある的を拾う (エイム補正)。
-        /// 壁や屋台の板の向こうにある的は拾わない。
+        /// 壁や屋台の板の向こうにある的は拾わない (銃口から的まで見通せる時だけ当てる)。
         /// </summary>
         bool TryHitTarget(Vector3 origin, Vector3 dir, float range, float assist, out Target target, out Vector3 point)
         {
@@ -237,6 +246,9 @@ namespace ShootingGallery
                 if (h.distance <= 0f || h.distance >= best) continue; // 0 = 発射位置ですでに重なっている物
                 var t = h.collider.GetComponentInParent<Target>();
                 if (t == null || !t.IsUp) continue;
+                // 銃口からその的までの間に別の物 (回転扉の板など) があれば、裏側の的なので当てない
+                if (Physics.Linecast(origin, h.point, out var block, hitMask, QueryTriggerInteraction.Ignore)
+                    && block.collider.GetComponentInParent<Target>() != t) continue;
                 best = h.distance;
                 target = t;
                 point = h.point;

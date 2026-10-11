@@ -31,6 +31,8 @@ namespace ShootingGallery
         public BonusStage bonusStage;
         [Tooltip("スナイパーの的を撃つと始まるスナイパーチャレンジ (遠くの大きな的を1発で狙う)")]
         public SniperChallenge sniper;
+        [Tooltip("マシンガンチャレンジの的を撃つと始まるマシンガンチャレンジ (屋台3軒分に並んだ的をマシンガンで撃つ)")]
+        public MachineGunChallenge machineGunChallenge;
 
         [Header("Rules")]
         public float roundDuration = 90f;
@@ -48,12 +50,15 @@ namespace ShootingGallery
         [Tooltip("次のステージに進むまでの秒数")]
         public float stageInterval = 30f;
 
-        [Header("Sniper Challenge")]
-        public int sniperPoints = 3000;
-
         /// <summary>スナイパーチャレンジ中か</summary>
         public bool SniperActive => sniperStall != null;
         Stall sniperStall;          // チャレンジのために引っ込めた屋台
+        /// <summary>マシンガンチャレンジ中か</summary>
+        public bool MachineGunChallengeActive { get; private set; }
+        readonly List<Stall> machineGunStalls = new List<Stall>(); // マシンガンチャレンジのために引っ込めた屋台 (撃った屋台と両隣)
+        bool machineGunGiven;       // マシンガンチャレンジのマシンガンをもう渡したか (屋台がせり上がってから渡す)
+        /// <summary>スナイパー / マシンガンのどちらかのチャレンジ中か (この間はフィーバーの残り時間と屋台の拡張を止める)</summary>
+        public bool ChallengeActive => SniperActive || MachineGunChallengeActive;
 
         public GameState State { get; private set; }
         /// <summary>今のステージ (0 始まり)</summary>
@@ -64,6 +69,8 @@ namespace ShootingGallery
         public int Score { get; private set; }
 
         float timeLeft;
+        /// <summary>ラウンドの残り時間 (秒)</summary>
+        public float TimeLeft => timeLeft;
         float feverLeft;
         float messageTimer;
         int highScore;
@@ -94,11 +101,13 @@ namespace ShootingGallery
             {
                 timeLeft -= Time.deltaTime;
                 int stage = Mathf.Min((int)((roundDuration - timeLeft) / Mathf.Max(1f, stageInterval)), stageStallCounts.Length - 1);
-                if (stage > Stage && !SniperActive) StageUp(stage); // チャレンジ中は拡張を待つ (念のため)
+                if (stage > Stage && !ChallengeActive) StageUp(stage); // チャレンジ中は拡張を待つ (念のため)
                 if (SniperActive && sniper.TimeLeft <= 0f) EndSniper(false, "TIME OVER...");
+                if (MachineGunChallengeActive && !machineGunGiven && machineGunChallenge.IsReady) GiveChallengeMachineGun();
+                if (MachineGunChallengeActive && machineGunChallenge.TimeLeft <= 0f) EndMachineGunChallenge();
                 if (IsFever)
                 {
-                    if (!SniperActive) feverLeft -= Time.deltaTime; // スナイパーチャレンジ中はフィーバーの残り時間を止める
+                    if (!ChallengeActive) feverLeft -= Time.deltaTime; // チャレンジ中はフィーバーの残り時間を止める
                     if (feverLeft <= 0f) EndFever();
                 }
                 if (timeLeft <= 0f) EndRound();
@@ -123,7 +132,8 @@ namespace ShootingGallery
                     break;
                 case GameState.Playing:
                     string fever = IsFever ? $"   FEVER {Mathf.CeilToInt(feverLeft)}" : "";
-                    hudText.text = $"SCORE {Score}   STAGE {Stage + 1}\nTIME {Mathf.CeilToInt(Mathf.Max(0f, timeLeft))}{fever}";
+                    string mg = MachineGunChallengeActive ? $"   MG {machineGunChallenge.Hits}/{machineGunChallenge.Total}" : "";
+                    hudText.text = $"SCORE {Score}   STAGE {Stage + 1}\nTIME {Mathf.CeilToInt(Mathf.Max(0f, timeLeft))}{fever}{mg}";
                     break;
                 case GameState.Result:
                     hudText.text = $"SCORE {Score}\nHIGH SCORE {highScore}";
@@ -166,6 +176,7 @@ namespace ShootingGallery
         {
             State = GameState.Result;
             if (SniperActive) EndSniper(false, null);
+            if (MachineGunChallengeActive) EndMachineGunChallenge();
             if (IsFever) EndFever();
             mainStall.SetTargetsAvailable(false);
             player.ResetWeapon();
@@ -294,7 +305,7 @@ namespace ShootingGallery
                 return;
             }
             if (State != GameState.Playing) return;
-            if (target.kind == TargetKind.SniperBig) target.points = sniperPoints;
+            if (target.kind == TargetKind.SniperBig) target.points = sniper.PointsAt(point); // 真ん中に近いほど高い
 
             // ボーナスの大きな的: 当てるたびに 100, 200, 300… と点数が上がる (音階もここで鳴る)
             if (target.kind == TargetKind.BigBonus)
@@ -338,22 +349,26 @@ namespace ShootingGallery
                     popupColor = new Color(0.4f, 1f, 0.9f);
                     ShowMessage($"UFO!!  +{target.points}", 2f, popupColor);
                     break;
+                // 武器の的: マシンガンチャレンジ中は武器を持ち替えない (点数だけ入る)
                 case TargetKind.Bomb:
+                    popupColor = new Color(1f, 0.55f, 0.15f);
+                    if (MachineGunChallengeActive) { Sfx.Play("hit"); break; }
                     player.GiveWeapon(WeaponType.Bomb, specialWeaponDuration);
                     Sfx.Play("pickup");
-                    popupColor = new Color(1f, 0.55f, 0.15f);
                     ShowMessage("BOMB!", 1.5f, popupColor);
                     break;
                 case TargetKind.MachineGun:
+                    popupColor = new Color(0.4f, 0.7f, 1f);
+                    if (MachineGunChallengeActive) { Sfx.Play("hit"); break; }
                     player.GiveWeapon(WeaponType.MachineGun, specialWeaponDuration);
                     Sfx.Play("pickup");
-                    popupColor = new Color(0.4f, 0.7f, 1f);
                     ShowMessage("MACHINE GUN!", 1.5f, popupColor);
                     break;
                 case TargetKind.Shotgun:
+                    popupColor = new Color(0.4f, 1f, 0.5f);
+                    if (MachineGunChallengeActive) { Sfx.Play("hit"); break; }
                     player.GiveWeapon(WeaponType.Shotgun, specialWeaponDuration);
                     Sfx.Play("pickup");
-                    popupColor = new Color(0.4f, 1f, 0.5f);
                     ShowMessage("SHOTGUN!", 1.5f, popupColor);
                     break;
                 case TargetKind.Fever:
@@ -368,7 +383,22 @@ namespace ShootingGallery
                     popupColor = new Color(1f, 0.85f, 0.3f);
                     Sfx.Play("complete");
                     Sfx.Play("explosion");
-                    ShowMessage($"BULLSEYE!!\n+{target.points}", 3f, popupColor);
+                    ShowMessage(target.points >= sniper.MaxPoints ? $"BULLSEYE!!\n+{target.points}" : $"NICE SHOT!\n+{target.points}", 3f, popupColor);
+                    break;
+                case TargetKind.MachineGunChallenge:
+                    popupColor = new Color(1f, 0.85f, 0.2f);
+                    StartMachineGunChallenge(target);
+                    break;
+                case TargetKind.MachineGunChallengeTarget:
+                    popupColor = new Color(1f, 0.85f, 0.2f);
+                    if (machineGunChallenge != null && machineGunChallenge.IsBomb(target))
+                    {   // 混ざっていた爆弾: 少し後に爆発して周りのカップを落とす (近くの爆弾も誘爆する)
+                        Sfx.Play("hit");
+                        popupColor = new Color(1f, 0.35f, 0.1f);
+                        StartCoroutine(ExplodeAfterDelay(point, machineGunChallenge.bombRadius));
+                    }
+                    else Sfx.Play("can");
+                    if (MachineGunChallengeActive && machineGunChallenge.RegisterHit() == 0) EndMachineGunChallenge(); // 全部倒した
                     break;
             }
 
@@ -387,13 +417,25 @@ namespace ShootingGallery
         /// </summary>
         public bool CanOfferSniper(Target target, float lifetime)
         {
-            if (target == null || sniper == null || State != GameState.Playing || SniperActive) return false;
+            return sniper != null && CanOfferChallenge(target, lifetime, sniper.timeLimit + sniper.appearTime);
+        }
+
+        /// <summary>この的をマシンガンチャレンジの的に化けさせてよいか (WeaponDropper が聞く)。条件はスナイパーと同じ</summary>
+        public bool CanOfferMachineGunChallenge(Target target, float lifetime)
+        {
+            return machineGunChallenge != null && CanOfferChallenge(target, lifetime, machineGunChallenge.Duration);
+        }
+
+        // challengeTime = チャレンジが始まってから終わるまでの最長の秒数
+        bool CanOfferChallenge(Target target, float lifetime, float challengeTime)
+        {
+            if (target == null || State != GameState.Playing || ChallengeActive) return false;
             if (bonusStage != null && bonusStage.IsBusy) return false;
             var stall = target.GetComponentInParent<Stall>();
             if (stall == null || !stall.IsSettled) return false;
 
             // 時間切れまでには、撃たれるまで + チャレンジ全体の時間が必要
-            if (timeLeft < lifetime + sniper.timeLimit + sniper.appearTime + 1.5f) return false;
+            if (timeLeft < lifetime + challengeTime + 1.5f) return false;
             // 屋台の拡張はチャレンジ中は待たせるので、的が出ている間に拡張が来なければよい
             if (Stage < stageStallCounts.Length - 1)
             {
@@ -418,7 +460,7 @@ namespace ShootingGallery
         /// <summary>スナイパーの的を撃った: その屋台を引っ込め、屋台があった方の遠くに大きな的を出し、スナイパーライフルを渡す</summary>
         void StartSniper(Target target)
         {
-            if (sniper == null || SniperActive) return;
+            if (sniper == null || ChallengeActive) return;
             var stall = target.GetComponentInParent<Stall>();
             if (stall == null) return;
 
@@ -430,7 +472,7 @@ namespace ShootingGallery
             player.SetDualWield(false); // ライフルは右手の1丁だけ
             player.GiveWeapon(WeaponType.Sniper, sniper.timeLimit);
             Sfx.Play("sniperready");
-            ShowMessage($"SNIPER CHALLENGE!\nONE SHOT  {sniperPoints} PTS", 3f, new Color(1f, 0.3f, 0.35f));
+            ShowMessage($"SNIPER CHALLENGE!\nCENTER {sniper.MaxPoints} PTS", 3f, new Color(1f, 0.3f, 0.35f));
         }
 
         /// <summary>スナイパーライフルの1発が撃たれた (GunController から)。hit = 当たった的 (なければ null)</summary>
@@ -461,12 +503,97 @@ namespace ShootingGallery
             }
         }
 
+        // ---- マシンガンチャレンジ ----
+
+        /// <summary>
+        /// マシンガンチャレンジの的を撃った: その屋台と両隣の屋台を引っ込め、同じ方向に横長の屋台 (棚にカップが並ぶ) をせり上げる。
+        /// 屋台がせり上がり終わったらマシンガンを渡す (Update)。フィーバー外はメイン屋台しか出ていないので、引っ込むのはメイン屋台だけ。
+        /// </summary>
+        void StartMachineGunChallenge(Target target)
+        {
+            if (machineGunChallenge == null || ChallengeActive) return;
+            var stall = target.GetComponentInParent<Stall>();
+            if (stall == null) return;
+
+            // 輪に並んでいる順 (メイン屋台 → フィーバー屋台。ArrangeFeverStalls と同じ順) から両隣を探す
+            var ring = new List<Stall> { mainStall };
+            if (IsFever) ring.AddRange(activeFeverStalls);
+            machineGunStalls.Clear();
+            machineGunStalls.Add(stall);
+            int i = ring.IndexOf(stall);
+            if (i >= 0 && ring.Count > 1)
+            {
+                foreach (var s in new[] { ring[(i + ring.Count - 1) % ring.Count], ring[(i + 1) % ring.Count] })
+                    if (!machineGunStalls.Contains(s)) machineGunStalls.Add(s);
+            }
+            foreach (var s in machineGunStalls) s.Sink(stallMoveDuration);
+
+            MachineGunChallengeActive = true;
+            Vector3 center = player.transform.position;
+            Vector3 dir = stall.transform.position - center;
+            dir.y = 0f;
+            machineGunChallenge.Show(center, dir, dir.magnitude);
+            machineGunGiven = false;
+
+            Sfx.Play("sniperready");
+            ShowMessage("MACHINE GUN CHALLENGE!", 2.5f, new Color(1f, 0.85f, 0.2f));
+        }
+
+        /// <summary>横長の屋台がせり上がり終わった: マシンガンを渡す</summary>
+        void GiveChallengeMachineGun()
+        {
+            machineGunGiven = true;
+            player.GiveWeapon(WeaponType.MachineGun, machineGunChallenge.ShootDuration);
+            Sfx.Play("pickup");
+            ShowMessage($"SHOOT ALL {machineGunChallenge.Total} CUPS!\nBOMBS INSIDE!", 2f, new Color(1f, 0.85f, 0.2f));
+        }
+
+        /// <summary>チャレンジを終える (全部落とした / マシンガンの時間切れ): 横長の屋台を沈め、引っ込めた屋台を戻し、銃を元に戻す</summary>
+        void EndMachineGunChallenge()
+        {
+            if (!MachineGunChallengeActive) return;
+            MachineGunChallengeActive = false;
+            bool cleared = machineGunChallenge.AllCleared;
+            int hits = machineGunChallenge.Hits, total = machineGunChallenge.Total;
+            machineGunChallenge.Hide();
+
+            // 最後のカップが落ちるのを少し見せてから、横長の屋台が沈むのと同時に元の屋台を戻す
+            StartCoroutine(RiseStallsAfter(new List<Stall>(machineGunStalls), machineGunChallenge.SwapBackDelay));
+            machineGunStalls.Clear();
+
+            if (machineGunGiven && player.Weapon == WeaponType.MachineGun) player.ResetWeapon();
+            if (State != GameState.Playing) return;
+            if (cleared)
+            {
+                Sfx.Play("complete");
+                ShowMessage($"PERFECT!!\nALL {total} CLEAR!", 3f, new Color(1f, 0.85f, 0.3f));
+            }
+            else
+            {
+                Sfx.Play("snipermiss");
+                ShowMessage($"TIME UP!\n{hits} / {total} CUPS", 2f, new Color(0.7f, 0.7f, 0.8f));
+            }
+        }
+
+        // 引っ込めた屋台を戻す (待っている間にフィーバーが終わったフィーバー屋台は戻さない)
+        IEnumerator RiseStallsAfter(List<Stall> stalls, float delay)
+        {
+            yield return new WaitForSeconds(delay);
+            foreach (var s in stalls)
+            {
+                if (ChallengeActive && (machineGunStalls.Contains(s) || s == sniperStall)) continue; // 念のため: もう次のチャレンジで使っている
+                bool show = s == mainStall || (IsFever && activeFeverStalls.Contains(s));
+                if (show) s.Rise(stallMoveDuration, State == GameState.Playing);
+            }
+        }
+
         // 爆弾の的: 少し間をおいて爆発し、周りの的をまとめて倒す (範囲内の爆弾の的も誘爆する)
-        IEnumerator ExplodeAfterDelay(Vector3 point)
+        IEnumerator ExplodeAfterDelay(Vector3 point, float radius = -1f)
         {
             yield return new WaitForSeconds(explosiveDelay);
+            if (radius <= 0f) radius = explosiveRadius;
             var explosionMat = player != null && player.rightGun != null ? player.rightGun.explosionMaterial : null;
-            Bomb.Blast(point, explosiveRadius, explosionMat);
+            Bomb.Blast(point, radius, explosionMat);
             ScorePopup.Spawn(font, point + Vector3.up * 0.3f, "BOOM!", new Color(1f, 0.45f, 0.1f), 0.2f);
         }
     }
