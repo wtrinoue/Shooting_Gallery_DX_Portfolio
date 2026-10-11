@@ -1,0 +1,59 @@
+using UnityEngine;
+
+namespace ShootingGallery
+{
+    /// <summary>
+    /// 夜祭りの空気感 (環境光・霧) を再生時に適用し、シーンに元からあるカメラを止める。
+    /// 霧や環境光は「シーンの設定」なのでオブジェクトをコピペしても付いてこない。
+    /// そのため、このコンポーネントが再生時に毎回設定し直す。
+    /// </summary>
+    public class SceneEnvironment : MonoBehaviour
+    {
+        public Color ambientColor = new Color(0.42f, 0.4f, 0.5f);
+        public bool fog = true;
+        public Color fogColor = new Color(0.05f, 0.05f, 0.14f);
+        public float fogStart = 12f;
+        public float fogEnd = 30f;
+        [Tooltip("このオブジェクトの子以外のカメラ (元からある Main Camera など) を止める")]
+        public bool disableOtherCameras = true;
+
+        void Awake()
+        {
+            WarnMissingMaterials();
+
+            RenderSettings.skybox = null;
+            RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
+            RenderSettings.ambientLight = ambientColor;
+            RenderSettings.fog = fog;
+            RenderSettings.fogMode = FogMode.Linear;
+            RenderSettings.fogColor = fogColor;
+            RenderSettings.fogStartDistance = fogStart;
+            RenderSettings.fogEndDistance = fogEnd;
+
+            if (!disableOtherCameras) return;
+            foreach (var c in FindObjectsByType<Camera>(FindObjectsSortMode.None))
+            {
+                if (c.transform.IsChildOf(transform)) continue;
+                c.gameObject.tag = "Untagged";
+                c.enabled = false;
+                var listener = c.GetComponent<AudioListener>();
+                if (listener != null) listener.enabled = false;
+            }
+        }
+
+        // 再生中に生成されたものをコピペすると、マテリアルが外れて全部ピンクになる。その時に原因を知らせる。
+        void WarnMissingMaterials()
+        {
+            int missing = 0;
+            foreach (var r in GetComponentsInChildren<Renderer>(true))
+                if (r is MeshRenderer && r.GetComponent<TextMesh>() == null && r.sharedMaterial == null) missing++;
+            if (missing == 0) return;
+
+            Debug.LogError(
+                $"[ShootingGallery] マテリアルが外れているオブジェクトが {missing} 個あります (ピンク色に表示されます)。\n" +
+                "再生中に生成されたものをコピーして貼り付けると、再生終了と同時にマテリアルが消えるためこうなります。\n" +
+                "直し方: 貼り付けたものを削除し、再生を止めた状態で GalleryBuilder の「シーンに生成」ボタンを押して、" +
+                "できた ShootingGallery をコピーしてください。", this);
+        }
+    }
+}
