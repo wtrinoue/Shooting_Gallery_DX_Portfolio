@@ -7,10 +7,16 @@ namespace ShootingGallery
     /// <summary>1丁の銃。見た目の切り替えと発射(レイキャスト)を担当する。</summary>
     public class GunController : MonoBehaviour
     {
-        [Tooltip("WeaponType の順 (Handgun, MachineGun, Shotgun, Bomb) に並べた見た目")]
-        public GameObject[] models = new GameObject[4];
+        [Tooltip("WeaponType の順 (Handgun, MachineGun, Shotgun, Bomb, Sniper) に並べた見た目")]
+        public GameObject[] models = new GameObject[5];
         [Tooltip("各見た目の銃口。最初の子をマズルフラッシュとして使う")]
-        public Transform[] muzzles = new Transform[4];
+        public Transform[] muzzles = new Transform[5];
+        [Header("Sniper")]
+        [Tooltip("スナイパーライフルのレーザーポインター (銃口から当たる所まで伸びる)")]
+        public LineRenderer laser;
+        [Tooltip("レーザーが当たった所に出る光の点")]
+        public Transform laserDot;
+        public float laserRange = 120f;
         public Material tracerMaterial;
         public Material bombMaterial;
         public Material explosionMaterial;
@@ -49,6 +55,44 @@ namespace ShootingGallery
             current = type;
             for (int i = 0; i < models.Length; i++)
                 if (models[i] != null) models[i].SetActive(i == (int)type);
+            ShowLaser(type == WeaponType.Sniper);
+        }
+
+        void ShowLaser(bool show)
+        {
+            if (laser != null && laser.gameObject.activeSelf != show) laser.gameObject.SetActive(show);
+            if (laserDot != null && laserDot.gameObject.activeSelf != show) laserDot.gameObject.SetActive(show);
+        }
+
+        // レーザーを銃口から最初に当たる物まで伸ばし、当たった所に点を置く
+        void UpdateLaser()
+        {
+            if (laser == null || current != WeaponType.Sniper) return;
+            var muzzle = MuzzleOf(current);
+            Vector3 from = muzzle.position, dir = muzzle.forward;
+            bool hitSomething = Physics.Raycast(from, dir, out var hit, laserRange, hitMask, QueryTriggerInteraction.Ignore);
+            Vector3 to = hitSomething ? hit.point : from + dir * laserRange;
+            laser.useWorldSpace = true;
+            laser.positionCount = 2;
+            laser.SetPosition(0, from);
+            laser.SetPosition(1, to);
+            if (laserDot != null)
+            {
+                laserDot.gameObject.SetActive(hitSomething);
+                if (hitSomething)
+                {
+                    laserDot.position = hit.point - dir * 0.01f;
+                    // 遠くても見えるように距離に応じて大きくする
+                    float size = 0.025f + hit.distance * 0.006f;
+                    laserDot.localScale = Vector3.one * size / Mathf.Max(0.0001f, laserDot.parent != null ? laserDot.parent.lossyScale.x : 1f);
+                }
+            }
+        }
+
+        Transform MuzzleOf(WeaponType type)
+        {
+            int i = (int)type;
+            return i < muzzles.Length && muzzles[i] != null ? muzzles[i] : transform;
         }
 
         public void SetInfo(string text)
@@ -90,6 +134,7 @@ namespace ShootingGallery
 
         void LateUpdate()
         {
+            UpdateLaser();
             // 情報テキストとゲージを常にカメラへ向ける
             if (Camera.main == null) return;
             FaceCamera(infoText != null ? infoText.transform : null);
@@ -105,7 +150,7 @@ namespace ShootingGallery
         void Fire(WeaponDef def)
         {
             nextFireTime = Time.time + def.fireInterval;
-            var muzzle = muzzles[(int)current] != null ? muzzles[(int)current] : transform;
+            var muzzle = MuzzleOf(current);
             Vector3 origin = muzzle.position;
 
             if (def.projectile)
@@ -116,12 +161,30 @@ namespace ShootingGallery
             if (flashRoutine != null) StopCoroutine(flashRoutine);
             flashRoutine = StartCoroutine(Flash(muzzle));
             Sfx.PlayShot(current);
-            InputDevices.GetDeviceAtXRNode(hapticNode).SendHapticImpulse(0, current == WeaponType.Shotgun || current == WeaponType.Bomb ? 0.9f : 0.5f, 0.06f);
+            bool heavy = current == WeaponType.Shotgun || current == WeaponType.Bomb || current == WeaponType.Sniper;
+            InputDevices.GetDeviceAtXRNode(hapticNode).SendHapticImpulse(0, heavy ? 0.9f : 0.5f, heavy ? 0.12f : 0.06f);
         }
 
         // 弾がまっすぐ一瞬で届く武器 (ハンドガン, マシンガン, ショットガン)
         void FireHitscan(WeaponDef def, Transform muzzle, Vector3 origin)
         {
+            // スナイパー: レーザーの先にそのまま飛ぶ1発 (エイム補正なし)。撃った結果をスナイパーチャレンジに知らせる
+            if (current == WeaponType.Sniper)
+            {
+                Vector3 end = origin + muzzle.forward * def.range;
+                Target hitTarget = null;
+                if (Physics.Raycast(origin, muzzle.forward, out var hit, def.range, hitMask, QueryTriggerInteraction.Ignore))
+                {
+                    end = hit.point;
+                    hitTarget = hit.collider.GetComponentInParent<Target>();
+                    if (hitTarget != null && hitTarget.IsUp) hitTarget.Hit(hit.point);
+                    else hitTarget = null;
+                }
+                SpawnTracer(origin, end);
+                if (GameManager.I != null) GameManager.I.OnSniperShot(hitTarget);
+                return;
+            }
+
             for (int i = 0; i < def.pellets; i++)
             {
                 Vector3 dir = muzzle.forward;

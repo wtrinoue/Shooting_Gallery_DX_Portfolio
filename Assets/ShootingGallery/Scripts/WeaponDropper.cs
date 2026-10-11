@@ -43,6 +43,27 @@ namespace ShootingGallery
         public float blueOrbLifetime = 8f;
         float nextBlueOrbTime;
 
+        [Header("スナイパーの的 (撃つとスナイパーチャレンジ。同時に1つまで。屋台の拡張に巻き込まれない時だけ出る)")]
+        [Tooltip("スナイパーの的が消えて (撃たれて / 時間切れで) から次に出るまでの間隔 (秒)")]
+        public Vector2 sniperGap = new Vector2(6f, 12f);
+        [Tooltip("フィーバー中の間隔 (秒)。フィーバー中はメイン以外の屋台に出る")]
+        public Vector2 sniperFeverGap = new Vector2(3f, 6f);
+        [Tooltip("ゲーム開始から最初のスナイパーの的が出るまでの秒数")]
+        public Vector2 sniperStartDelay = new Vector2(4f, 7f);
+        [Tooltip("フィーバーが始まってから最初のスナイパーの的が出るまでの秒数 (屋台がせり上がり終わってから)")]
+        public Vector2 sniperFeverStartDelay = new Vector2(1.5f, 3f);
+        [Tooltip("撃たれずにこの秒数たったら引っ込む")]
+        public float sniperLifetime = 5f;
+        public int sniperTargetPoints = 100;
+        [Tooltip("出す屋台を決めてから、その屋台の的が起き上がるのを待つ最長の秒数 (過ぎたら選び直す)")]
+        public float sniperReserveTimeout = 4f;
+        float nextSniperTime;
+        bool wasPlaying, wasFever, sniperWasBusy;
+        // スナイパーの的を出す予定の屋台 / 的 (どの屋台にも等しく出るよう、先に屋台をランダムに決めておく)
+        Stall sniperStall;
+        Target sniperTarget;
+        float sniperReservedAt;
+
         class Disguise
         {
             public GameObject look;
@@ -71,10 +92,77 @@ namespace ShootingGallery
             foreach (var pair in active)
             {
                 if (!pair.Key.IsVisible) toRestore.Add(pair.Key);
-                else if (pair.Key.IsUp && Time.time - pair.Value.since > (pair.Value.kind == TargetKind.BlueOrb ? blueOrbLifetime : lifetime))
+                else if (pair.Key.IsUp && Time.time - pair.Value.since > LifetimeOf(pair.Value.kind))
                     pair.Key.Lower();
             }
             foreach (var t in toRestore) Restore(t);
+
+            UpdateSniperReservation();
+        }
+
+        /// <summary>
+        /// スナイパーの的を出す時が来たら、今出ている屋台からランダムに1軒選び、その屋台の立っている的を1つ
+        /// いったん倒して起き上がらせる (起き上がる時に OnTargetRising で化ける)。
+        /// フィーバー外はメイン屋台、フィーバー中はメイン以外の屋台 (フィーバー屋台) から選ぶ。
+        /// 倒せる的がない屋台 (もぐら叩きなど) は、その屋台の的が次に起き上がるのを待つ。
+        /// </summary>
+        void UpdateSniperReservation()
+        {
+            var gm = GameManager.I;
+            bool playing = gm != null && gm.State == GameState.Playing;
+            bool fever = playing && gm.IsFever;
+            bool busy = playing && (gm.SniperActive || Count(TargetKind.Sniper) > 0);
+
+            if (playing && !wasPlaying) // ゲーム開始直後には出さない
+                nextSniperTime = Time.time + Random.Range(sniperStartDelay.x, sniperStartDelay.y);
+            else if (fever && !wasFever) // フィーバーが始まったら早めに出す (屋台がせり上がる 1.2 秒も待つ)
+                nextSniperTime = Mathf.Min(nextSniperTime, Time.time + gm.stallMoveDuration + Random.Range(sniperFeverStartDelay.x, sniperFeverStartDelay.y));
+            if (sniperWasBusy && !busy) // 前のスナイパーの的 / チャレンジが終わった所から間隔を数える
+            {
+                var gap = fever ? sniperFeverGap : sniperGap;
+                nextSniperTime = Time.time + Random.Range(gap.x, gap.y);
+            }
+            wasPlaying = playing;
+            wasFever = fever;
+            sniperWasBusy = busy;
+
+            if (!playing || busy)
+            {
+                ClearSniperReservation();
+                return;
+            }
+            if (sniperStall != null)
+            {
+                if (Time.time - sniperReservedAt > sniperReserveTimeout || !sniperStall.IsSettled) ClearSniperReservation();
+                return;
+            }
+            if (Time.time < nextSniperTime) return;
+
+            var stalls = gm.ShownStalls();
+            if (fever) stalls.Remove(gm.mainStall); // フィーバー中はまわりの屋台に出す
+            if (stalls.Count == 0) return;
+            var stall = stalls[Random.Range(0, stalls.Count)];
+
+            var candidates = new List<Target>();
+            foreach (var t in stall.targets)
+                if (t != null && t.kind == TargetKind.Normal && t.face != null && t.IsUp && !t.manualControl && !active.ContainsKey(t))
+                    candidates.Add(t);
+            Target pick = candidates.Count > 0 ? candidates[Random.Range(0, candidates.Count)] : null;
+            if (!gm.CanOfferSniper(pick != null ? pick : stall.targets.Length > 0 ? stall.targets[0] : null, sniperLifetime + 1f))
+            {
+                nextSniperTime = Time.time + 1f; // 今は出せない (拡張が近い等)。少ししてから選び直す
+                return;
+            }
+
+            sniperStall = stall;
+            sniperReservedAt = Time.time;
+            if (pick != null && pick.Reappear(0.4f)) sniperTarget = pick;
+        }
+
+        void ClearSniperReservation()
+        {
+            sniperStall = null;
+            sniperTarget = null;
         }
 
         void OnTargetRising(Target target)
@@ -82,6 +170,18 @@ namespace ShootingGallery
             var gm = GameManager.I;
             if (gm == null || gm.State != GameState.Playing) return;
             if (target.kind != TargetKind.Normal || target.face == null || active.ContainsKey(target)) return;
+
+            // スナイパーの的: 予約した的 (または予約した屋台で起き上がった的) だけが化ける。
+            // 拡張・時間切れ・フィーバー終了に巻き込まれないかは GameManager が判断
+            if (sniperStall != null && (target == sniperTarget || (sniperTarget == null && target.GetComponentInParent<Stall>() == sniperStall)))
+            {
+                ClearSniperReservation();
+                if (Count(TargetKind.Sniper) == 0 && gm.CanOfferSniper(target, sniperLifetime)
+                    && ApplyDisguise(target, TargetKind.Sniper, sniperTargetPoints))
+                {
+                    return;
+                }
+            }
 
             // 青い玉: フィーバー中だけ、メイン以外の屋台に1つまで (撃たれずに消えたらまた出る)
             if (gm.IsFever && !gm.BonusUsedThisFever && (gm.bonusStage == null || !gm.bonusStage.IsBusy)
@@ -129,6 +229,13 @@ namespace ShootingGallery
             target.points = points;
             return true;
         }
+
+        float LifetimeOf(TargetKind kind) => kind switch
+        {
+            TargetKind.BlueOrb => blueOrbLifetime,
+            TargetKind.Sniper => sniperLifetime,
+            _ => lifetime
+        };
 
         int Count(TargetKind kind)
         {

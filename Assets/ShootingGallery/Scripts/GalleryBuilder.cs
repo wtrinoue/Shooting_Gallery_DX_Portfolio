@@ -35,7 +35,6 @@ namespace ShootingGallery
         [Tooltip("編集中のシーンで内側の輪に並べて見せるフィーバー屋台の数 (見た目確認用)。\n" +
                  "再生時に何軒出るかは GameManager の Stage Stall Counts で決まる (時間で 6→7→8 軒と増える)")]
         [Range(1, 9)] public int feverStallCount = 5;
-        public bool buildLanterns = true;
 
         [Header("Rules")]
         public float roundDuration = 90f;
@@ -198,6 +197,7 @@ namespace ShootingGallery
             BuildWeaponDropper();
             BuildUfo();
             var bonusStage = BuildBonusStage();
+            var sniper = BuildSniperChallenge();
             LogStep("武器の的 / UFO", step);
 
             // ---- 5. ゲーム開始 ----
@@ -209,6 +209,7 @@ namespace ShootingGallery
             gm.mainStall = mainStall;
             gm.feverStalls = feverStalls;
             gm.bonusStage = bonusStage;
+            gm.sniper = sniper;
             gm.stallRadius = stallRadius;
             gm.startTarget = startTarget;
             gm.hudText = hudText;
@@ -278,18 +279,6 @@ namespace ShootingGallery
             // 足元の目印 (ここから動かない)。ボーナスステージで床が開いている間は隠れる
             playerMark = Prim(PrimitiveType.Cylinder, "PlayerMark", world, new Vector3(0f, 0.005f, 0f), new Vector3(0.8f, 0.005f, 0.8f),
                               Mat("PlayerMark", new Color(0.9f, 0.8f, 0.4f), new Color(0.3f, 0.25f, 0.05f)), false);
-
-            if (!buildLanterns) return;
-
-            // 遠くの提灯の列 (雰囲気用)
-            var deco = Group(world, "Lanterns");
-            for (int i = 0; i < 24; i++)
-            {
-                float a = i * 15f * Mathf.Deg2Rad;
-                var pos = new Vector3(Mathf.Sin(a), 0f, Mathf.Cos(a)) * 9f;
-                RemoveCollider(Prim(PrimitiveType.Cylinder, $"Pole_{i}", deco, pos + Vector3.up * 1.6f, new Vector3(0.06f, 1.6f, 0.06f), Mat("Wood_Dark", new Color(0.25f, 0.16f, 0.1f))));
-                RemoveCollider(Prim(PrimitiveType.Sphere, $"Lantern_{i}", deco, pos + Vector3.up * 3.1f, new Vector3(0.35f, 0.45f, 0.35f), LanternMat()));
-            }
         }
 
         // ------------------------------------------------------------------
@@ -391,10 +380,39 @@ namespace ShootingGallery
             GunPart(PrimitiveType.Cube, bm, new Vector3(0f, -0.06f, -0.01f), new Vector3(0.035f, 0.09f, 0.045f), grip, 15f);
             var bmMuzzle = Muzzle(bm, new Vector3(0f, 0.01f, 0.3f), flashMat);
 
+            // 4: スナイパーライフル (長い銃身 + スコープ + ストック)。レーザーポインター付き
+            var sr = Group(gunGo.transform, "Model_Sniper");
+            var sniperBody = Mat("Gun_Sniper", new Color(0.25f, 0.27f, 0.22f));
+            GunPart(PrimitiveType.Cube, sr, new Vector3(0f, 0f, 0.06f), new Vector3(0.04f, 0.05f, 0.26f), sniperBody);
+            GunPart(PrimitiveType.Cylinder, sr, new Vector3(0f, 0.01f, 0.36f), new Vector3(0.018f, 0.17f, 0.018f), metal, 90f);
+            GunPart(PrimitiveType.Cylinder, sr, new Vector3(0f, 0.055f, 0.08f), new Vector3(0.032f, 0.08f, 0.032f), metal, 90f);   // スコープ
+            GunPart(PrimitiveType.Cylinder, sr, new Vector3(0f, 0.055f, 0.165f), new Vector3(0.042f, 0.012f, 0.042f), metal, 90f); // スコープの前玉
+            GunPart(PrimitiveType.Cube, sr, new Vector3(0f, -0.015f, -0.12f), new Vector3(0.035f, 0.06f, 0.12f), grip);           // ストック
+            GunPart(PrimitiveType.Cube, sr, new Vector3(0f, -0.06f, -0.02f), new Vector3(0.03f, 0.09f, 0.04f), grip, 15f);
+            var srMuzzle = Muzzle(sr, new Vector3(0f, 0.01f, 0.53f), flashMat);
+
+            var laserMat = Mat("Laser", new Color(1f, 0.1f, 0.1f), null, true);
+            var laserGo = new GameObject("Laser");
+            laserGo.transform.SetParent(gunGo.transform, false);
+            var laser = laserGo.AddComponent<LineRenderer>();
+            laser.useWorldSpace = true;
+            laser.positionCount = 2;
+            laser.startWidth = 0.004f;
+            laser.endWidth = 0.004f;
+            laser.sharedMaterial = laserMat;
+            laser.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            laser.receiveShadows = false;
+            var dot = RemoveCollider(Prim(PrimitiveType.Sphere, "LaserDot", gunGo.transform, Vector3.zero, Vector3.one * 0.03f, Mat("LaserDot", new Color(1f, 0.25f, 0.2f), null, true)));
+            dot.GetComponent<Renderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            gun.laser = laser;
+            gun.laserDot = dot.transform;
+            laserGo.SetActive(false);
+            dot.SetActive(false);
+
             gun.bombMaterial = Mat("Bomb", new Color(0.12f, 0.12f, 0.14f), new Color(0.5f, 0.15f, 0f));
             gun.explosionMaterial = TransparentMat("Explosion", new Color(1f, 0.55f, 0.15f, 0.8f));
-            gun.models = new[] { hg.gameObject, mg.gameObject, sg.gameObject, bm.gameObject };
-            gun.muzzles = new[] { hgMuzzle, mgMuzzle, sgMuzzle, bmMuzzle };
+            gun.models = new[] { hg.gameObject, mg.gameObject, sg.gameObject, bm.gameObject, sr.gameObject };
+            gun.muzzles = new[] { hgMuzzle, mgMuzzle, sgMuzzle, bmMuzzle, srMuzzle };
             gun.infoText = MakeText(gunGo.transform, "InfoText", "HANDGUN", new Vector3(0f, 0.11f, 0f), 0.025f, Color.white);
 
             // 特殊武器の残り時間ゲージ (銃の上に浮かぶ横長バー)
@@ -954,7 +972,7 @@ namespace ShootingGallery
 
             // 武器の的の見た目 (箱 + 文字)。普通の的の「顔」と付け替えて使い回す。同時に出るのは最大2個
             var looks = new List<GameObject>();
-            foreach (var kind in new[] { TargetKind.MachineGun, TargetKind.Shotgun, TargetKind.Bomb, TargetKind.Explosive, TargetKind.BlueOrb })
+            foreach (var kind in new[] { TargetKind.MachineGun, TargetKind.Shotgun, TargetKind.Bomb, TargetKind.Explosive, TargetKind.BlueOrb, TargetKind.Sniper })
                 for (int i = 0; i < 2; i++)
                     looks.Add(WeaponLook(go.transform, kind));
 
@@ -1000,6 +1018,23 @@ namespace ShootingGallery
                 fuse.transform.localRotation = Quaternion.Euler(0f, 0f, -25f);
                 Prim(PrimitiveType.Sphere, "Spark", look, new Vector3(0.04f, TargetDiscY + 0.2f, 0f), Vector3.one * 0.04f,
                      Mat("Explosive_Spark", new Color(1f, 0.85f, 0.3f), new Color(2f, 1.4f, 0.3f)), false);
+                return look.gameObject;
+            }
+
+            if (kind == TargetKind.Sniper)
+            {
+                // スナイパーの的: 黒い板に赤い照準 (丸 + 十字) と「SNIPER」の文字
+                var c = new Vector3(0f, TargetDiscY, 0f);
+                Prim(PrimitiveType.Cube, "Plate", look, c, new Vector3(0.28f, 0.28f, 0.04f), Mat("Sniper_Plate", new Color(0.08f, 0.08f, 0.1f)));
+                var red = Mat("Sniper_Red", new Color(1f, 0.15f, 0.15f), new Color(1.6f, 0.1f, 0.1f));
+                var ringOuter = Prim(PrimitiveType.Cylinder, "Scope", look, c + new Vector3(0f, 0.02f, -0.022f), new Vector3(0.17f, 0.002f, 0.17f), red, false);
+                ringOuter.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+                var ringInner = Prim(PrimitiveType.Cylinder, "ScopeHole", look, c + new Vector3(0f, 0.02f, -0.024f), new Vector3(0.13f, 0.002f, 0.13f),
+                                     Mat("Sniper_Plate", new Color(0.08f, 0.08f, 0.1f)), false);
+                ringInner.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+                Prim(PrimitiveType.Cube, "CrossH", look, c + new Vector3(0f, 0.02f, -0.026f), new Vector3(0.2f, 0.012f, 0.002f), red, false);
+                Prim(PrimitiveType.Cube, "CrossV", look, c + new Vector3(0f, 0.02f, -0.026f), new Vector3(0.012f, 0.2f, 0.002f), red, false);
+                MakeText(look, "Label", "SNIPER", c + new Vector3(0f, -0.105f, -0.025f), 0.05f, Color.white);
                 return look.gameObject;
             }
 
@@ -1111,6 +1146,52 @@ namespace ShootingGallery
             foreach (var lamp in lampsOn) lamp.SetActive(false);
             go.SetActive(true);
             return stage;
+        }
+
+        /// <summary>
+        /// スナイパーチャレンジの遠くの大きな的。宙に浮かぶ金と赤の的 + 光る輪 + 「3000」。
+        /// 編集中はメイン屋台の奥の遠くに置いておく (再生時は隠れていて、チャレンジのたびに SniperChallenge が動かす)。
+        /// </summary>
+        SniperChallenge BuildSniperChallenge()
+        {
+            const float Diameter = 2.2f;
+            var go = new GameObject("SniperChallenge");
+            go.SetActive(false);
+            go.transform.SetParent(world, false);
+
+            var root = Group(go.transform, "FarTarget");
+            root.localPosition = new Vector3(0f, 3.5f, 22f);
+
+            // 的本体 (根元が下端。撃たれると後ろに倒れる)
+            var targetRoot = Group(root, "BigTarget");
+            targetRoot.localPosition = new Vector3(0f, -Diameter / 2f, 0f);
+            var target = targetRoot.gameObject.AddComponent<Target>();
+            target.kind = TargetKind.SniperBig;
+            target.points = 3000;
+            target.manualControl = true;
+            var pivot = Group(targetRoot, "Pivot");
+            target.visual = pivot;
+            var gold = Mat("Sniper_Gold", new Color(1f, 0.75f, 0.15f), new Color(0.9f, 0.55f, 0.05f));
+            var red = Mat("Sniper_BigRed", new Color(1f, 0.12f, 0.1f), new Color(1.1f, 0.08f, 0.05f));
+            Bullseye(pivot, Diameter / 2f, Diameter, red, Mat("Target_White", Color.white), gold);
+            MakeText(pivot, "Label", "3000", new Vector3(0f, Diameter / 2f, -0.03f), 0.28f, new Color(0.15f, 0.05f, 0.05f));
+
+            // 飾り: 的のまわりの光る輪と、照準の目盛り (当たり判定なし)
+            var glow = Mat("Sniper_Glow", new Color(1f, 0.3f, 0.3f), new Color(2f, 0.3f, 0.25f), true);
+            var halo = Prim(PrimitiveType.Cylinder, "Halo", root, new Vector3(0f, 0f, 0.05f), new Vector3(Diameter + 0.35f, 0.005f, Diameter + 0.35f), glow, false);
+            halo.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            foreach (var d in new[] { Vector3.up, Vector3.down, Vector3.left, Vector3.right })
+            {
+                Prim(PrimitiveType.Cube, "Tick", root, d * (Diameter / 2f + 0.35f), new Vector3(0.06f, 0.06f, 0.02f) + new Vector3(Mathf.Abs(d.x), Mathf.Abs(d.y), 0f) * 0.3f, glow, false);
+            }
+            MakeText(root, "Title", "SNIPER CHALLENGE", new Vector3(0f, Diameter / 2f + 0.75f, 0f), 0.3f, new Color(1f, 0.85f, 0.3f));
+
+            var challenge = go.AddComponent<SniperChallenge>();
+            challenge.root = root;
+            challenge.bigTarget = target;
+            if (!editMode) root.gameObject.SetActive(false);
+            go.SetActive(true);
+            return challenge;
         }
 
         void BuildUfo()

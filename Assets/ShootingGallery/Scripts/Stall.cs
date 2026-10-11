@@ -52,11 +52,12 @@ namespace ShootingGallery
             transform.localPosition = restPos + Vector3.down * hiddenDepth;
         }
 
-        public void Rise(float duration)
+        /// <summary>地下からせり上がる。enableTargets = false なら的は出さない (ゲーム終了時に屋台だけ戻す時など)</summary>
+        public void Rise(float duration, bool enableTargets = true)
         {
             CaptureRestPos();
             gameObject.SetActive(true);
-            enableTargetsOnArrive = true;
+            enableTargetsOnArrive = enableTargets;
             Move(restPos, transform.localRotation, duration, null);
         }
 

@@ -37,6 +37,7 @@ namespace ShootingGallery
         float yaw, pitch;
 
         public bool DualWield => dualWield;
+        public WeaponType Weapon => weapon;
 
         void Awake()
         {
@@ -105,6 +106,7 @@ namespace ShootingGallery
             WeaponType.MachineGun => new Color(0.3f, 0.6f, 1f),
             WeaponType.Shotgun => new Color(0.3f, 0.95f, 0.4f),
             WeaponType.Bomb => new Color(1f, 0.6f, 0.15f),
+            WeaponType.Sniper => new Color(1f, 0.2f, 0.25f),
             _ => Color.white
         };
 

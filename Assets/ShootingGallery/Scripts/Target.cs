@@ -2,7 +2,7 @@ using UnityEngine;
 
 namespace ShootingGallery
 {
-    public enum TargetKind { Normal, MachineGun, Shotgun, Bomb, Fever, Start, Ufo, Explosive, BlueOrb, BigBonus }
+    public enum TargetKind { Normal, MachineGun, Shotgun, Bomb, Fever, Start, Ufo, Explosive, BlueOrb, BigBonus, Sniper, SniperBig }
 
     /// <summary>
     /// 的。撃たれると後ろに倒れて消え、一定時間後に起き上がる。
@@ -152,6 +152,21 @@ namespace ShootingGallery
                 pendingRespawn = true;
                 respawnTimer = respawnDelay;
             }
+        }
+
+        /// <summary>
+        /// 出ている的をいったん倒して、delay 秒後に起き上がらせる (自動復活する的だけ)。
+        /// 起き上がる瞬間に Rising が呼ばれるので、狙った的を特殊な的に化けさせるのに使う。
+        /// </summary>
+        public bool Reappear(float delay)
+        {
+            if (manualControl || !IsUp || Animating) return false;
+            up = false;
+            lowerTimer = 0f;
+            StartFall(0.2f);
+            pendingRespawn = true;
+            respawnTimer = delay;
+            return true;
         }
 
         /// <summary>manualControl の的を stay 秒だけ出す</summary>
