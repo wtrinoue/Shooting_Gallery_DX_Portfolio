@@ -32,9 +32,6 @@ namespace ShootingGallery
         [Header("Layout")]
         [Tooltip("プレイヤー(中心)から屋台までの距離")]
         public float stallRadius = 3.5f;
-        [Tooltip("編集中のシーンで内側の輪に並べて見せるフィーバー屋台の数 (見た目確認用)。\n" +
-                 "再生時に何軒出るかは GameManager の Stage Stall Counts で決まる (時間で 6→7→8 軒と増える)")]
-        [Range(1, 9)] public int feverStallCount = 5;
 
         [Header("Rules")]
         public float roundDuration = 90f;
@@ -172,21 +169,17 @@ namespace ShootingGallery
             LogStep("メイン屋台", step);
             yield return null;
 
-            // ---- 3. フィーバー屋台 (全ギミック分。再生時は隠したまま1軒ずつ) ----
-            // 編集中は見た目を確認・調整できるよう、最初の feverStallCount 軒は本番と同じ輪に、
-            // 残りは外側の輪に並べておく (再生時は GameManager がフィーバーのたびに並べ直す)
+            // ---- 3. フィーバー屋台 (全ギミック分。シーンに生成した時も再生時も、隠した状態で作る) ----
+            // 置き場所は仮 (メイン屋台のまわりに等間隔)。再生時は GameManager がフィーバーのたびに並べ直す。
+            // 見た目を確認したい時は、Hierarchy で Stall_〇〇 を一時的にアクティブにすればよい
             var feverStalls = new Stall[feverGimmicks.Length];
             for (int i = 0; i < feverGimmicks.Length; i++)
             {
-                bool inner = i < feverStallCount;
-                float angle = inner
-                    ? 360f / (feverStallCount + 1) * (i + 1)
-                    : 360f / (feverGimmicks.Length - feverStallCount) * (i - feverStallCount) + 30f;
-                float radius = inner ? stallRadius : stallRadius + 3.5f;
+                float angle = 360f / (feverGimmicks.Length + 1) * (i + 1);
 
                 var gimmick = feverGimmicks[i];
                 var cloth = Mat($"Cloth_{gimmick}", feverColors[i % feverColors.Length]);
-                var shell = BuildStallShell($"Stall_{gimmick}", angle, gimmick, cloth, editMode, radius);
+                var shell = BuildStallShell($"Stall_{gimmick}", angle, gimmick, cloth, false);
                 feverStalls[i] = BuildStallContent(shell, gimmick, cloth);
                 msgText.text = LoadingText(++stepsDone, stepsTotal);
                 LogStep($"フィーバー屋台 {gimmick}", step);
@@ -1189,7 +1182,7 @@ namespace ShootingGallery
             var challenge = go.AddComponent<SniperChallenge>();
             challenge.root = root;
             challenge.bigTarget = target;
-            if (!editMode) root.gameObject.SetActive(false);
+            root.gameObject.SetActive(false); // チャレンジの時だけ出る
             go.SetActive(true);
             return challenge;
         }
@@ -1238,6 +1231,7 @@ namespace ShootingGallery
 
             var flyer = go.AddComponent<UfoFlyer>();
             flyer.ufo = target;
+            target.SetAvailable(false); // 飛ぶ時だけ見える (シーンに生成した時も隠しておく)
             flyer.hum = hum;
             go.SetActive(true);
         }
