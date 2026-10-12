@@ -29,6 +29,7 @@ namespace ShootingGallery
         {
             if (DebugClearFor(() => StartWestern(yaw))) return;
             if (westernTrain == null || ChallengeActive || DeluxeActive || (bonusStage != null && bonusStage.IsBusy)) return;
+            HideHatch(); // 床下のハッチはすぐに小さくなって消える
             PutAwayStalls(false);
             westernTrain.dropDelay = StallsAwayTime; // 屋台が沈みきってから暗くなる
             westernTrain.Begin(yaw);

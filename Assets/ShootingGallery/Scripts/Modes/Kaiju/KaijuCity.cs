@@ -22,12 +22,14 @@ namespace ShootingGallery
         [Tooltip("流れる雲 (ConveyorBelt)")]
         public ConveyorBelt[] clouds;
         public float cloudSpeed = 1.2f;
+        [Tooltip("街の地面の上面の高さ (大きい間はこの分だけお祭りの地面の下へ沈めておく)")]
+        public float groundTop = 0.03f;
 
         [Header("Timing")]
         [Tooltip("始まってから終わるまでの秒数 (屋台が縮む・街が伸びる時間も含む)")]
-        public float duration = 21f;
-        [Tooltip("始まってから街が伸び始めるまでの秒数 (屋台が縮み終わるのを待つ)")]
-        public float dropDelay = 0.9f;
+        public float duration = 24f;
+        [Tooltip("始まってから街が伸び始めるまでの秒数")]
+        public float dropDelay = 0f;
         [Tooltip("建物1つが伸びきるまでの秒数")]
         public float riseTime = 0.5f;
         [Tooltip("一番近い建物から一番遠い建物まで、伸び始める時間のずれ (秒)。近くから遠くへ波のように広がる")]
@@ -62,15 +64,41 @@ namespace ShootingGallery
 
         static Vector3 Flat(Vector3 v) => new Vector3(v.x, 0f, v.z);
 
-        public void Begin()
+        /// <summary>
+        /// 怪獣モードを始める。街は bigScale 倍の大きさ (プレイヤーがふつうの人の大きさに見える、見上げるほどのビル) で、近くから遠くへ地面から伸びてくる。
+        /// そのあと GameManager が屋台や床といっしょに SetCityScale で小さくしていき、FinishShrink で今の大きさに落ち着く (ここで的のビルが使えるようになる)
+        /// </summary>
+        public void Begin(float bigScale)
         {
             if (IsActive) return;
             IsActive = true;
             startTime = Time.time;
             Destroyed = 0;
             foreach (var c in clouds) c.speed = cloudSpeed;
+            SetCityScale(bigScale, 0f);
             Play(Intro());
         }
+
+        /// <summary>
+        /// 街全体の大きさ (プレイヤーの足元が中心)。progress = 小さくなる途中の進み具合 (0〜1)。
+        /// 大きい間は街の地面をお祭りの地面の少し下に沈めておき、お祭りの地面 (と屋台) が上に見えるようにする
+        /// </summary>
+        public void SetCityScale(float scale, float progress)
+        {
+            transform.localScale = Vector3.one * scale;
+            transform.localPosition = Vector3.down * ((groundTop * scale + 0.01f) * (1f - Mathf.Clamp01(progress)));
+        }
+
+        /// <summary>小さくなりきった: 今の大きさに落ち着いて、的のビルを使えるようにする</summary>
+        public void FinishShrink()
+        {
+            SetCityScale(1f, 1f);
+            if (!IsActive) return;
+            foreach (var b in targets) b.Activate();
+        }
+
+        /// <summary>街が伸びきるまでの秒数</summary>
+        public float RiseDuration => dropDelay + riseTime + spreadTime;
 
         public void End()
         {
@@ -93,7 +121,7 @@ namespace ShootingGallery
                 yield return null;
             }
             SetCity(total, false);
-            foreach (var b in targets) b.Activate();
+            // 的のビルは、世界全体が小さくなりきってから (FinishShrink)
             anim = null;
         }
 

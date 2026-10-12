@@ -197,6 +197,7 @@ namespace ShootingGallery
         IEnumerator RiseStallsAfter(List<Stall> stalls, float delay)
         {
             yield return new WaitForSeconds(delay);
+            ShowHatch(); // 別の世界から戻った: 床下のハッチも戻す (隠していなければ何もしない)
             foreach (var s in stalls)
             {
                 if (ChallengeActive && (machineGunStalls.Contains(s) || s == sniperStall)) continue; // 念のため: もう次のチャレンジで使っている

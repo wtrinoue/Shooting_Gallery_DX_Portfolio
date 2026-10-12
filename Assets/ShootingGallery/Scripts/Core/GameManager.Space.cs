@@ -26,6 +26,7 @@ namespace ShootingGallery
         {
             if (DebugClearFor(StartSpace)) return;
             if (spaceStage == null || ChallengeActive || DeluxeActive || (bonusStage != null && bonusStage.IsBusy)) return;
+            HideHatch(); // 床下のハッチはすぐに小さくなって消える
             PutAwayStalls(false);
             spaceStage.dropDelay = StallsAwayTime; // 屋台が沈みきってから暗くなる
             spaceStage.Begin();

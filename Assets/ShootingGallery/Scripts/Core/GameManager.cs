@@ -26,6 +26,9 @@ namespace ShootingGallery
         public Target startTarget;
         [Tooltip("操作方法の看板 (プレイヤーの背中側)。タイトルの間だけ表示する (ゲーム中はフィーバーの屋台が並ぶ場所なので隠す)")]
         public GameObject controlsBoard;
+        [Tooltip("タイトルの間だけ穴をふさぐ平らな床のふたと、穴のふち (ラウンドが始まるとふたが消え、ふちとハッチが出る)")]
+        public GameObject pitCover;
+        public Transform pitRim;
         public TextMesh hudText;
         public TextMesh messageText;
         public Font font;
@@ -248,6 +251,13 @@ namespace ShootingGallery
             player.DebugRequested += StartDebug; // X ボタン長押しでデバッグモード
             player.ResetRequested += ResetToTitle; // A ボタン長押しで最初に戻る
             player.EndlessRequested += StartEndless; // B ボタン長押しでエンドレスモード
+            // 生成した時に小さくして隠してあった床下のハッチは、ラウンドが始まるまで隠したまま (タイトルの間は平らな床)
+            if (bonusStage != null && bonusStage.transform.localScale.x < 0.5f)
+            {
+                hatchScale = Vector3.one;
+                hatchHidden = true;
+                hatchWasActive = bonusStage.gameObject.activeSelf;
+            }
             GoTitle();
         }
 
@@ -341,6 +351,7 @@ namespace ShootingGallery
             mainStall.SetTargetsAvailable(false);
             startTarget.SetAvailable(true);
             if (controlsBoard != null) controlsBoard.SetActive(true);
+            SetFlatFloor(true); // タイトルの間は、穴もふちもない平らな床
             ShowMessage("SHOOT  START !", 9999f, Color.white);
         }
 
@@ -355,6 +366,7 @@ namespace ShootingGallery
             timeLeft = endless ? EndlessTime : roundDuration;
             startTarget.SetAvailable(false);
             if (controlsBoard != null) controlsBoard.SetActive(false);
+            SetFlatFloor(false); // ラウンドが始まった: 平らな床のふたが消え、穴のふちとハッチがふくらんで出る
             mainStall.SetTargetsAvailable(true);
             player.ResetWeapon();
             Sfx.Play(endless ? "stageup" : "start");
@@ -661,6 +673,93 @@ namespace ShootingGallery
             {
                 if (!shrink) s.Sink(stallMoveDuration); // 怪獣モード (shrink) は集めるだけ。床といっしょに縮める (ScaleWorld)
             }
+        }
+
+        // ---- 床下のハッチ (ボーナスステージの絞り羽根) ----
+        // 別の世界へ変わるモード (怪獣以外) では、始まってすぐにハッチがその場で小さくなって消え、屋台が戻る時にふくらんで戻る。
+        // 怪獣モードだけは、床や屋台といっしょに足元へ縮む (ScaleWorld)
+        const float HatchTime = 0.35f;
+        Coroutine hatchRoutine;
+        Vector3 hatchScale;
+        bool hatchHidden, hatchWasActive;
+
+        // タイトルの間は平らな床 (穴のふたを出して、穴のふちとハッチを隠す) / ラウンド中はいつもの穴のふちとハッチ
+        Coroutine flatRoutine;
+        Vector3 rimScale;
+
+        void SetFlatFloor(bool flat)
+        {
+            if (flatRoutine != null) StopCoroutine(flatRoutine);
+            flatRoutine = StartCoroutine(FlatFloorRoutine(flat));
+        }
+
+        IEnumerator FlatFloorRoutine(bool flat)
+        {
+            if (pitRim != null && rimScale == Vector3.zero) rimScale = pitRim.localScale.x > 0.5f ? pitRim.localScale : Vector3.one;
+            if (flat)
+            {
+                // ハッチが小さくなって消えてから、ふたで穴をふさぎ、ふちを隠す
+                bool wasHidden = hatchHidden;
+                HideHatch();
+                if (!wasHidden) yield return new WaitForSeconds(HatchTime);
+                if (pitCover != null) pitCover.SetActive(true);
+                if (pitRim != null) { pitRim.gameObject.SetActive(false); pitRim.localScale = rimScale; }
+                flatRoutine = null;
+                yield break;
+            }
+            // ふたが消え、穴のふちとハッチがふくらんで出る
+            if (pitCover != null) pitCover.SetActive(false);
+            ShowHatch();
+            if (pitRim != null)
+            {
+                pitRim.gameObject.SetActive(true);
+                for (float k = 0f; k < 1f; k += Time.deltaTime / HatchTime)
+                {
+                    pitRim.localScale = rimScale * Mathf.Max(0.001f, 1f - (1f - k) * (1f - k));
+                    yield return null;
+                }
+                pitRim.localScale = rimScale;
+            }
+            flatRoutine = null;
+        }
+
+        void HideHatch()
+        {
+            if (bonusStage == null || hatchHidden) return;
+            hatchHidden = true;
+            var t = bonusStage.transform;
+            if (hatchScale == Vector3.zero) hatchScale = t.localScale;
+            hatchWasActive = t.gameObject.activeSelf;
+            if (hatchRoutine != null) StopCoroutine(hatchRoutine);
+            hatchRoutine = StartCoroutine(ScaleHatch(false));
+        }
+
+        void ShowHatch()
+        {
+            if (bonusStage == null || !hatchHidden || State != GameState.Playing) return; // タイトルの間は平らな床のまま
+            hatchHidden = false;
+            if (hatchRoutine != null) StopCoroutine(hatchRoutine);
+            hatchRoutine = StartCoroutine(ScaleHatch(true));
+        }
+
+        IEnumerator ScaleHatch(bool show)
+        {
+            var t = bonusStage.transform;
+            if (show) t.gameObject.SetActive(hatchWasActive);
+            float from = t.localScale.x / Mathf.Max(0.0001f, hatchScale.x), to = show ? 1f : 0f;
+            for (float k = 0f; k < 1f; k += Time.deltaTime / HatchTime)
+            {
+                float e = show ? 1f - (1f - k) * (1f - k) : k * k;
+                t.localScale = hatchScale * Mathf.Max(0.001f, Mathf.Lerp(from, to, e));
+                yield return null;
+            }
+            t.localScale = hatchScale * Mathf.Max(0.001f, to);
+            if (!show)
+            {
+                t.gameObject.SetActive(false);
+                t.localScale = hatchScale; // 隠している間は元の大きさに戻しておく (他の処理が大きさを使っても困らないように)
+            }
+            hatchRoutine = null;
         }
 
         /// <summary>

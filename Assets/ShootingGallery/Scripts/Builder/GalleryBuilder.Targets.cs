@@ -13,7 +13,8 @@ namespace ShootingGallery
         const float TargetDiscY = 0.3f; // 的の根元から円の中心までの高さ
 
         /// <summary>点数付きの的。点数で色と大きさが変わり、中央に点数が書いてある。</summary>
-        Target PointTarget(Transform parent, int points, Vector3 localPos, float respawnDelay = 3f)
+        /// <summary>点数の的。stand = false なら円盤の下の棒を付けない (回る円盤や板に貼り付いた的・吊るした的など、棒があるとおかしい所)</summary>
+        Target PointTarget(Transform parent, int points, Vector3 localPos, float respawnDelay = 3f, bool stand = true)
         {
             var root = Group(parent, $"Target_{points}");
             root.localPosition = localPos;
@@ -25,7 +26,8 @@ namespace ShootingGallery
             target.visual = pivot;
 
             float d = PointStyle.Diameter(points);
-            Prim(PrimitiveType.Cube, "Stand", pivot, new Vector3(0f, (TargetDiscY - d / 2f) / 2f, 0f), new Vector3(0.035f, TargetDiscY - d / 2f, 0.035f), Mat("Target_Stand", new Color(0.3f, 0.3f, 0.32f)));
+            if (stand)
+                Prim(PrimitiveType.Cube, "Stand", pivot, new Vector3(0f, (TargetDiscY - d / 2f) / 2f, 0f), new Vector3(0.035f, TargetDiscY - d / 2f, 0.035f), Mat("Target_Stand", new Color(0.3f, 0.3f, 0.32f)));
 
             // 「顔」(円盤と数字)。武器の的に化ける時はここが武器の箱に付け替わる
             var face = Group(pivot, "Face");
@@ -35,6 +37,19 @@ namespace ShootingGallery
             MakeText(face, "Points", points.ToString(), new Vector3(0f, TargetDiscY, -0.012f), d * 0.32f, new Color(0.1f, 0.1f, 0.1f));
             return target;
         }
+
+        /// <summary>回る円盤や板に貼り付けた点数の的: 棒がなく、当たると後ろに倒れずにその場で縮んで消える (起き上がる時はふくらんで出る)</summary>
+        Target WallTarget(Transform parent, int points, Vector3 localPos)
+        {
+            var target = PointTarget(parent, points, localPos, 3f, stand: false);
+            target.shrinkOnHit = true;
+            // 縮む中心が円盤の真ん中になるように、見た目の軸を円盤の中心まで上げ、中身はその分下げる
+            var pivot = target.visual;
+            pivot.localPosition = Vector3.up * TargetDiscY;
+            foreach (Transform child in pivot) child.localPosition += Vector3.down * TargetDiscY;
+            return target;
+        }
+
 
         /// <summary>フィーバーの赤い的 (メイン屋台の最上段)。当てると周りに屋台が現れる。</summary>
         Target FeverTarget(Transform parent, Vector3 localPos)

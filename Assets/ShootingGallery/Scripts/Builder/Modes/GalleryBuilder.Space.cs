@@ -121,7 +121,6 @@ namespace ShootingGallery
                 if (t != null) ground.Add(t);
             }
             if (playerMark != null) ground.Add(playerMark.transform);
-            if (bonusStage != null) ground.Add(bonusStage.transform);
             stage.groundParts = ground.ToArray();
             // 床の材質ごとに、透けさせる時の半透明版を作っておく (シーンに保存して、実機でも半透明の描き方が使えるようにする)
             var fadeFrom = new List<Material>();

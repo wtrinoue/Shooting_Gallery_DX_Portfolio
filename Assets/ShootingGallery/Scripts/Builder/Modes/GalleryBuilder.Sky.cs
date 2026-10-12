@@ -77,7 +77,6 @@ namespace ShootingGallery
                 if (t != null) ground.Add(t);
             }
             if (playerMark != null) ground.Add(playerMark.transform);
-            if (bonusStage != null) ground.Add(bonusStage.transform);
             battle.groundParts = ground.ToArray();
             battle.scenery = scenery.ToArray();
             battle.sceneryFactors = factors.ToArray();

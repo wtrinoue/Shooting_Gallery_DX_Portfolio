@@ -246,6 +246,15 @@ namespace ShootingGallery
             gm.roundDuration = roundDuration;
             gm.feverDuration = feverDuration;
             gm.specialWeaponDuration = weaponSeconds;
+            // 床下のハッチは、生成した時は小さくして隠しておく (ゲームが始まるとふくらんで出てくる。GameManager.Start)
+            if (bonusStage != null) bonusStage.transform.localScale = Vector3.one * 0.001f;
+            // タイトルの間は平らな床: 穴を地面と同じ色のふたでふさぎ、穴のふちも隠しておく (ラウンドが始まるとふたが消え、ふちとハッチが出る)
+            var pitRim = world.Find("PitRim");
+            var pitCover = Prim(PrimitiveType.Cylinder, "PitCover", world, new Vector3(0f, 0.0015f, 0f), new Vector3(2f * (PitRadius + 0.15f), 0.0015f, 2f * (PitRadius + 0.15f)),
+                                Mat("Ground", new Color(0.22f, 0.18f, 0.14f)), false);
+            if (pitRim != null) pitRim.gameObject.SetActive(false);
+            gm.pitCover = pitCover;
+            gm.pitRim = pitRim;
             gmGo.SetActive(true);
             if (editMode) msgText.text = ""; // 「NOW LOADING」をシーンに残さない
 

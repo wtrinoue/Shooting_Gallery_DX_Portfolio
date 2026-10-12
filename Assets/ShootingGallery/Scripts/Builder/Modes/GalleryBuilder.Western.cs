@@ -140,8 +140,6 @@ namespace ShootingGallery
                 if (t != null) ground.Add(t);
             }
             if (playerMark != null) ground.Add(playerMark.transform);
-            var bonus = world.Find("BonusStage");
-            if (bonus != null) ground.Add(bonus);
             western.groundParts = ground.ToArray();
             western.showDuringStage = new[] { desert, track.gameObject };
             western.scenery = scenery.ToArray();

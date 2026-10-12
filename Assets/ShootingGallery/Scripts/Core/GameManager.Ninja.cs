@@ -34,6 +34,7 @@ namespace ShootingGallery
         {
             if (DebugClearFor(() => StartNinja(yaw))) return;
             if (ninjaDojo == null || ChallengeActive || DeluxeActive || (bonusStage != null && bonusStage.IsBusy)) return;
+            HideHatch(); // 床下のハッチはすぐに小さくなって消える
             ninjaStalls.Clear();
             ninjaStalls.Add(mainStall);
             if (IsFever) ninjaStalls.AddRange(activeFeverStalls);

@@ -9,9 +9,11 @@ namespace ShootingGallery
     {
         // ---- 怪獣モード ----
 
-        const float KaijuShrinkTime = 3f;   // 床と屋台がまとめて小さくなって消えるまでの秒数 (ゆっくり)
+        const float KaijuShrinkTime = 3.5f; // 床・屋台・大きな街がまとめて小さくなっていく秒数 (ゆっくり)
+        const float KaijuCityRatio = 0.15f; // その間に全部が小さくなる倍率 (街は 1 / これ 倍の大きさから、今の大きさまで縮む)
+        const float KaijuVanishTime = 0.5f; // 足元に小さく残った屋台と床が、さらに縮んで消えるまでの秒数
         const float KaijuGrowTime = 2.2f;   // 終わりに元の大きさへ戻るまでの秒数
-        const float KaijuSmallest = 0.03f;  // 小さくなりきった時の倍率
+        const float KaijuSmallest = 0.01f;  // 屋台と床が消える時の倍率 (戻る時はここから大きくなる)
         Coroutine kaijuWorldRoutine;
         Vector3[] kaijuGroundPos, kaijuGroundScale;
         bool[] kaijuGroundActive;
@@ -27,28 +29,38 @@ namespace ShootingGallery
         }
 
         /// <summary>
-        /// 怪獣の的を撃った: 床 (地面・穴のふち・ボーナスステージのハッチ) と出ている屋台をまとめて、プレイヤーの足元を中心に
-        /// 世界全体がゆっくり小さくなるように縮めて消し、まわりに街を伸ばす。空は青空に。
-        /// 武器は怪獣の頭 (炎の玉を吐く)。
+        /// 怪獣の的を撃った:
+        ///   1. まず屋台のまわりに、見上げるほど大きなビルの街が地面から伸びてくる (屋台はそのまま。的はしまう)。
+        ///   2. 次に、床 (地面・穴のふち・ボーナスステージのハッチ)・屋台・街の全部が、プレイヤーの足元を中心に同じ調子でゆっくり小さくなっていく
+        ///      (プレイヤーがどんどん大きくなっていくように見える)。街が今の大きさまで縮んだら、足元に小さく残った屋台と床が消える。
+        ///   3. 落ち着いたら青空になり、手が怪獣の頭になって、炎の玉でビルを壊せる。
         /// </summary>
         void StartKaiju()
         {
             if (DebugClearFor(StartKaiju)) return;
             if (kaijuCity == null || ChallengeActive || DeluxeActive || (bonusStage != null && bonusStage.IsBusy)) return;
             PutAwayStalls(true);
-            StartWorldScale(ScaleWorld(new List<Stall>(stageStalls), true, KaijuShrinkTime, 0f));
-            kaijuCity.dropDelay = KaijuShrinkTime; // 床と屋台が縮みきってから街が伸びる (縮みきった床と入れ替わりに街の地面が出る)
-            kaijuCity.Begin();
-            player.GiveWeapon(WeaponType.FireBall, kaijuCity.duration);
-            // 縮みきったら、遠くまで続く街が見えるように霧を遠くからにして、青空にする
-            StartCoroutine(WhileActiveAfter(KaijuShrinkTime, () => KaijuActive, () =>
-            {
-                RenderSettings.fogStartDistance = Mathf.Max(normalFogStart, 35f);
-                RenderSettings.fogEndDistance = Mathf.Max(normalFogEnd, 140f);
-                FadeAmbience(kaijuFogColor, kaijuAmbient, kaijuSkyColor);
-            }));
+            foreach (var s in stageStalls) s.SetTargetsAvailable(false);
+            kaijuCity.dropDelay = 0.2f;
+            kaijuCity.Begin(1f / KaijuCityRatio); // 1. 大きな街が伸びてくる
+            StartWorldScale(ScaleWorld(new List<Stall>(stageStalls), true, KaijuShrinkTime, kaijuCity.RiseDuration + 0.4f)); // 2. 全部まとめて小さくなる
+            // 大きな街が遠くまで見えるように、霧を遠くからにする
+            RenderSettings.fogStartDistance = Mathf.Max(normalFogStart, 35f);
+            RenderSettings.fogEndDistance = Mathf.Max(normalFogEnd, 140f);
             Sfx.Play("roar");
-            ShowMessage("KAIJU MODE!!\nBREAK THE COLORED BUILDINGS!", 3f, new Color(0.4f, 1f, 0.4f));
+            ShowMessage("KAIJU MODE!!", 2f, new Color(0.4f, 1f, 0.4f));
+        }
+
+        // 3. 世界全体が小さくなりきった: 青空にして、怪獣の頭を渡す (手元のゲージが残り時間)
+        void OnKaijuSettled()
+        {
+            kaijuCity.FinishShrink();
+            if (!KaijuActive) return;
+            FadeAmbience(kaijuFogColor, kaijuAmbient, kaijuSkyColor);
+            if (State != GameState.Playing) return;
+            player.GiveWeapon(WeaponType.FireBall, kaijuCity.TimeLeft);
+            Sfx.Play("roar");
+            ShowMessage("BREAK THE COLORED BUILDINGS!", 2.5f, new Color(0.4f, 1f, 0.4f));
         }
 
         /// <summary>怪獣モードの時間切れ: 街を沈め、縮めた屋台を元の大きさに戻す</summary>
@@ -110,21 +122,45 @@ namespace ShootingGallery
             if (!shrink)
                 for (int i = 0; i < ground.Length; i++) ground[i].gameObject.SetActive(kaijuGroundActive[i]);
 
+            if (shrink)
+            {
+                // 床・屋台・大きな街を、同じ倍率でいっしょに小さくする (街は 1 / KaijuCityRatio 倍 → 1 倍、床と屋台は 1 倍 → KaijuCityRatio 倍)
+                float logRatio = Mathf.Log(KaijuCityRatio);
+                for (float t = 0f; t < 1f; t += Time.deltaTime / duration)
+                {
+                    float e = t * t * (3f - 2f * t);
+                    float s = Mathf.Exp(logRatio * e);
+                    ApplyWorldScale(moving, ground, s);
+                    kaijuCity.SetCityScale(s / KaijuCityRatio, e);
+                    yield return null;
+                }
+                ApplyWorldScale(moving, ground, KaijuCityRatio);
+                kaijuCity.SetCityScale(1f, 1f);
+                // 足元に小さく残った屋台と床が、さらに縮んで消える (街の地面がもうその下に来ている)
+                float logFrom = Mathf.Log(KaijuCityRatio), logTo = Mathf.Log(KaijuSmallest);
+                for (float t = 0f; t < 1f; t += Time.deltaTime / KaijuVanishTime)
+                {
+                    ApplyWorldScale(moving, ground, Mathf.Exp(Mathf.Lerp(logFrom, logTo, t * t)));
+                    yield return null;
+                }
+                // 小さくなりきった: 屋台は地下へしまい、床は元の大きさに戻して隠しておく (街の地面の下)
+                foreach (var s in moving) s.FinishWorldShrink();
+                ApplyWorldScale(new List<Stall>(), ground, 1f);
+                foreach (var g in ground) g.gameObject.SetActive(false);
+                kaijuWorldRoutine = null;
+                OnKaijuSettled();
+                yield break;
+            }
+
             float logSmall = Mathf.Log(KaijuSmallest);
             for (float t = 0f; t < 1f; t += Time.deltaTime / duration)
             {
                 float e = t * t * (3f - 2f * t);
-                ApplyWorldScale(moving, ground, Mathf.Exp(logSmall * (shrink ? e : 1f - e)));
+                ApplyWorldScale(moving, ground, Mathf.Exp(logSmall * (1f - e)));
                 yield return null;
             }
-            ApplyWorldScale(moving, ground, shrink ? KaijuSmallest : 1f);
-            if (shrink)
-            {   // 小さくなりきった: 屋台は地下へしまい、床は元の大きさに戻して隠しておく (街の地面の下)
-                foreach (var s in moving) s.FinishWorldShrink();
-                ApplyWorldScale(new List<Stall>(), ground, 1f);
-                foreach (var g in ground) g.gameObject.SetActive(false);
-            }
-            else foreach (var s in moving) s.FinishWorldGrow();
+            ApplyWorldScale(moving, ground, 1f);
+            foreach (var s in moving) s.FinishWorldGrow();
             kaijuWorldRoutine = null;
         }
 

@@ -299,7 +299,7 @@ namespace ShootingGallery
                 RemoveCollider(Prim(PrimitiveType.Cube, "Rope", pivot, new Vector3(0f, -lengths[i] / 2f, 0f), new Vector3(0.012f, lengths[i], 0.012f), rope));
                 // 的の円の上端がロープの先に来るように吊るす
                 float d = PointStyle.Diameter(values[i]);
-                targets.Add(PointTarget(pivot, values[i], new Vector3(0f, -lengths[i] - d / 2f - TargetDiscY, 0f)));
+                targets.Add(PointTarget(pivot, values[i], new Vector3(0f, -lengths[i] - d / 2f - TargetDiscY, 0f), stand: false)); // ロープから吊るすので棒なし
             }
         }
 
@@ -452,9 +452,9 @@ namespace ShootingGallery
             {
                 float a = i * Mathf.PI * 2f / values.Length;
                 var pos = new Vector3(Mathf.Cos(a), Mathf.Sin(a), 0f) * 0.62f;
-                targets.Add(PointTarget(wheel, values[i], pos + new Vector3(0f, -TargetDiscY, -0.04f)));
+                targets.Add(WallTarget(wheel, values[i], pos + new Vector3(0f, -TargetDiscY, -0.04f)));
             }
-            targets.Add(PointTarget(wheel, 500, new Vector3(0f, -TargetDiscY, -0.04f))); // 真ん中は500点
+            targets.Add(WallTarget(wheel, 500, new Vector3(0f, -TargetDiscY, -0.04f))); // 真ん中は500点
         }
 
         // ---- 回転扉: くるくる回る板の表と裏に的。板が横を向いた瞬間は当てにくい ----
@@ -479,8 +479,8 @@ namespace ShootingGallery
                 rotator.speed = speeds[i];
 
                 Prim(PrimitiveType.Cube, "Board", panel, Vector3.zero, new Vector3(0.5f, 0.5f, 0.03f), cloth);
-                targets.Add(PointTarget(panel, values[i][0], new Vector3(0f, -TargetDiscY, -0.02f)));     // 表
-                var back = PointTarget(panel, values[i][1], new Vector3(0f, -TargetDiscY, 0.02f));       // 裏
+                targets.Add(WallTarget(panel, values[i][0], new Vector3(0f, -TargetDiscY, -0.02f)));     // 表
+                var back = WallTarget(panel, values[i][1], new Vector3(0f, -TargetDiscY, 0.02f));       // 裏
                 back.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
                 targets.Add(back);
             }

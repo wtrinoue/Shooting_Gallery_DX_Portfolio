@@ -29,6 +29,7 @@ namespace ShootingGallery
         {
             if (DebugClearFor(() => StartCasino(yaw))) return;
             if (casinoHall == null || ChallengeActive || DeluxeActive || (bonusStage != null && bonusStage.IsBusy)) return;
+            HideHatch(); // 床下のハッチはすぐに小さくなって消える
             PutAwayStalls(false);
             casinoHall.dropDelay = StallsAwayTime; // 屋台が沈みきってから壁が伸びてくる
             casinoHall.Begin(yaw);
