@@ -8,8 +8,8 @@ namespace ShootingGallery
 {
     /// <summary>
     /// プレイヤー。中心から移動せず、見回して撃つだけ。
-    /// 操作は右手トリガーのみ (フィーバー中の左手の銃も右トリガーで同時に撃つ)。
-    /// VRデバイスが無い時はマウスでテストできる (右ドラッグで視点, 左クリックで発射)。
+    /// 右手トリガーで右の銃を撃つ。フィーバー中の左手の銃は左手トリガーで撃つ。
+    /// VRデバイスが無い時はマウスでテストできる (右ドラッグで視点, 左クリック/Spaceで右の銃, Fキーで左の銃)。
     /// </summary>
     public class PlayerRig : MonoBehaviour
     {
@@ -20,9 +20,9 @@ namespace ShootingGallery
         public GunController rightGun;
         public GunController leftGun;
 
-        [Tooltip("ONなら左手の銃も右トリガーで撃つ。OFFなら左トリガーで撃つ")]
-        public bool leftGunUsesRightTrigger = true;
         public float standingEyeHeight = 1.6f;
+        [Tooltip("VRの時に視点をこの分 (m) だけ実際より高くする")]
+        public float xrHeightBoost = 1.0f;
         public float mouseSensitivity = 0.15f;
 
         InputAction rightTrigger;
@@ -48,6 +48,7 @@ namespace ShootingGallery
 
             leftTrigger = new InputAction("LeftTrigger", InputActionType.Button);
             leftTrigger.AddBinding("<XRController>{LeftHand}/trigger");
+            leftTrigger.AddBinding("<Keyboard>/f");
         }
 
         void OnEnable()
@@ -81,8 +82,7 @@ namespace ShootingGallery
 
             if (dualWield && leftGun != null)
             {
-                if (leftGunUsesRightTrigger) leftGun.TriggerInput(rPressed, rHeld);
-                else leftGun.TriggerInput(leftTrigger.WasPressedThisFrame(), leftTrigger.IsPressed());
+                leftGun.TriggerInput(leftTrigger.WasPressedThisFrame(), leftTrigger.IsPressed());
             }
 
             // 特殊武器の残り時間
@@ -144,7 +144,7 @@ namespace ShootingGallery
             if (xr)
             {
                 bool floor = TrySetFloorOrigin();
-                cameraOffset.localPosition = floor ? Vector3.zero : Vector3.up * standingEyeHeight;
+                cameraOffset.localPosition = Vector3.up * ((floor ? 0f : standingEyeHeight) + xrHeightBoost);
             }
             else
             {

@@ -2,7 +2,7 @@ using UnityEngine;
 
 namespace ShootingGallery
 {
-    public enum TargetKind { Normal, MachineGun, Shotgun, Bomb, Fever, Start, Ufo, Explosive, BlueOrb, BigBonus, Sniper, SniperBig, MachineGunChallenge, MachineGunChallengeTarget }
+    public enum TargetKind { Normal, MachineGun, Shotgun, Bomb, Fever, Start, Ufo, Explosive, BlueOrb, BigBonus, Sniper, SniperBig, MachineGunChallenge, MachineGunChallengeTarget, Deluxe }
 
     /// <summary>
     /// 的。撃たれると後ろに倒れて消え、一定時間後に起き上がる。
@@ -40,6 +40,8 @@ namespace ShootingGallery
         public float knockMaxBack = 0.4f;
         [Tooltip("根元からどれだけ下まで落ちたら消えるか (m)。台の高さにすると床まで落ちる")]
         public float knockDropHeight = 1f;
+        [Tooltip("ONなら的の向きに関係なく、カメラから遠ざかる向きへ飛ぶ (回転台に乗っていて向きが変わるカップ用)")]
+        public bool knockAwayFromCamera;
 
         /// <summary>的が起き上がり始めた瞬間に呼ばれる (WeaponDropper が武器の的に化けさせるのに使う)</summary>
         public static event System.Action<Target> Rising;
@@ -259,11 +261,13 @@ namespace ShootingGallery
             angle = targetAngle = 90f; // 倒れた扱い (見た目は落ちきるまで出しておく)
             knockHome = visual.localPosition;
             knockStart = visual.position;
-            knockBackDir = Vector3.ProjectOnPlane(transform.forward, Vector3.up).normalized;
-            knockSpinAxis = transform.right; // この軸の正の回転で、上が奥へ倒れる
+            Vector3 back = transform.forward;
+            if (knockAwayFromCamera && Camera.main != null) back = transform.position - Camera.main.transform.position;
+            knockBackDir = Vector3.ProjectOnPlane(back, Vector3.up).normalized;
+            knockSpinAxis = Vector3.Cross(Vector3.up, knockBackDir); // 奥に向かって右。この軸の正の回転で、上が奥へ倒れる
             knockVel = knockBackDir * knockBackSpeed * Random.Range(0.85f, 1.15f)
                      + Vector3.up * knockUpSpeed * Random.Range(0.8f, 1.2f)
-                     + transform.right * Random.Range(-0.25f, 0.25f);
+                     + knockSpinAxis * Random.Range(-0.25f, 0.25f);
             knockSpin = Random.Range(450f, 750f);
             knockFloorY = transform.position.y - knockDropHeight;
         }

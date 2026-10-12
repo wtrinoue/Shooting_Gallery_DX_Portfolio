@@ -16,6 +16,8 @@ namespace ShootingGallery
         public AudioClip door, complete;
         [Header("ステージアップ (屋台が増える時)")]
         public AudioClip stageUp;
+        [Header("豪華屋台チェンジ")]
+        public AudioClip deluxe;
         [Header("マシンガンチャレンジ (カップを倒した音。空なら自動生成。複数入れると毎回ランダムに選ぶ)")]
         public AudioClip[] canHits = new AudioClip[0];
         [Header("同時に鳴る音の抑え方")]
@@ -57,6 +59,7 @@ namespace ShootingGallery
             if (door == null) door = Noise("Door", 1.3f, 2.2f, 3.5f, 0.03f); // ゴゴゴ…と床がスライドする音
             if (complete == null) complete = Fanfare();
             if (stageUp == null) stageUp = PowerUp();
+            if (deluxe == null) deluxe = DeluxeFanfare();
             if (sniperShot == null) sniperShot = Noise("SniperShot", 0.9f, 4.5f, 2.2f, 0.5f); // 乾いた大きな発砲音が長く尾を引く
             if (sniperReady == null) sniperReady = Tones("SniperReady", new[] { 1760f, 0f, 1760f, 0f, 2349f }, 0.07f); // ピッ ピッ ピーン (照準)
             if (sniperMiss == null) sniperMiss = Tones("SniperMiss", new[] { 392f, 330f, 262f }, 0.16f); // ざんねん…
@@ -139,6 +142,7 @@ namespace ShootingGallery
                 "ufo" => instance.ufoHit,
                 "door" => instance.door,
                 "complete" => instance.complete,
+                "deluxe" => instance.deluxe,
                 _ => null
             };
             if (clip == null) return;
@@ -260,6 +264,40 @@ namespace ShootingGallery
             for (int i = 0; i < data.Length; i++) data[i] = Mathf.Clamp(data[i], -1f, 1f);
 
             var clip = AudioClip.Create("Complete", data.Length, 1, Rate, false);
+            clip.SetData(data, 0);
+            return clip;
+        }
+
+        /// <summary>
+        /// 豪華屋台チェンジの音: ハープのように2オクターブを駆け上がるきらきらした分散和音 → 大きな和音がうねりながら長く響く。
+        /// </summary>
+        static AudioClip DeluxeFanfare()
+        {
+            float[] run = { 523.25f, 659.25f, 783.99f, 987.77f, 1046.5f, 1318.5f, 1568f, 1975.5f, 2093f }; // ド ミ ソ シ ド…
+            const float NoteLen = 0.055f;
+            var chord = Bell("DeluxeChord", new[] { 261.63f, 523.25f, 659.25f, 783.99f, 987.77f, 1318.5f }, 2.2f);
+            var chordData = new float[chord.samples];
+            chord.GetData(chordData, 0);
+            Destroy(chord);
+
+            int per = (int)(Rate * NoteLen);
+            int chordStart = per * run.Length;
+            var data = new float[chordStart + chordData.Length];
+            for (int k = 0; k < run.Length; k++)
+                for (int i = 0; i < per * 6 && k * per + i < data.Length; i++) // 長く重ねてハープのように
+                {
+                    float t = i / (float)Rate;
+                    float env = Mathf.Exp(-t * 6f) * Mathf.Clamp01(i / 60f);
+                    data[k * per + i] += 0.22f * env * (Mathf.Sin(2f * Mathf.PI * run[k] * t) + 0.25f * Mathf.Sin(6f * Mathf.PI * run[k] * t));
+                }
+            for (int i = 0; i < chordData.Length; i++)
+            {
+                float t = i / (float)Rate;
+                data[chordStart + i] += chordData[i] * 2f * (0.8f + 0.2f * Mathf.Sin(2f * Mathf.PI * 6f * t)); // うねり
+            }
+            for (int i = 0; i < data.Length; i++) data[i] = Mathf.Clamp(data[i], -1f, 1f);
+
+            var clip = AudioClip.Create("Deluxe", data.Length, 1, Rate, false);
             clip.SetData(data, 0);
             return clip;
         }

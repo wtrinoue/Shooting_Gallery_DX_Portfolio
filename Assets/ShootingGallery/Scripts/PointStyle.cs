@@ -9,6 +9,7 @@ namespace ShootingGallery
 
         public static Color TargetColor(int points) => points switch
         {
+            >= 1000 => new Color(1f, 0.25f, 0.75f),  // 桃 (豪華屋台だけに出る)
             >= 500 => new Color(1f, 0.75f, 0.1f),    // 金
             >= 300 => new Color(0.78f, 0.8f, 0.88f), // 銀
             >= 200 => new Color(0.65f, 0.3f, 0.9f),  // 紫
@@ -21,6 +22,7 @@ namespace ShootingGallery
 
         public static float Diameter(int points) => points switch
         {
+            >= 1000 => 0.14f,
             >= 500 => 0.15f,
             >= 300 => 0.18f,
             >= 200 => 0.2f,

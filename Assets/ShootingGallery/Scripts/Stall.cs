@@ -10,12 +10,16 @@ namespace ShootingGallery
         public float hiddenDepth = 4f;
 
         Vector3 restPos;
+        Quaternion restRot;
         bool restPosCaptured;
         Coroutine moveRoutine;
         bool enableTargetsOnArrive; // せり上がり途中に Slide されても、着いたら的を出す
 
         /// <summary>表示中で、せり上がり / 沈み込みの途中でない</summary>
         public bool IsSettled => gameObject.activeInHierarchy && moveRoutine == null;
+        /// <summary>止まる場所 (地上に出ている時の位置と向き。親のローカル座標)。動いている途中でも行き先を返す</summary>
+        public Vector3 RestPosition { get { CaptureRestPos(); return restPos; } }
+        public Quaternion RestRotation { get { CaptureRestPos(); return restRot; } }
 
         void Awake() => CaptureRestPos();
 
@@ -23,6 +27,7 @@ namespace ShootingGallery
         {
             if (restPosCaptured) return;
             restPos = transform.localPosition;
+            restRot = transform.localRotation;
             restPosCaptured = true;
         }
 
@@ -47,6 +52,7 @@ namespace ShootingGallery
             if (moveRoutine != null) StopCoroutine(moveRoutine);
             moveRoutine = null;
             restPos = localPos;
+            restRot = localRot;
             restPosCaptured = true;
             transform.localRotation = localRot;
             transform.localPosition = restPos + Vector3.down * hiddenDepth;
@@ -77,6 +83,7 @@ namespace ShootingGallery
         {
             CaptureRestPos();
             restPos = localPos;
+            restRot = localRot;
             if (!gameObject.activeInHierarchy)
             {
                 transform.localRotation = localRot;

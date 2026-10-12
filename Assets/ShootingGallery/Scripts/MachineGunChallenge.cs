@@ -8,14 +8,37 @@ namespace ShootingGallery
     /// マシンガンチャレンジの「横長の屋台とカップ」の出し入れ。
     /// 進行 (屋台を引っ込める・マシンガンを渡す・終了の判定) は GameManager が行い、ここは屋台の出し入れと時間・当てた数だけを受け持つ。
     /// 引っ込めた屋台 (撃った屋台と両隣) が沈むのと同時に、同じ方向に横長の屋台がせり上がり、
-    /// 棚に並んだカップが左から順に現れる。カップは撃たれると棚の後ろへ弾き飛ばされて落ちる (Target.knockOffOnHit)。
+    /// カップが左から順に現れる。カップは撃たれると後ろへ弾き飛ばされて落ちる (Target.knockOffOnHit)。
+    /// カップの並べ方 (棚 / ピラミッド / 回転台 / 動く棚) は毎回 layouts からランダムに選ぶ。
+    /// ピラミッドのように積んだカップは、下のカップが落ちると上のカップも崩れ落ちる (links)。
     /// </summary>
     public class MachineGunChallenge : MonoBehaviour
     {
+        /// <summary>積んだカップの「下」と「その上に乗っているカップ」の組</summary>
+        [System.Serializable]
+        public struct CupLink
+        {
+            public Target lower;
+            public Target upper;
+        }
+
+        /// <summary>カップの並べ方 1つ分</summary>
+        [System.Serializable]
+        public class Layout
+        {
+            public string name;
+            [Tooltip("この並べ方の台とカップをまとめた親。選ばれた時だけ表示する")]
+            public GameObject root;
+            [Tooltip("カップ (kind = MachineGunChallengeTarget, manualControl, knockOffOnHit)")]
+            public Target[] targets;
+            [Tooltip("lower が落ちると upper も崩れ落ちる")]
+            public CupLink[] links;
+        }
+
         [Tooltip("横長の屋台。カップはこの子にあり、Stall.targets には入れない (沈む時にカップを消さず、乗せたまま沈めるため)")]
         public Stall stall;
-        [Tooltip("棚に並んだカップ (kind = MachineGunChallengeTarget, manualControl, knockOffOnHit)")]
-        public Target[] targets;
+        [Tooltip("カップの並べ方。チャレンジのたびにランダムで1つ選ぶ (前回と同じものは続けて出さない)")]
+        public Layout[] layouts;
 
         [Header("Bombs (並ぶたびに、ランダムなカップが爆弾に変わる)")]
         [Tooltip("爆弾の見た目 (使い回す)。この数だけ爆弾が混ざる。カップの「顔」(Target.face) と付け替える")]
@@ -30,6 +53,8 @@ namespace ShootingGallery
         public float appearSpread = 0.6f;
         [Tooltip("マシンガンを撃てる秒数 (カップが並び終わってから)")]
         public float timeLimit = 8f;
+        [Tooltip("下のカップが落ちてから、上のカップが崩れ落ちるまでの秒数")]
+        public float collapseDelay = 0.08f;
 
         public bool IsActive { get; private set; }
         /// <summary>屋台がせり上がり終わり、カップが出始めたか (ここでマシンガンを渡す)</summary>
@@ -40,7 +65,9 @@ namespace ShootingGallery
         public float Duration => riseDuration + ShootDuration;
         /// <summary>撃てる残り時間。屋台がせり上がる前は減らない</summary>
         public float TimeLeft => !IsActive ? 0f : IsReady ? Mathf.Max(0f, ShootDuration - (Time.time - readyTime)) : ShootDuration;
-        public int Total => targets != null ? targets.Length : 0;
+        /// <summary>今回の並べ方の名前</summary>
+        public string LayoutName => current != null ? current.name : "";
+        public int Total => current != null && current.targets != null ? current.targets.Length : 0;
         public int Hits { get; private set; }
         public bool AllCleared => Total > 0 && Hits >= Total;
         /// <summary>Hide してから横長の屋台が沈み始めるまでの秒数 (元の屋台はこの時に同時にせり上げる)</summary>
@@ -49,6 +76,8 @@ namespace ShootingGallery
 
         float readyTime;
         Coroutine anim;
+        Layout current;
+        int lastLayout = -1;
         readonly List<Target> bombs = new List<Target>(); // 今回爆弾に変わっているカップ
 
         /// <summary>このカップは今回爆弾か</summary>
@@ -56,7 +85,11 @@ namespace ShootingGallery
 
         void Awake()
         {
-            foreach (var t in targets) if (t != null) t.SetAvailable(false);
+            foreach (var layout in layouts)
+            {
+                foreach (var t in layout.targets) if (t != null) t.SetAvailable(false);
+                if (layout.root != null) layout.root.SetActive(false);
+            }
             foreach (var look in bombLooks) if (look != null) look.SetActive(false);
         }
 
@@ -80,9 +113,26 @@ namespace ShootingGallery
             var worldRot = Quaternion.LookRotation(direction); // 屋台の表 (-Z) がプレイヤーを向く
             stall.PlaceAt(parent != null ? parent.InverseTransformPoint(worldPos) : worldPos,
                           parent != null ? Quaternion.Inverse(parent.rotation) * worldRot : worldRot);
-            foreach (var t in targets) if (t != null) t.SetAvailable(true); // manualControl なので隠れたまま Raise を待つ
+            ChooseLayout();
+            foreach (var t in current.targets) if (t != null) t.SetAvailable(true); // manualControl なので隠れたまま Raise を待つ
             PlaceBombs();
             Play(ShowRoutine());
+        }
+
+        /// <summary>並べ方をランダムに選び、その台とカップだけを表示する</summary>
+        void ChooseLayout()
+        {
+            // 前回の片付けが途中で止まっていても、前のカップは全部しまっておく
+            foreach (var layout in layouts)
+                foreach (var t in layout.targets) if (t != null) t.SetAvailable(false);
+
+            int n = layouts.Length;
+            int i = Random.Range(0, n);
+            if (n > 1 && i == lastLayout) i = (i + Random.Range(1, n)) % n;
+            lastLayout = i;
+            current = layouts[i];
+            for (int k = 0; k < n; k++)
+                if (layouts[k].root != null) layouts[k].root.SetActive(k == i);
         }
 
         IEnumerator ShowRoutine()
@@ -92,16 +142,23 @@ namespace ShootingGallery
 
             IsReady = true;
             readyTime = Time.time;
-            // 左から順に現れる (屋台のローカル X の小さい順)
-            var order = new List<Target>(targets);
+            // 左から順に現れる (屋台から見た横位置の小さい順。台に乗って動いているカップは今の位置で決める)
+            var order = new List<Target>(current.targets);
             order.RemoveAll(t => t == null);
-            order.Sort((a, b) => a.transform.localPosition.x.CompareTo(b.transform.localPosition.x));
-            float minX = order.Count > 0 ? order[0].transform.localPosition.x : 0f;
-            float maxX = order.Count > 0 ? order[order.Count - 1].transform.localPosition.x : 0f;
+            var appearAt = new Dictionary<Target, float>();
+            float minX = float.MaxValue, maxX = float.MinValue;
             foreach (var t in order)
             {
-                float at = readyTime + appearSpread * Mathf.InverseLerp(minX, maxX, t.transform.localPosition.x);
-                while (Time.time < at) yield return null;
+                float x = stall.transform.InverseTransformPoint(t.transform.position).x;
+                appearAt[t] = x;
+                minX = Mathf.Min(minX, x);
+                maxX = Mathf.Max(maxX, x);
+            }
+            foreach (var t in order) appearAt[t] = readyTime + appearSpread * Mathf.InverseLerp(minX, maxX, appearAt[t]);
+            order.Sort((a, b) => appearAt[a].CompareTo(appearAt[b]));
+            foreach (var t in order)
+            {
+                while (Time.time < appearAt[t]) yield return null;
                 if (IsActive) t.Raise(ShootDuration + 60f); // 片付ける時は屋台ごと沈める
             }
             anim = null;
@@ -113,6 +170,20 @@ namespace ShootingGallery
             if (!IsActive) return Total - Hits;
             Hits++;
             return Mathf.Max(0, Total - Hits);
+        }
+
+        /// <summary>カップが落ちた: その上に積んであったカップを少し後に崩れ落とす (崩れたカップも当てた数と点数に入る)</summary>
+        public void OnCupHit(Target cup)
+        {
+            if (!IsActive || current == null || current.links == null) return;
+            foreach (var link in current.links)
+                if (link.lower == cup && link.upper != null) StartCoroutine(Collapse(link.upper));
+        }
+
+        IEnumerator Collapse(Target upper)
+        {
+            yield return new WaitForSeconds(collapseDelay);
+            if (IsActive && upper.IsUp) upper.Hit(upper.visual.position + Vector3.up * 0.09f);
         }
 
         /// <summary>残ったカップを乗せたまま屋台を沈めて片付ける</summary>
@@ -129,7 +200,7 @@ namespace ShootingGallery
             yield return new WaitForSeconds(HideWait);
             stall.Sink(riseDuration);
             yield return new WaitForSeconds(riseDuration + 0.1f);
-            foreach (var t in targets) if (t != null) t.SetAvailable(false);
+            foreach (var t in current.targets) if (t != null) t.SetAvailable(false);
             ClearBombs();
             anim = null;
         }
@@ -139,7 +210,7 @@ namespace ShootingGallery
         {
             ClearBombs();
             var pool = new List<Target>();
-            foreach (var t in targets) if (t != null && t.face != null) pool.Add(t);
+            foreach (var t in current.targets) if (t != null && t.face != null) pool.Add(t);
             foreach (var look in bombLooks)
             {
                 if (look == null || pool.Count == 0) continue;

@@ -8,28 +8,47 @@ namespace ShootingGallery
     /// 進行 (屋台を引っ込める・武器を渡す・成功/失敗の判定) は GameManager が行い、ここは見た目と時間だけを受け持つ。
     /// 的は屋台があった方向の遠く・高い所に浮かんで現れ、プレイヤーの方を向く。
     /// 出ている間は霧を遠ざけて、遠くの的がはっきり見えるようにする。
+    /// 距離は毎回 tiers からランダムに選ぶ。遠いほど的 (縞) が大きく、点数も高い。
     /// </summary>
     public class SniperChallenge : MonoBehaviour
     {
+        /// <summary>的までの距離の段階 1つ分</summary>
+        [System.Serializable]
+        public class DistanceTier
+        {
+            public string name = "NEAR";
+            [Tooltip("プレイヤーから的までの水平距離 (m)")]
+            public float distance = 14f;
+            [Tooltip("的の中心の高さ (m)")]
+            public float height = 3f;
+            [Tooltip("的の大きさの倍率 (縞の幅もこの倍率で大きくなる)")]
+            public float scale = 1f;
+            [Tooltip("各輪の点数。ringRadii と同じ順 (真ん中から)")]
+            public int[] ringPoints = { 3000, 2000, 1000, 500 };
+        }
+
         [Tooltip("動かす / 拡大縮小する親 (大きな的と飾り)")]
         public Transform root;
         [Tooltip("遠くの大きな的 (kind = SniperBig)")]
         public Target bigTarget;
+        [Tooltip("各輪の点数の数字。ringRadii と同じ順 (真ん中から)。距離が変わるたびに書き換える")]
+        public TextMesh[] ringLabels;
 
         [Header("Placement")]
-        [Tooltip("プレイヤーから的までの水平距離 (m)")]
-        public float distance = 22f;
-        [Tooltip("的の中心の高さ (m)")]
-        public float height = 3.5f;
+        [Tooltip("距離の段階。チャレンジのたびにランダムで1つ選ぶ")]
+        public DistanceTier[] tiers =
+        {
+            new DistanceTier { name = "NEAR", distance = 14f, height = 3f, scale = 1f, ringPoints = new[] { 3000, 2000, 1000, 500 } },
+            new DistanceTier { name = "MIDDLE", distance = 21f, height = 4f, scale = 1.3f, ringPoints = new[] { 4000, 2500, 1500, 800 } },
+            new DistanceTier { name = "FAR", distance = 28f, height = 5f, scale = 1.65f, ringPoints = new[] { 5000, 3500, 2000, 1000 } },
+        };
         [Tooltip("ふわふわ上下に揺れる幅 (m)")]
         public float bobAmplitude = 0.15f;
         public float bobSpeed = 1.2f;
 
         [Header("Score Rings (真ん中ほど高い)")]
-        [Tooltip("各輪の外側の半径 (m)。真ん中から順に。GalleryBuilder はこの半径で縞模様を作る")]
+        [Tooltip("各輪の外側の半径 (m, 倍率 1 の時)。真ん中から順に。GalleryBuilder はこの半径で縞模様を作る")]
         public float[] ringRadii = { 0.22f, 0.5f, 0.8f, 1.1f };
-        [Tooltip("各輪の点数。ringRadii と同じ順 (真ん中から)")]
-        public int[] ringPoints = { 3000, 2000, 1000, 500 };
 
         [Header("Timing")]
         [Tooltip("撃たずにこの秒数たつと失敗")]
@@ -44,14 +63,20 @@ namespace ShootingGallery
 
         public bool IsActive { get; private set; }
         public float TimeLeft => IsActive ? Mathf.Max(0f, timeLimit - (Time.time - startTime)) : 0f;
+        /// <summary>今回の距離の段階</summary>
+        public DistanceTier Tier => tiers[Mathf.Clamp(tierIndex, 0, tiers.Length - 1)];
+        /// <summary>今回の各輪の点数 (真ん中から)</summary>
+        public int[] RingPoints => Tier.ringPoints;
         /// <summary>真ん中に当てた時の点数</summary>
-        public int MaxPoints => ringPoints.Length > 0 ? ringPoints[0] : 0;
+        public int MaxPoints => RingPoints.Length > 0 ? RingPoints[0] : 0;
 
         /// <summary>的に当たった所 (ワールド座標) の点数。的の中心からの距離で決まる</summary>
         public int PointsAt(Vector3 worldPoint)
         {
+            var ringPoints = RingPoints;
             if (ringPoints.Length == 0) return 0;
-            // root は的の中心にあり、的の面は root の XY 平面 (撃たれた瞬間はまだ倒れていない)
+            // root は的の中心にあり、的の面は root の XY 平面 (撃たれた瞬間はまだ倒れていない)。
+            // root の拡大率は InverseTransformPoint で打ち消されるので、半径は倍率 1 の時の値で比べられる
             Vector3 p = root.InverseTransformPoint(worldPoint);
             float r = new Vector2(p.x, p.y).magnitude;
             for (int i = 0; i < ringPoints.Length && i < ringRadii.Length; i++)
@@ -60,6 +85,7 @@ namespace ShootingGallery
         }
 
         float startTime;
+        int tierIndex;
         Vector3 basePos;
         Coroutine anim;
         float savedFogStart, savedFogEnd;
@@ -85,8 +111,14 @@ namespace ShootingGallery
 
             IsActive = true;
             startTime = Time.time;
+            tierIndex = Random.Range(0, tiers.Length);
+            var tier = Tier;
+            for (int i = 0; i < ringLabels.Length && i < tier.ringPoints.Length; i++)
+                if (ringLabels[i] != null) ringLabels[i].text = tier.ringPoints[i].ToString();
+            bigTarget.points = MaxPoints; // 実際の点数は当たった所で GameManager が決める
+
             var parent = root.parent;
-            Vector3 worldPos = (parent != null ? parent.position : Vector3.zero) + direction * distance + Vector3.up * height;
+            Vector3 worldPos = (parent != null ? parent.position : Vector3.zero) + direction * tier.distance + Vector3.up * tier.height;
             basePos = parent != null ? parent.InverseTransformPoint(worldPos) : worldPos;
             root.localPosition = basePos;
             root.rotation = Quaternion.LookRotation(worldPos - eye); // 的の表 (-Z) をプレイヤーに向ける
@@ -104,7 +136,7 @@ namespace ShootingGallery
                     fogSaved = true;
                 }
             }
-            Play(Scale(0f, 1f, appearTime, false));
+            Play(Scale(0f, tier.scale, appearTime, false));
         }
 
         /// <summary>的を消す。hit = true なら倒れるのを少し見せてから縮んで消える</summary>

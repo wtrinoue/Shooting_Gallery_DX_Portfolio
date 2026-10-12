@@ -79,6 +79,19 @@ namespace ShootingGallery
         float separatedUntil;              // チャレンジが終わってから、次のチャレンジの的を出してよくなる時刻
         bool sniperShown, mgChallengeShown; // このラウンドでもう出たか
 
+        [Header("DELUXE の的 (撃つと出ている屋台が全部豪華な屋台に入れ替わる。同時に1つまで)")]
+        [Tooltip("ゲーム開始から最初に出せるようになるまでの秒数")]
+        public Vector2 deluxeStartDelay = new Vector2(15f, 25f);
+        [Tooltip("豪華タイムが終わってから、次に出せるようになるまでの秒数")]
+        public Vector2 deluxeGap = new Vector2(20f, 30f);
+        [Tooltip("出せる時に、起き上がった的が化ける確率")]
+        [Range(0f, 1f)] public float deluxeChance = 0.25f;
+        [Tooltip("撃たれずにこの秒数たったら引っ込む")]
+        public float deluxeLifetime = 6f;
+        public int deluxeTargetPoints = 300;
+        float nextDeluxeTime;
+        bool wasDeluxe;
+
         bool wasPlaying, wasFever, challengeWasBusy;
         TargetKind lastChallengeKind = TargetKind.Sniper;
         // チャレンジの的 (スナイパー / マシンガン) を出す予定の屋台 / 的 (どの屋台にも等しく出るよう、先に屋台をランダムに決めておく)
@@ -120,6 +133,12 @@ namespace ShootingGallery
             }
             foreach (var t in toRestore) Restore(t);
 
+            // 豪華タイムが終わった所から次の DELUXE の的までの間隔を数える
+            var gm = GameManager.I;
+            bool deluxe = gm != null && gm.DeluxeActive;
+            if (wasDeluxe && !deluxe) nextDeluxeTime = Time.time + Random.Range(deluxeGap.x, deluxeGap.y);
+            wasDeluxe = deluxe;
+
             UpdateChallengeReservation();
         }
 
@@ -147,6 +166,7 @@ namespace ShootingGallery
                 nextMgChallengeTime = Time.time + Random.Range(mgChallengeStartDelay.x, mgChallengeStartDelay.y);
                 sniperShown = mgChallengeShown = false;
                 separatedUntil = 0f;
+                nextDeluxeTime = Time.time + Random.Range(deluxeStartDelay.x, deluxeStartDelay.y);
             }
             else if (fever && !wasFever) // フィーバーが始まったら早めに出す (屋台がせり上がる 1.2 秒も待つ)
             {
@@ -258,6 +278,14 @@ namespace ShootingGallery
                 }
             }
 
+            // DELUXE の的: どの屋台にも出る。撃たれずに消えたら少ししてまた出る
+            if (Time.time >= nextDeluxeTime && Count(TargetKind.Deluxe) == 0 && Random.value < deluxeChance
+                && gm.CanOfferDeluxe(target, deluxeLifetime))
+            {
+                if (ApplyDisguise(target, TargetKind.Deluxe, deluxeTargetPoints)) nextDeluxeTime = Time.time + deluxeLifetime + 4f;
+                return;
+            }
+
             // 青い玉: フィーバー中だけ、メイン以外の屋台に1つまで (撃たれずに消えたらまた出る)
             if (gm.IsFever && !gm.BonusUsedThisFever && (gm.bonusStage == null || !gm.bonusStage.IsBusy)
                 && Count(TargetKind.BlueOrb) == 0 && Time.time >= nextBlueOrbTime
@@ -311,6 +339,7 @@ namespace ShootingGallery
             TargetKind.BlueOrb => blueOrbLifetime,
             TargetKind.Sniper => sniperLifetime,
             TargetKind.MachineGunChallenge => mgChallengeLifetime,
+            TargetKind.Deluxe => deluxeLifetime,
             _ => lifetime
         };
 

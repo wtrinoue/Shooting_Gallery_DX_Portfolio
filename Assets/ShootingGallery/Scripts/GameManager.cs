@@ -34,6 +34,19 @@ namespace ShootingGallery
         [Tooltip("マシンガンチャレンジの的を撃つと始まるマシンガンチャレンジ (屋台3軒分に並んだ的をマシンガンで撃つ)")]
         public MachineGunChallenge machineGunChallenge;
 
+        [Header("Deluxe (豪華屋台チェンジ: DELUXE の的を撃つと、出ている屋台が全部黒と金の豪華な屋台に入れ替わる)")]
+        [Tooltip("豪華版のメイン屋台 (フィーバーの的もある)")]
+        public Stall deluxeMainStall;
+        [Tooltip("豪華版のフィーバー屋台。豪華タイム中のフィーバーはこの中から選ぶ (輪に並ぶ最大数 - 1 軒以上必要)")]
+        public Stall[] deluxeFeverStalls;
+        public float deluxeDuration = 20f;
+        [Tooltip("豪華タイム中に空に上がる花火の色 (半透明のマテリアル)")]
+        public Material[] fireworkMaterials;
+        [Tooltip("豪華タイム中の霧の色 (夜空が紫がかる)")]
+        public Color deluxeFogColor = new Color(0.14f, 0.04f, 0.2f);
+        [Tooltip("豪華タイム中の環境光")]
+        public Color deluxeAmbient = new Color(0.55f, 0.45f, 0.42f);
+
         [Header("Rules")]
         public float roundDuration = 90f;
         public float feverDuration = 20f;
@@ -59,6 +72,14 @@ namespace ShootingGallery
         bool machineGunGiven;       // マシンガンチャレンジのマシンガンをもう渡したか (屋台がせり上がってから渡す)
         /// <summary>スナイパー / マシンガンのどちらかのチャレンジ中か (この間はフィーバーの残り時間と屋台の拡張を止める)</summary>
         public bool ChallengeActive => SniperActive || MachineGunChallengeActive;
+        /// <summary>豪華タイム中か (この間 mainStall / feverStalls は豪華版の屋台を指す)</summary>
+        public bool DeluxeActive { get; private set; }
+        float deluxeLeft;
+        float nextFireworkTime;
+        Stall normalMainStall;      // 普通のメイン屋台 (豪華タイムが終わったら戻す)
+        Stall[] normalFeverStalls;  // 普通のフィーバー屋台
+        Color normalFogColor, normalAmbient;
+        Coroutine ambienceRoutine;
 
         public GameState State { get; private set; }
         /// <summary>今のステージ (0 始まり)</summary>
@@ -92,6 +113,11 @@ namespace ShootingGallery
             mainHomePos = mainStall.transform.localPosition;
             mainHomeRot = mainStall.transform.localRotation;
             foreach (var s in feverStalls) s.HideImmediate();
+            normalMainStall = mainStall;
+            normalFeverStalls = feverStalls;
+            if (deluxeMainStall != null) deluxeMainStall.HideImmediate();
+            if (deluxeFeverStalls != null)
+                foreach (var s in deluxeFeverStalls) s.HideImmediate();
             GoTitle();
         }
 
@@ -109,6 +135,12 @@ namespace ShootingGallery
                 {
                     if (!ChallengeActive) feverLeft -= Time.deltaTime; // チャレンジ中はフィーバーの残り時間を止める
                     if (feverLeft <= 0f) EndFever();
+                }
+                if (DeluxeActive)
+                {
+                    if (!ChallengeActive) deluxeLeft -= Time.deltaTime; // チャレンジ中は止める (屋台を入れ替えない)
+                    if (deluxeLeft <= 0f && !ChallengeActive) EndDeluxe();
+                    else if (Time.time >= nextFireworkTime) LaunchFirework();
                 }
                 if (timeLeft <= 0f) EndRound();
             }
@@ -133,7 +165,8 @@ namespace ShootingGallery
                 case GameState.Playing:
                     string fever = IsFever ? $"   FEVER {Mathf.CeilToInt(feverLeft)}" : "";
                     string mg = MachineGunChallengeActive ? $"   MG {machineGunChallenge.Hits}/{machineGunChallenge.Total}" : "";
-                    hudText.text = $"SCORE {Score}   STAGE {Stage + 1}\nTIME {Mathf.CeilToInt(Mathf.Max(0f, timeLeft))}{fever}{mg}";
+                    string deluxe = DeluxeActive ? $"   DELUXE {Mathf.CeilToInt(Mathf.Max(0f, deluxeLeft))}" : "";
+                    hudText.text = $"SCORE {Score}   STAGE {Stage + 1}\nTIME {Mathf.CeilToInt(Mathf.Max(0f, timeLeft))}{fever}{deluxe}{mg}";
                     break;
                 case GameState.Result:
                     hudText.text = $"SCORE {Score}\nHIGH SCORE {highScore}";
@@ -178,6 +211,7 @@ namespace ShootingGallery
             if (SniperActive) EndSniper(false, null);
             if (MachineGunChallengeActive) EndMachineGunChallenge();
             if (IsFever) EndFever();
+            if (DeluxeActive) EndDeluxe(); // 普通のメイン屋台に戻してからタイトルへ (START の的は普通のメイン屋台にある)
             mainStall.SetTargetsAvailable(false);
             player.ResetWeapon();
 
@@ -389,6 +423,10 @@ namespace ShootingGallery
                     popupColor = new Color(1f, 0.85f, 0.2f);
                     StartMachineGunChallenge(target);
                     break;
+                case TargetKind.Deluxe:
+                    popupColor = new Color(1f, 0.8f, 0.3f);
+                    StartDeluxe();
+                    break;
                 case TargetKind.MachineGunChallengeTarget:
                     popupColor = new Color(1f, 0.85f, 0.2f);
                     if (machineGunChallenge != null && machineGunChallenge.IsBomb(target))
@@ -398,6 +436,7 @@ namespace ShootingGallery
                         StartCoroutine(ExplodeAfterDelay(point, machineGunChallenge.bombRadius));
                     }
                     else Sfx.Play("can");
+                    machineGunChallenge.OnCupHit(target); // 上に積んであったカップも崩れ落ちる
                     if (MachineGunChallengeActive && machineGunChallenge.RegisterHit() == 0) EndMachineGunChallenge(); // 全部倒した
                     break;
             }
@@ -472,7 +511,7 @@ namespace ShootingGallery
             player.SetDualWield(false); // ライフルは右手の1丁だけ
             player.GiveWeapon(WeaponType.Sniper, sniper.timeLimit);
             Sfx.Play("sniperready");
-            ShowMessage($"SNIPER CHALLENGE!\nCENTER {sniper.MaxPoints} PTS", 3f, new Color(1f, 0.3f, 0.35f));
+            ShowMessage($"SNIPER CHALLENGE!\n{sniper.Tier.name} {sniper.Tier.distance:0}m  CENTER {sniper.MaxPoints} PTS", 3f, new Color(1f, 0.3f, 0.35f));
         }
 
         /// <summary>スナイパーライフルの1発が撃たれた (GunController から)。hit = 当たった的 (なければ null)</summary>
@@ -536,7 +575,7 @@ namespace ShootingGallery
             machineGunGiven = false;
 
             Sfx.Play("sniperready");
-            ShowMessage("MACHINE GUN CHALLENGE!", 2.5f, new Color(1f, 0.85f, 0.2f));
+            ShowMessage($"MACHINE GUN CHALLENGE!\n{machineGunChallenge.LayoutName}", 2.5f, new Color(1f, 0.85f, 0.2f));
         }
 
         /// <summary>横長の屋台がせり上がり終わった: マシンガンを渡す</summary>
@@ -585,6 +624,129 @@ namespace ShootingGallery
                 bool show = s == mainStall || (IsFever && activeFeverStalls.Contains(s));
                 if (show) s.Rise(stallMoveDuration, State == GameState.Playing);
             }
+        }
+
+        // ---- 豪華屋台チェンジ ----
+
+        /// <summary>
+        /// この的を DELUXE の的に化けさせてよいか (WeaponDropper が聞く)。
+        /// 豪華タイム中・チャレンジ中・ボーナスステージ中は出さない。撃たれるまでの間に時間切れが来る時も出さない。
+        /// </summary>
+        public bool CanOfferDeluxe(Target target, float lifetime)
+        {
+            if (deluxeMainStall == null || target == null || State != GameState.Playing) return false;
+            if (DeluxeActive || ChallengeActive || (bonusStage != null && bonusStage.IsBusy)) return false;
+            var stall = target.GetComponentInParent<Stall>();
+            if (stall == null || !stall.IsSettled) return false;
+            return timeLeft > lifetime + 8f;
+        }
+
+        /// <summary>
+        /// DELUXE の的を撃った: 今出ている屋台 (メイン + フィーバー中の屋台) を、同じ場所で豪華版の屋台に入れ替える。
+        /// 以後 mainStall / feverStalls は豪華版を指すので、フィーバー・ステージの拡張・チャレンジはそのまま豪華版の屋台で動く。
+        /// </summary>
+        void StartDeluxe()
+        {
+            if (DeluxeActive || ChallengeActive || deluxeMainStall == null) return;
+            DeluxeActive = true;
+            deluxeLeft = deluxeDuration;
+            nextFireworkTime = Time.time + 0.3f;
+
+            SwapStalls(deluxeMainStall, deluxeFeverStalls);
+            normalFogColor = RenderSettings.fogColor;
+            normalAmbient = RenderSettings.ambientLight;
+            FadeAmbience(deluxeFogColor, deluxeAmbient);
+
+            Sfx.Play("deluxe");
+            ShowMessage("DELUXE TIME!!\nGRAND STALLS OPEN!", 3f, new Color(1f, 0.8f, 0.3f));
+        }
+
+        /// <summary>豪華タイムが終わった: 豪華版の屋台を、同じ場所で普通の屋台に戻す</summary>
+        void EndDeluxe()
+        {
+            if (!DeluxeActive) return;
+            DeluxeActive = false;
+            SwapStalls(normalMainStall, normalFeverStalls);
+            FadeAmbience(normalFogColor, normalAmbient);
+            if (State == GameState.Playing) ShowMessage("DELUXE END", 1.5f, Color.white);
+        }
+
+        /// <summary>
+        /// 出ている屋台を、newMain と newFeverPool の屋台に同じ場所で入れ替える (古い屋台が沈んでから新しい屋台がせり上がる)。
+        /// フィーバー屋台は newFeverPool からランダムに選ぶ。
+        /// </summary>
+        void SwapStalls(Stall newMain, Stall[] newFeverPool)
+        {
+            SwapStall(mainStall, newMain);
+            mainStall = newMain;
+
+            var pool = new List<Stall>(newFeverPool);
+            for (int i = 0; i < activeFeverStalls.Count && pool.Count > 0; i++)
+            {
+                int j = Random.Range(0, pool.Count);
+                SwapStall(activeFeverStalls[i], pool[j]);
+                activeFeverStalls[i] = pool[j];
+                pool.RemoveAt(j);
+            }
+            feverStalls = newFeverPool;
+        }
+
+        void SwapStall(Stall from, Stall to)
+        {
+            if (from == null || to == null) return;
+            to.PlaceAt(from.RestPosition, from.RestRotation);
+            if (from.gameObject.activeInHierarchy)
+            {
+                from.Sink(stallMoveDuration * 0.6f);
+                // 入れ替わる瞬間を金色の光で包む
+                if (fireworkMaterials != null && fireworkMaterials.Length > 0)
+                    Explosion.Spawn(from.transform.position + Vector3.up * 1.5f, 2.2f, fireworkMaterials[0]);
+            }
+            StartCoroutine(RiseSwapped(to, stallMoveDuration * 0.5f));
+        }
+
+        // 入れ替えた屋台を少し後にせり上げる (待っている間に別の屋台に入れ替わったり、フィーバーが終わったりしていたら出さない)
+        IEnumerator RiseSwapped(Stall stall, float delay)
+        {
+            yield return new WaitForSeconds(delay);
+            bool show = stall == mainStall || (IsFever && activeFeverStalls.Contains(stall));
+            if (ChallengeActive && (machineGunStalls.Contains(stall) || stall == sniperStall)) show = false;
+            if (show) stall.Rise(stallMoveDuration, State == GameState.Playing);
+        }
+
+        /// <summary>夜空に花火を1発上げる (プレイヤーのまわりのランダムな方向。何色かの光の玉がぱっと広がる)</summary>
+        void LaunchFirework()
+        {
+            nextFireworkTime = Time.time + Random.Range(0.35f, 0.8f);
+            if (fireworkMaterials == null || fireworkMaterials.Length == 0) return;
+            float angle = Random.Range(0f, Mathf.PI * 2f);
+            Vector3 center = player.transform.position + new Vector3(Mathf.Sin(angle), 0f, Mathf.Cos(angle)) * Random.Range(8f, 11f)
+                           + Vector3.up * Random.Range(5.5f, 8.5f);
+            var mat = fireworkMaterials[Random.Range(0, fireworkMaterials.Length)];
+            Explosion.Spawn(center, Random.Range(0.6f, 0.9f), mat);
+            int sparks = Random.Range(5, 8);
+            for (int i = 0; i < sparks; i++)
+                Explosion.Spawn(center + Random.onUnitSphere * Random.Range(0.7f, 1.3f), Random.Range(0.18f, 0.3f), mat);
+        }
+
+        void FadeAmbience(Color fog, Color ambient)
+        {
+            if (ambienceRoutine != null) StopCoroutine(ambienceRoutine);
+            ambienceRoutine = StartCoroutine(FadeAmbienceRoutine(fog, ambient, 1.2f));
+        }
+
+        IEnumerator FadeAmbienceRoutine(Color fog, Color ambient, float duration)
+        {
+            Color fogFrom = RenderSettings.fogColor, ambientFrom = RenderSettings.ambientLight;
+            for (float t = 0f; t < 1f; t += Time.deltaTime / duration)
+            {
+                RenderSettings.fogColor = Color.Lerp(fogFrom, fog, t);
+                RenderSettings.ambientLight = Color.Lerp(ambientFrom, ambient, t);
+                yield return null;
+            }
+            RenderSettings.fogColor = fog;
+            RenderSettings.ambientLight = ambient;
+            ambienceRoutine = null;
         }
 
         // 爆弾の的: 少し間をおいて爆発し、周りの的をまとめて倒す (範囲内の爆弾の的も誘爆する)
