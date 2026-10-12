@@ -23,20 +23,21 @@ namespace ShootingGallery
         /// <summary>手裏剣を投げる。dir の向きに speed (m/秒) でまっすぐ飛び、range (m) 飛んだら消える</summary>
         public static void Spawn(Vector3 origin, Vector3 dir, float speed, float range, Material mat, Material centerMat, LayerMask mask)
         {
-            var go = new GameObject("Shuriken");
-            go.transform.position = origin;
-            go.transform.rotation = Quaternion.LookRotation(dir);
-            var s = go.AddComponent<Shuriken>();
-            s.velocity = dir.normalized * speed;
-            s.maxDistance = range;
-            s.mask = mask;
-
-            // 見た目: 平たい棒を4本、45度ずつずらして重ねた8方手裏剣と、真ん中の輪 (飛ぶ向きに対して水平に寝かせる)
-            s.spin = new GameObject("Spin").transform;
-            s.spin.SetParent(go.transform, false);
-            for (int i = 0; i < 4; i++)
-                Part(PrimitiveType.Cube, s.spin, Quaternion.Euler(0f, i * 45f, 0f), new Vector3(0.026f, 0.006f, 0.14f), mat);
-            Part(PrimitiveType.Cylinder, s.spin, Quaternion.identity, new Vector3(0.045f, 0.005f, 0.045f), centerMat);
+            // 投げるたびに部品から作らず、FxPool で使い回す
+            var go = FxPool.Get("Shuriken", () =>
+            {
+                var g = new GameObject("Shuriken");
+                var sh = g.AddComponent<Shuriken>();
+                sh.poolKey = "Shuriken";
+                // 見た目: 平たい棒を4本、45度ずつずらして重ねた8方手裏剣と、真ん中の輪 (飛ぶ向きに対して水平に寝かせる)
+                sh.spin = new GameObject("Spin").transform;
+                sh.spin.SetParent(g.transform, false);
+                for (int i = 0; i < 4; i++)
+                    Part(PrimitiveType.Cube, sh.spin, Quaternion.Euler(0f, i * 45f, 0f), new Vector3(0.026f, 0.006f, 0.14f), mat);
+                Part(PrimitiveType.Cylinder, sh.spin, Quaternion.identity, new Vector3(0.045f, 0.005f, 0.045f), centerMat);
+                return g;
+            });
+            Launch(go, origin, dir, speed, range, mask);
         }
 
         /// <summary>
@@ -45,27 +46,43 @@ namespace ShootingGallery
         /// </summary>
         public static void SpawnDart(Vector3 origin, Vector3 dir, float speed, float range, Material shaftMat, Material flightMat, LayerMask mask)
         {
-            var go = new GameObject("Dart");
-            go.transform.position = origin;
-            go.transform.rotation = Quaternion.LookRotation(dir);
-            var s = go.AddComponent<Shuriken>();
+            var go = FxPool.Get("Dart", () =>
+            {
+                var g = new GameObject("Dart");
+                var s = g.AddComponent<Shuriken>();
+                s.poolKey = "Dart";
+                s.spinSpeed = 0f;
+                s.spin = new GameObject("Body").transform;
+                s.spin.SetParent(g.transform, false);
+                s.spin.localPosition = Vector3.back * 0.06f; // 針の先が当たった所に来るように、体は少し後ろ
+                Part(PrimitiveType.Cylinder, s.spin, Quaternion.Euler(90f, 0f, 0f), new Vector3(0.012f, 0.06f, 0.012f), shaftMat, Vector3.zero);
+                Part(PrimitiveType.Cylinder, s.spin, Quaternion.Euler(90f, 0f, 0f), new Vector3(0.004f, 0.03f, 0.004f), shaftMat, new Vector3(0f, 0f, 0.085f)); // 針
+                Part(PrimitiveType.Cube, s.spin, Quaternion.identity, new Vector3(0.05f, 0.002f, 0.04f), flightMat, new Vector3(0f, 0f, -0.07f));  // 羽根
+                Part(PrimitiveType.Cube, s.spin, Quaternion.identity, new Vector3(0.002f, 0.05f, 0.04f), flightMat, new Vector3(0f, 0f, -0.07f));
+                return g;
+            });
+            Launch(go, origin, dir, speed, range, mask);
+        }
+
+        string poolKey = "Shuriken"; // FxPool にしまう時の種類 (Shuriken / Dart)
+
+        // 使い回しの1本を、origin から dir へ飛ばし始める
+        static void Launch(GameObject go, Vector3 origin, Vector3 dir, float speed, float range, LayerMask mask)
+        {
+            go.transform.SetPositionAndRotation(origin, Quaternion.LookRotation(dir));
+            go.transform.localScale = Vector3.one; // 刺さっていた物の大きさの影響を戻す
+            var s = go.GetComponent<Shuriken>();
             s.velocity = dir.normalized * speed;
             s.maxDistance = range;
+            s.travelled = 0f;
             s.mask = mask;
-            s.spinSpeed = 0f;
-            s.spin = new GameObject("Body").transform;
-            s.spin.SetParent(go.transform, false);
-            s.spin.localPosition = Vector3.back * 0.06f; // 針の先が当たった所に来るように、体は少し後ろ
-            Part(PrimitiveType.Cylinder, s.spin, Quaternion.Euler(90f, 0f, 0f), new Vector3(0.012f, 0.06f, 0.012f), shaftMat, Vector3.zero);
-            Part(PrimitiveType.Cylinder, s.spin, Quaternion.Euler(90f, 0f, 0f), new Vector3(0.004f, 0.03f, 0.004f), shaftMat, new Vector3(0f, 0f, 0.085f)); // 針
-            Part(PrimitiveType.Cube, s.spin, Quaternion.identity, new Vector3(0.05f, 0.002f, 0.04f), flightMat, new Vector3(0f, 0f, -0.07f));  // 羽根
-            Part(PrimitiveType.Cube, s.spin, Quaternion.identity, new Vector3(0.002f, 0.05f, 0.04f), flightMat, new Vector3(0f, 0f, -0.07f));
+            s.stuck = false;
         }
 
         static void Part(PrimitiveType type, Transform parent, Quaternion rot, Vector3 scale, Material mat, Vector3 pos = default)
         {
             var p = GameObject.CreatePrimitive(type);
-            Destroy(p.GetComponent<Collider>());
+            DestroyImmediate(p.GetComponent<Collider>()); // すぐ消す (飛んでいる自分に当たらないように)
             p.transform.SetParent(parent, false);
             p.transform.localPosition = pos;
             p.transform.localRotation = rot;
@@ -93,7 +110,7 @@ namespace ShootingGallery
             }
             transform.position += dir * step;
             travelled += step;
-            if (travelled > maxDistance) Destroy(gameObject);
+            if (travelled > maxDistance) FxPool.Release(poolKey, gameObject);
         }
 
         // 当たった所に、刃の先が少し食い込むように刺さる。当たった物 (の親) について動く (倒れる的と一緒に倒れる)
@@ -104,7 +121,7 @@ namespace ShootingGallery
             // 当たった物そのものは大きさを変えた箱のことが多いので、その親につける (子が歪まないように)
             var parent = hit.collider.transform.parent;
             if (parent != null) transform.SetParent(parent, true);
-            Destroy(gameObject, StuckTime); // 的と一緒に非表示になっても消える
+            FxPool.ReleaseAfter(poolKey, gameObject, StuckTime); // 的と一緒に非表示になっても、時間どおりにしまう
         }
     }
 }

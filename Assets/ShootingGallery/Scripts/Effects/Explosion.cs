@@ -2,10 +2,11 @@ using UnityEngine;
 
 namespace ShootingGallery
 {
-    /// <summary>爆発の見た目。半透明の球が膨らみながら消える。</summary>
+    /// <summary>爆発の見た目。半透明の球が膨らみながら消える。使い終わったら FxPool にしまって使い回す。</summary>
     public class Explosion : MonoBehaviour
     {
         const float Duration = 0.35f;
+        const string PoolKey = "Explosion";
 
         float radius;
         float age;
@@ -15,18 +16,19 @@ namespace ShootingGallery
 
         public static void Spawn(Vector3 position, float radius, Material material)
         {
-            var go = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            go.name = "Explosion";
-            DestroyImmediate(go.GetComponent<Collider>());
+            var go = FxPool.Get(PoolKey, () =>
+            {
+                var g = FxPool.Primitive(PrimitiveType.Sphere, material);
+                var ex = g.AddComponent<Explosion>();
+                ex.rend = g.GetComponent<Renderer>();
+                ex.block = new MaterialPropertyBlock();
+                return g;
+            });
             go.transform.position = position;
-            var r = go.GetComponent<Renderer>();
-            r.sharedMaterial = material;
-            r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-
-            var e = go.AddComponent<Explosion>();
+            var e = go.GetComponent<Explosion>();
+            e.rend.sharedMaterial = material;
             e.radius = radius;
-            e.rend = r;
-            e.block = new MaterialPropertyBlock();
+            e.age = 0f;
             e.baseColor = material != null && material.HasProperty("_BaseColor") ? material.GetColor("_BaseColor") : new Color(1f, 0.6f, 0.2f, 0.8f);
             e.Update();
         }
@@ -43,7 +45,7 @@ namespace ShootingGallery
             block.SetColor("_BaseColor", c);
             rend.SetPropertyBlock(block);
 
-            if (t >= 1f) Destroy(gameObject);
+            if (t >= 1f) FxPool.Release(PoolKey, gameObject);
         }
     }
 }

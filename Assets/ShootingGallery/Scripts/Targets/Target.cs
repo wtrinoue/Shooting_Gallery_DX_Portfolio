@@ -131,6 +131,9 @@ namespace ShootingGallery
                     StartFall(0.2f);
                 }
             }
+
+            // することがなくなったら眠る (毎フレームの処理を止める)。動きが必要になったら Wake で起きる
+            if (!moving && spinner == null && !knocking && !Animating && !pendingRespawn && !(lowerTimer > 0f && up)) enabled = false;
         }
 
         /// <summary>的を出す / しまう。しまった的は復活しない。</summary>
@@ -196,6 +199,7 @@ namespace ShootingGallery
         public void Raise(float stay)
         {
             if (!CanRaise) return;
+            Wake();
             lowerTimer = stay;
             StartRise();
         }
@@ -211,6 +215,7 @@ namespace ShootingGallery
                 if (GameManager.I != null) GameManager.I.OnTargetHit(this, point);
                 if (up) // ぐらっと後ろに揺れて戻る (OnTargetHit の中で Lower() された時は揺らさない)
                 {
+                    Wake();
                     angle = hitWobbleDeg;
                     targetAngle = 0f;
                     animSpeed = hitWobbleDeg / 0.15f;
@@ -231,6 +236,12 @@ namespace ShootingGallery
             }
         }
 
+        /// <summary>眠っていたら起こす (的の動き・タイマーが必要になった時)</summary>
+        void Wake()
+        {
+            if (!enabled) enabled = true;
+        }
+
         bool CanRespawn()
         {
             if (!available || knocking) return false;
@@ -240,6 +251,7 @@ namespace ShootingGallery
 
         void StartRise()
         {
+            Wake();
             targetAngle = 0f;
             animSpeed = 90f / RiseTime;
             Rising?.Invoke(this);
@@ -248,6 +260,7 @@ namespace ShootingGallery
 
         void StartFall(float duration)
         {
+            Wake();
             targetAngle = 90f;
             animSpeed = 90f / duration;
         }
@@ -258,6 +271,7 @@ namespace ShootingGallery
         /// </summary>
         void StartKnockOff()
         {
+            Wake();
             knocking = true;
             knockTime = 0f;
             angle = targetAngle = 90f; // 倒れた扱い (見た目は落ちきるまで出しておく)

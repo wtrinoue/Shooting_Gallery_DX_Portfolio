@@ -312,9 +312,43 @@ namespace ShootingGallery
             UpdateHud();
         }
 
+        // HUD に出す数字の組み合わせ (前のフレームと同じなら文字を作り直さない。文字の作り直しと文字列のごみを毎フレーム出さないように)
+        int lastHudSignature;
+        bool hudWritten;
+
+        static int Mix(int h, int v) => unchecked(h * 31 + v);
+        static int Mix(int h, bool on, int v) => Mix(h, on ? v : int.MinValue);
+
+        int HudSignature()
+        {
+            int h = Mix(17, (int)State);
+            h = Mix(h, Score);
+            h = Mix(h, highScore);
+            if (State != GameState.Playing) return h;
+            h = Mix(h, Stage);
+            h = Mix(h, DebugMode ? 2 : Endless ? 1 : 0);
+            h = Mix(h, DebugMode || Endless ? (int)elapsed : Mathf.CeilToInt(Mathf.Max(0f, timeLeft)));
+            h = Mix(h, IsFever, Mathf.CeilToInt(feverLeft));
+            h = Mix(h, SniperActive, SniperShotsLeft);
+            h = Mix(h, MachineGunChallengeActive, MachineGunChallengeActive ? machineGunChallenge.Hits : 0);
+            h = Mix(h, DeluxeActive, Mathf.CeilToInt(Mathf.Max(0f, deluxeLeft)));
+            h = Mix(h, NavalActive, NavalActive ? Mathf.CeilToInt(navalBattle.TimeLeft) * 1000 + navalBattle.Sunk : 0);
+            h = Mix(h, SkyActive, SkyActive ? Mathf.CeilToInt(skyBattle.TimeLeft) * 1000 + skyBattle.Downed : 0);
+            h = Mix(h, NinjaActive, NinjaActive ? Mathf.CeilToInt(ninjaDojo.TimeLeft) * 1000 + ninjaDojo.Hits : 0);
+            h = Mix(h, KaijuActive, KaijuActive ? Mathf.CeilToInt(kaijuCity.TimeLeft) * 1000 + kaijuCity.Destroyed : 0);
+            h = Mix(h, CasinoActive, CasinoActive ? Mathf.CeilToInt(casinoHall.TimeLeft) : 0);
+            h = Mix(h, WesternActive, WesternActive ? Mathf.CeilToInt(westernTrain.TimeLeft) * 1000 + westernTrain.Downed : 0);
+            h = Mix(h, SpaceActive, SpaceActive ? Mathf.CeilToInt(spaceStage.TimeLeft) * 1000 + spaceStage.Hits : 0);
+            return h;
+        }
+
         void UpdateHud()
         {
             if (hudText == null) return;
+            int signature = HudSignature();
+            if (hudWritten && signature == lastHudSignature) return; // 出す数字が変わっていない
+            lastHudSignature = signature;
+            hudWritten = true;
             switch (State)
             {
                 case GameState.Title:

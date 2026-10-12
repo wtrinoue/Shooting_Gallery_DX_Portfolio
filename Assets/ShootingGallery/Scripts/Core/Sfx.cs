@@ -58,45 +58,67 @@ namespace ShootingGallery
             if (machineGunShot == null) machineGunShot = Noise("MachineGunShot", 0.07f, 45f, 0.6f);
             if (shotgunShot == null) shotgunShot = Noise("ShotgunShot", 0.3f, 14f, 1f);
             if (bombShot == null) bombShot = Noise("BombShot", 0.2f, 20f, 2f, 0.12f);
-            if (explosion == null) explosion = Noise("Explosion", 0.8f, 5f, 4f, 0.06f);
             if (hit == null) hit = Tones("Hit", new[] { 1320f }, 0.09f);
             if (bonus == null) bonus = Tones("Bonus", new[] { 1046f, 1568f }, 0.08f);
             if (pickup == null) pickup = Tones("Pickup", new[] { 523f, 659f, 784f, 1046f }, 0.07f);
             if (fever == null) fever = Tones("Fever", new[] { 523f, 659f, 784f, 1046f, 784f, 1046f, 1318f }, 0.1f);
             if (start == null) start = Tones("Start", new[] { 784f, 1046f }, 0.12f);
             if (end == null) end = Tones("End", new[] { 1046f, 784f, 659f, 523f }, 0.15f);
-            if (ufoHit == null) ufoHit = Tones("UfoHit", new[] { 1568f, 1318f, 1046f, 880f, 784f, 659f, 523f, 1046f, 1568f, 2093f }, 0.05f);
-            if (door == null) door = Noise("Door", 1.3f, 2.2f, 3.5f, 0.03f); // ゴゴゴ…と床がスライドする音
-            if (complete == null) complete = Fanfare();
-            if (stageUp == null) stageUp = PowerUp();
-            if (deluxe == null) deluxe = DeluxeFanfare();
-            if (shurikenThrow == null) shurikenThrow = Swish("ShurikenThrow", 0.2f, 0.55f, 0.6f);   // シュッ
             if (thunk == null) thunk = Noise("Thunk", 0.08f, 60f, 1.2f, 0.15f);                     // トッ (刺さる)
-            if (fusuma == null) fusuma = Swish("Fusuma", 0.3f, 0.12f, 0.45f);                       // スーッ (ふすま)
-            if (roar == null) roar = Roar();                                                         // ガオーッ
-            if (slotLever == null) slotLever = Noise("SlotLever", 0.25f, 14f, 1.4f, 0.08f);          // ガシャン
             if (reelStop == null) reelStop = Tones("ReelStop", new[] { 880f }, 0.05f);               // ピッ
             if (coin == null) coin = Tones("Coin", new[] { 1975.5f, 2637f }, 0.06f);                 // チャリン
             if (reload == null) reload = Tones("Reload", new[] { 1400f, 0f, 0f, 1700f, 0f, 2100f }, 0.035f); // カチャカチャ
-            if (whistle == null) whistle = Bell("Whistle", new[] { 587.33f, 739.99f, 880f }, 1.3f);  // ポーッ (汽笛)
-            if (sandstorm == null) sandstorm = Wind();                                                 // ゴォーッ (砂嵐)
-            if (blackout == null) blackout = Blackout();                                             // バツン
-            if (drumroll == null) drumroll = Drumroll(3.6f);                                         // ドロロロロ…
-            if (crash == null) crash = Noise("Crash", 2f, 2.2f, 1.6f, 0.9f);                         // ジャーン (シンバル)
-            if (cheer == null) cheer = Cheer();                                                      // ワーッ
-            if (missile == null) missile = Missile();                                                // シュゴーッ
-            if (twinkle == null) twinkle = Twinkle();                                                // キラキラ…
-            if (warpIn == null) warpIn = Warp("WarpIn", true);                                       // ヒュイーン (上がる)
-            if (warpOut == null) warpOut = Warp("WarpOut", false);                                   // ヒュウゥン (下がる)
-            if (sniperShot == null) sniperShot = Noise("SniperShot", 0.9f, 4.5f, 2.2f, 0.5f); // 乾いた大きな発砲音が長く尾を引く
             if (sniperReady == null) sniperReady = Tones("SniperReady", new[] { 1760f, 0f, 1760f, 0f, 2349f }, 0.07f); // ピッ ピッ ピーン (照準)
             if (sniperMiss == null) sniperMiss = Tones("SniperMiss", new[] { 392f, 330f, 262f }, 0.16f); // ざんねん…
-            if (canHits == null || canHits.Length == 0) // カーン、カラン… (高さを変えて3種類。続けて当てても単調にならないように)
-                canHits = new[] { CanHit("CanHit0", 1250f, 1), CanHit("CanHit1", 1080f, 2), CanHit("CanHit2", 1420f, 3) };
-            if (scaleNotes == null || scaleNotes.Length < ScaleHz.Length)
+
+            // 長い音 (ファンファーレ・風・ドラムロールなど) は、起動時に一度に作ると数百ミリ秒固まるので、数フレームに分けて作る
+            // (タイトル画面の間に作り終わる。作り終わる前に鳴らそうとした音は鳴らないだけ)
+            StartCoroutine(GenerateLongClips());
+        }
+
+        /// <summary>長い音を、1フレームあたり数ミリ秒ずつ作る</summary>
+        System.Collections.IEnumerator GenerateLongClips()
+        {
+            var steps = new System.Action[]
             {
-                scaleNotes = new AudioClip[ScaleHz.Length];
-                for (int i = 0; i < ScaleHz.Length; i++) scaleNotes[i] = Bell($"Note{i}", new[] { ScaleHz[i] }, 0.6f);
+                () => { if (explosion == null) explosion = Noise("Explosion", 0.8f, 5f, 4f, 0.06f); },
+                () => { if (ufoHit == null) ufoHit = Tones("UfoHit", new[] { 1568f, 1318f, 1046f, 880f, 784f, 659f, 523f, 1046f, 1568f, 2093f }, 0.05f); },
+                () => { if (door == null) door = Noise("Door", 1.3f, 2.2f, 3.5f, 0.03f); }, // ゴゴゴ…と床がスライドする音
+                () => { if (complete == null) complete = Fanfare(); },
+                () => { if (stageUp == null) stageUp = PowerUp(); },
+                () => { if (deluxe == null) deluxe = DeluxeFanfare(); },
+                () => { if (shurikenThrow == null) shurikenThrow = Swish("ShurikenThrow", 0.2f, 0.55f, 0.6f); }, // シュッ
+                () => { if (fusuma == null) fusuma = Swish("Fusuma", 0.3f, 0.12f, 0.45f); }, // スーッ (ふすま)
+                () => { if (roar == null) roar = Roar(); }, // ガオーッ
+                () => { if (slotLever == null) slotLever = Noise("SlotLever", 0.25f, 14f, 1.4f, 0.08f); }, // ガシャン
+                () => { if (whistle == null) whistle = Bell("Whistle", new[] { 587.33f, 739.99f, 880f }, 1.3f); }, // ポーッ (汽笛)
+                () => { if (sandstorm == null) sandstorm = Wind(); }, // ゴォーッ (砂嵐)
+                () => { if (blackout == null) blackout = Blackout(); }, // バツン
+                () => { if (drumroll == null) drumroll = Drumroll(3.6f); }, // ドロロロロ…
+                () => { if (crash == null) crash = Noise("Crash", 2f, 2.2f, 1.6f, 0.9f); }, // ジャーン (シンバル)
+                () => { if (cheer == null) cheer = Cheer(); }, // ワーッ
+                () => { if (missile == null) missile = Missile(); }, // シュゴーッ
+                () => { if (twinkle == null) twinkle = Twinkle(); }, // キラキラ…
+                () => { if (warpIn == null) warpIn = Warp("WarpIn", true); }, // ヒュイーン (上がる)
+                () => { if (warpOut == null) warpOut = Warp("WarpOut", false); }, // ヒュウゥン (下がる)
+                () => { if (sniperShot == null) sniperShot = Noise("SniperShot", 0.9f, 4.5f, 2.2f, 0.5f); }, // 乾いた大きな発砲音が長く尾を引く
+                () => { if (canHits == null || canHits.Length == 0) canHits = new[] { CanHit("CanHit0", 1250f, 1), CanHit("CanHit1", 1080f, 2), CanHit("CanHit2", 1420f, 3) }; }, // カーン、カラン… (高さを変えて3種類。続けて当てても単調にならないように)
+                () =>
+                {
+                    if (scaleNotes != null && scaleNotes.Length >= ScaleHz.Length) return;
+                    var notes = new AudioClip[ScaleHz.Length]; // 全部そろってから入れる (途中で鳴らされても大丈夫なように)
+                    for (int i = 0; i < ScaleHz.Length; i++) notes[i] = Bell($"Note{i}", new[] { ScaleHz[i] }, 0.6f);
+                    scaleNotes = notes;
+                },
+            };
+            var watch = new System.Diagnostics.Stopwatch();
+            watch.Start();
+            foreach (var step in steps)
+            {
+                step();
+                if (watch.ElapsedMilliseconds < 4) continue; // このフレームはまだ余裕がある
+                yield return null;
+                watch.Restart();
             }
         }
 

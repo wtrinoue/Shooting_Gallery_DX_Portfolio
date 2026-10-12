@@ -46,9 +46,13 @@ namespace ShootingGallery
         }
 
         /// <summary>今プレイヤーの周りに出ている屋台 (メイン + フィーバー中の屋台)。動いている途中の屋台は除く</summary>
-        public List<Stall> ShownStalls()
+        public List<Stall> ShownStalls() => ShownStalls(new List<Stall>());
+
+        /// <summary>ShownStalls の結果を into に入れて返す (毎フレーム呼ぶ所で、リストを使い回してごみを出さないように)</summary>
+        public List<Stall> ShownStalls(List<Stall> into)
         {
-            var list = new List<Stall>();
+            var list = into;
+            list.Clear();
             if (mainStall != null && mainStall.IsSettled) list.Add(mainStall);
             if (IsFever)
                 foreach (var s in activeFeverStalls)

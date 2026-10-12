@@ -291,14 +291,10 @@ namespace ShootingGallery
             if (confettiMaterials == null || confettiMaterials.Length == 0) return;
             for (int i = 0; i < confettiCount; i++)
             {
-                var piece = GameObject.CreatePrimitive(PrimitiveType.Quad);
-                piece.name = "Confetti";
-                Destroy(piece.GetComponent<Collider>());
-                var r = piece.GetComponent<Renderer>();
-                r.sharedMaterial = confettiMaterials[i % confettiMaterials.Length];
-                r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                var mat = confettiMaterials[i % confettiMaterials.Length];
+                var piece = FxPool.Get("Confetti", () => FxPool.Primitive(PrimitiveType.Quad, mat), transform); // 作って消さずに使い回す
+                piece.GetComponent<Renderer>().sharedMaterial = mat;
                 var t = piece.transform;
-                t.SetParent(transform, false);
                 Vector2 p = Random.insideUnitCircle * 5.5f;
                 t.localPosition = new Vector3(p.x, ceilingRest.y - Random.Range(0.4f, 1.6f), p.y);
                 t.localRotation = Random.rotation;
@@ -314,7 +310,7 @@ namespace ShootingGallery
 
         void ClearConfetti()
         {
-            foreach (var c in confetti) if (c.t != null) Destroy(c.t.gameObject);
+            foreach (var c in confetti) if (c.t != null) FxPool.Release("Confetti", c.t.gameObject);
             confetti.Clear();
         }
 
@@ -332,7 +328,7 @@ namespace ShootingGallery
                 c.t.Rotate(c.spinAxis, c.spin * dt, Space.Self);
                 if (c.t.localPosition.y < 0.06f)
                 {
-                    Destroy(c.t.gameObject);
+                    FxPool.Release("Confetti", c.t.gameObject);
                     confetti.RemoveAt(i);
                     continue;
                 }

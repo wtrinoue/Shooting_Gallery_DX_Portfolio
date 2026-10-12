@@ -10,6 +10,9 @@ namespace ShootingGallery
         // ユーティリティ
         // ------------------------------------------------------------------
 
+        /// <summary>これより小さい部品 (いちばん長い辺, m) は影を落とさない</summary>
+        const float ShadowMinSize = 0.8f;
+
         /// <summary>プリミティブを作る。position / scale は parent のローカル。collider = false なら当たり判定なし。</summary>
         protected GameObject Prim(PrimitiveType type, string name, Transform parent, Vector3 position, Vector3 scale, Material mat, bool collider = true)
         {
@@ -18,7 +21,15 @@ namespace ShootingGallery
             go.transform.SetParent(parent != null ? parent : world, false);
             go.transform.localPosition = position;
             go.transform.localScale = scale;
-            go.GetComponent<Renderer>().sharedMaterial = mat;
+            var rend = go.GetComponent<Renderer>();
+            rend.sharedMaterial = mat;
+            // 影は大きな部品 (屋台の本体・柱・屋根・壁など) だけに落とさせる。小さな部品・光る部品・半透明の部品の影は目立たないのに、
+            // 影の描画 (VR は両目分) の数だけ重くなるので切る
+            var size = rend.bounds.size;
+            bool glowing = mat != null && mat.IsKeywordEnabled("_EMISSION");
+            bool transparent = mat != null && mat.renderQueue >= (int)UnityEngine.Rendering.RenderQueue.AlphaTest + 50;
+            if (Mathf.Max(size.x, Mathf.Max(size.y, size.z)) < ShadowMinSize || glowing || transparent)
+                rend.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
 
             if (!collider) RemoveCollider(go);
             else if (type == PrimitiveType.Cylinder && scale.y * 2f < Mathf.Max(scale.x, scale.z))
@@ -62,6 +73,7 @@ namespace ShootingGallery
             tm.alignment = TextAlignment.Center;
             tm.color = color;
             go.GetComponent<MeshRenderer>().sharedMaterial = font.material;
+            go.GetComponent<MeshRenderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off; // 文字は影を落とさない
             return tm;
         }
 

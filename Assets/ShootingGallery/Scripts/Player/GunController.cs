@@ -163,12 +163,19 @@ namespace ShootingGallery
             return i < muzzles.Length && muzzles[i] != null ? muzzles[i] : transform;
         }
 
+        string lastInfo; // 最後に書いた文字 (TextMesh.text を読むと文字列が作られるので、こちらで覚えておく)
+
         public void SetInfo(string text)
         {
-            if (infoText != null) infoText.text = text;
+            // 同じ文字なら書き換えない (毎フレーム呼ばれるので、文字の形を作り直さないように)
+            if (infoText == null || text == lastInfo) return;
+            lastInfo = text;
+            infoText.text = text;
         }
 
         /// <summary>残り時間ゲージ。ratio = 1 で満タン, 0 以下で非表示。</summary>
+        Color lastGaugeColor = new Color(-1f, -1f, -1f, -1f);
+
         public void SetGauge(float ratio, Color color)
         {
             if (gaugeRoot == null || gaugeFill == null) return;
@@ -184,8 +191,9 @@ namespace ShootingGallery
             p.x = -gaugeWidth * (1f - ratio) * 0.5f; // 左端を固定して右から減らす
             gaugeFill.localPosition = p;
 
-            if (gaugeFillRenderer != null)
+            if (gaugeFillRenderer != null && color != lastGaugeColor) // 色が変わった時だけ渡す
             {
+                lastGaugeColor = color;
                 gaugeBlock.SetColor("_BaseColor", color);
                 gaugeFillRenderer.SetPropertyBlock(gaugeBlock);
             }
@@ -360,8 +368,10 @@ namespace ShootingGallery
 
             // 細い線が当たった物 (壁など) より少し奥までなら、的の縁がはみ出していれば当てる
             float best = float.MaxValue;
-            foreach (var h in Physics.SphereCastAll(origin, assist, dir, Mathf.Min(range, blockDist + 0.25f), hitMask, QueryTriggerInteraction.Ignore))
+            int hitCount = Physics.SphereCastNonAlloc(origin, assist, dir, castHits, Mathf.Min(range, blockDist + 0.25f), hitMask, QueryTriggerInteraction.Ignore);
+            for (int i = 0; i < hitCount; i++) // 結果は使い回しの配列に入れる (1発ごとに配列を作らない)
             {
+                var h = castHits[i];
                 if (h.distance <= 0f || h.distance >= best) continue; // 0 = 発射位置ですでに重なっている物
                 var t = h.collider.GetComponentInParent<Target>();
                 if (t == null || !t.IsUp) continue;
@@ -375,20 +385,28 @@ namespace ShootingGallery
             return target != null;
         }
 
+        static readonly RaycastHit[] castHits = new RaycastHit[64]; // エイム補正の太い線に当たった物 (使い回し)
+
         void SpawnTracer(Vector3 from, Vector3 to)
         {
-            var go = new GameObject("Tracer");
-            var lr = go.AddComponent<LineRenderer>();
-            lr.useWorldSpace = true;
-            lr.positionCount = 2;
+            // 弾の軌跡は1発ごとに出るので、作って消さずに FxPool で使い回す
+            var go = FxPool.Get("Tracer", () =>
+            {
+                var g = new GameObject("Tracer");
+                var line = g.AddComponent<LineRenderer>();
+                line.useWorldSpace = true;
+                line.positionCount = 2;
+                line.startWidth = 0.012f;
+                line.endWidth = 0.004f;
+                line.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                line.receiveShadows = false;
+                return g;
+            });
+            var lr = go.GetComponent<LineRenderer>();
+            lr.sharedMaterial = tracerMaterial;
             lr.SetPosition(0, from);
             lr.SetPosition(1, to);
-            lr.startWidth = 0.012f;
-            lr.endWidth = 0.004f;
-            lr.sharedMaterial = tracerMaterial;
-            lr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            lr.receiveShadows = false;
-            Destroy(go, 0.05f);
+            FxPool.ReleaseAfter("Tracer", go, 0.05f);
         }
 
         // 投げる武器 (手裏剣 / ダーツ): 手に持った1本が消えて、少しして次の1本が出る。part を渡すとその部品だけ (込めてあるミサイル)
