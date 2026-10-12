@@ -1,0 +1,159 @@
+using System.Collections;
+using UnityEngine;
+
+namespace ShootingGallery
+{
+    /// <summary>
+    /// 海戦モードの舞台。地面が海に沈み (海面がせり上がり)、プレイヤーの足元に自分の船の甲板がせり上がる。
+    /// まわりの海を敵の船が次々に走り、バズーカを当てると帆の点数が入って撃沈できる。反撃はない。時間切れまで船は出続ける。
+    /// 屋台の出し入れ・点数・終わる時間の判断は GameManager が行い、ここは見た目と敵の船の出し方だけを受け持つ。
+    ///
+    /// 酔い対策: プレイヤーの位置も向きも変えず、甲板も揺らさない。揺れるのは敵の船だけ。
+    /// 自分の船が進んで見えるのは、まわりの景色 (波しぶき・岩・ブイ) を後ろへ流しているから (scrollSpeed = 0 で止まる)。
+    /// </summary>
+    public class NavalBattle : MonoBehaviour
+    {
+        [Tooltip("自分の船 (甲板・帆柱・手すり)。地下からせり上がる")]
+        public Transform deck;
+        public float deckHiddenDepth = 9f;
+        [Tooltip("海面。地面の下からせり上がって地面を覆う")]
+        public Transform sea;
+        public float seaY = 0.05f;
+        public float seaHiddenY = -0.4f;
+        [Tooltip("後ろへ流す景色 (波しぶき・岩・ブイ)。ConveyorBelt のローカル X が後ろ向きになるように置く")]
+        public ConveyorBelt[] scenery;
+        [Tooltip("それぞれの景色の流れる速さの倍率 (scenery と同じ順)")]
+        public float[] sceneryFactors;
+        [Tooltip("自分の船が進んで見えるように景色を流す速さ (m/秒)。0 で止まる (酔いやすい人向け)")]
+        public float scrollSpeed = 2f;
+
+        [Header("敵の船 (時間切れまで、空いている船からランダムに次々出てくる。入れる数で出やすさが決まる)")]
+        public EnemyShip[] ships;
+        [Tooltip("次の船が出てくるまでの秒数 (この範囲でランダム)")]
+        public Vector2 launchInterval = new Vector2(0.9f, 1.6f);
+        [Tooltip("同時に走っている船の最大数")]
+        public int maxSailing = 5;
+        [Tooltip("終わりのこの秒数前からは新しい船を出さない (出てきてすぐ去るのを防ぐ)")]
+        public float stopLaunchBefore = 2f;
+
+        [Header("Timing")]
+        public float duration = 16.5f; // 屋台が沈みきるのを待つ分 (dropDelay) も含む
+        [Tooltip("甲板と海面がせり上がる / 沈む秒数")]
+        public float riseTime = 1.5f;
+        [Tooltip("始まってから甲板と海がせり上がり始めるまでの秒数 (屋台が沈みきるのを待つ)")]
+        public float dropDelay = 0f;
+
+        public bool IsActive { get; private set; }
+        public float TimeLeft => IsActive ? Mathf.Max(0f, duration - (Time.time - startTime)) : 0f;
+        /// <summary>今回撃沈した数</summary>
+        public int Sunk { get; private set; }
+        /// <summary>敵の船を撃沈した瞬間 (GameManager がボーナス点を入れる)</summary>
+        public event System.Action<EnemyShip> ShipSunk;
+
+        float startTime;
+        float nextLaunchTime;
+        float lastAngle;
+        Coroutine anim;
+        Vector3 deckRest;
+
+        void Awake()
+        {
+            deckRest = deck.localPosition;
+            SetRise(0f);
+            SetStageVisible(false);
+        }
+
+        /// <summary>海戦モードを始める (甲板と海面をせり上げ、敵の船を出し始める)</summary>
+        public void Begin()
+        {
+            if (IsActive) return;
+            IsActive = true;
+            startTime = Time.time;
+            nextLaunchTime = Time.time + dropDelay + riseTime * 0.8f; // 甲板がせり上がり終わる頃に1隻目
+            Sunk = 0;
+            lastAngle = Random.Range(0f, 360f);
+            for (int i = 0; i < scenery.Length; i++)
+                scenery[i].speed = scrollSpeed * (sceneryFactors != null && i < sceneryFactors.Length ? sceneryFactors[i] : 1f);
+            Play(RiseAfter(dropDelay));
+        }
+
+        /// <summary>海戦モードを終える。残っている船は去り、甲板と海面が沈む</summary>
+        public void End()
+        {
+            if (!IsActive) return;
+            IsActive = false;
+            foreach (var ship in ships) ship.Retreat();
+            Play(Rise(0f));
+        }
+
+        void Update()
+        {
+            if (!IsActive) return;
+            if (Time.time < nextLaunchTime || TimeLeft < stopLaunchBefore) return;
+            nextLaunchTime = Time.time + Random.Range(launchInterval.x, launchInterval.y);
+
+            int sailing = 0;
+            var free = new System.Collections.Generic.List<EnemyShip>();
+            foreach (var s in ships)
+            {
+                if (s.IsSailing) sailing++;
+                if (!s.IsBusy) free.Add(s);
+            }
+            if (sailing >= maxSailing || free.Count == 0) return;
+            // 前の船と離れた方向から出す (プレイヤーがまわりを見回すように)
+            lastAngle += Random.Range(80f, 150f) * (Random.value < 0.5f ? -1f : 1f);
+            free[Random.Range(0, free.Count)].Launch(lastAngle, OnShipSunk);
+        }
+
+        void OnShipSunk(EnemyShip ship)
+        {
+            Sunk++;
+            ShipSunk?.Invoke(ship);
+        }
+
+        // 屋台が沈みきってから、甲板と海を出してせり上げる
+        IEnumerator RiseAfter(float delay)
+        {
+            if (delay > 0f) yield return new WaitForSeconds(delay);
+            SetStageVisible(true);
+            yield return Rise(1f);
+        }
+
+        IEnumerator Rise(float to)
+        {
+            float from = currentRise;
+            for (float t = 0f; t < 1f; t += Time.deltaTime / riseTime)
+            {
+                SetRise(Mathf.Lerp(from, to, t * t * (3f - 2f * t)));
+                yield return null;
+            }
+            SetRise(to);
+            if (to <= 0f) SetStageVisible(false);
+            anim = null;
+        }
+
+        float currentRise;
+
+        void SetRise(float k)
+        {
+            currentRise = k;
+            deck.localPosition = deckRest + Vector3.down * (deckHiddenDepth * (1f - k));
+            var p = sea.localPosition;
+            p.y = Mathf.Lerp(seaHiddenY, seaY, k);
+            sea.localPosition = p;
+        }
+
+        void SetStageVisible(bool visible)
+        {
+            deck.gameObject.SetActive(visible);
+            sea.gameObject.SetActive(visible);
+            foreach (var s in scenery) s.gameObject.SetActive(visible);
+        }
+
+        void Play(IEnumerator routine)
+        {
+            if (anim != null) StopCoroutine(anim);
+            anim = StartCoroutine(routine);
+        }
+    }
+}

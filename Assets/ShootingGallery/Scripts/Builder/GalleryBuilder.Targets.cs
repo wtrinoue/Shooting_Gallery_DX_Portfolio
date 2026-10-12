@@ -1,0 +1,97 @@
+using System.Collections.Generic;
+using UnityEngine;
+
+namespace ShootingGallery
+{
+    /// <summary>GalleryBuilder のうち、的 (点数の的・フィーバーの的・START の的と、的の模様) の生成。</summary>
+    public partial class GalleryBuilder
+    {
+        // ------------------------------------------------------------------
+        // 的
+        // ------------------------------------------------------------------
+
+        const float TargetDiscY = 0.3f; // 的の根元から円の中心までの高さ
+
+        /// <summary>点数付きの的。点数で色と大きさが変わり、中央に点数が書いてある。</summary>
+        Target PointTarget(Transform parent, int points, Vector3 localPos, float respawnDelay = 3f)
+        {
+            var root = Group(parent, $"Target_{points}");
+            root.localPosition = localPos;
+            var target = root.gameObject.AddComponent<Target>();
+            target.kind = TargetKind.Normal;
+            target.points = points;
+            target.respawnDelay = respawnDelay;
+            var pivot = Group(root, "Pivot");
+            target.visual = pivot;
+
+            float d = PointStyle.Diameter(points);
+            Prim(PrimitiveType.Cube, "Stand", pivot, new Vector3(0f, (TargetDiscY - d / 2f) / 2f, 0f), new Vector3(0.035f, TargetDiscY - d / 2f, 0.035f), Mat("Target_Stand", new Color(0.3f, 0.3f, 0.32f)));
+
+            // 「顔」(円盤と数字)。武器の的に化ける時はここが武器の箱に付け替わる
+            var face = Group(pivot, "Face");
+            target.face = face.gameObject;
+            var color = Mat($"Points_{points}", PointStyle.TargetColor(points), PointStyle.Emission(points));
+            Bullseye(face, TargetDiscY, d, color, Mat("Target_White", Color.white), null);
+            MakeText(face, "Points", points.ToString(), new Vector3(0f, TargetDiscY, -0.012f), d * 0.32f, new Color(0.1f, 0.1f, 0.1f));
+            return target;
+        }
+
+        /// <summary>フィーバーの赤い的 (メイン屋台の最上段)。当てると周りに屋台が現れる。</summary>
+        Target FeverTarget(Transform parent, Vector3 localPos)
+        {
+            var root = Group(parent, "Target_Fever");
+            root.localPosition = localPos;
+            var target = root.gameObject.AddComponent<Target>();
+            target.kind = TargetKind.Fever;
+            target.points = 300;
+            target.respawnDelay = 25f;
+            var pivot = Group(root, "Pivot");
+            target.visual = pivot;
+
+            Prim(PrimitiveType.Cube, "Stand", pivot, new Vector3(0f, 0.08f, 0f), new Vector3(0.04f, 0.16f, 0.04f), Mat("Target_Stand", new Color(0.3f, 0.3f, 0.32f)));
+            Prim(PrimitiveType.Sphere, "RedOrb", pivot, new Vector3(0f, 0.32f, 0f), Vector3.one * 0.26f, Mat("Target_Fever", new Color(1f, 0.1f, 0.1f), new Color(1.5f, 0.05f, 0.05f)));
+            var spinner = Group(pivot, "Spinner");
+            spinner.localPosition = new Vector3(0f, 0.32f, 0f);
+            var ring = Prim(PrimitiveType.Cylinder, "Ring", spinner, Vector3.zero, new Vector3(0.38f, 0.008f, 0.38f), Mat("Target_FeverRing", new Color(1f, 0.8f, 0.2f), new Color(0.6f, 0.4f, 0f)), false);
+            ring.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            target.spinner = spinner;
+            target.spinSpeed = 150f;
+            return target;
+        }
+
+        Target BuildStartTarget(Transform stall)
+        {
+            var root = Group(stall, "Target_Start");
+            root.localPosition = new Vector3(0f, 1.1f, -0.6f);
+            var target = root.gameObject.AddComponent<Target>();
+            target.kind = TargetKind.Start;
+            target.points = 0;
+            target.respawnDelay = 1f;
+            var pivot = Group(root, "Pivot");
+            target.visual = pivot;
+            Prim(PrimitiveType.Cube, "Stand", pivot, new Vector3(0f, 0.15f, 0f), new Vector3(0.05f, 0.3f, 0.05f), Mat("Target_Stand", new Color(0.3f, 0.3f, 0.32f)));
+            var red = Mat("Target_StartRed", new Color(0.85f, 0.1f, 0.1f), new Color(0.3f, 0f, 0f));
+            Bullseye(pivot, 0.62f, 0.55f, red, Mat("Target_White", Color.white), red);
+            MakeText(pivot, "Label", "START", new Vector3(0f, 0.62f, -0.03f), 0.13f, new Color(0.1f, 0.1f, 0.1f));
+            return target;
+        }
+
+        /// <summary>同心円の的。外側の円にだけ BoxCollider を付ける。center が null なら2色。</summary>
+        void Bullseye(Transform pivot, float centerY, float diameter, Material outer, Material middle, Material center)
+        {
+            var o = Disc(pivot, "Outer", centerY, diameter, 0f, outer);
+            o.AddComponent<BoxCollider>();
+            Disc(pivot, "Middle", centerY, diameter * 0.66f, -0.006f, middle);
+            if (center != null)
+                Disc(pivot, "Center", centerY, diameter * 0.3f, -0.012f, center);
+        }
+
+        // 当たり判定なしの円盤 (的の模様用)
+        GameObject Disc(Transform parent, string name, float y, float diameter, float z, Material mat)
+        {
+            var go = Prim(PrimitiveType.Cylinder, name, parent, new Vector3(0f, y, z), new Vector3(diameter, 0.01f, diameter), mat, false);
+            go.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            return go;
+        }
+    }
+}

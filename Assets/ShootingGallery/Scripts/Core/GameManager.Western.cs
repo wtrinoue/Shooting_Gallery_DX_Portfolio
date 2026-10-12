@@ -1,0 +1,82 @@
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+
+namespace ShootingGallery
+{
+    /// <summary>GameManager のうち、西部劇モード (保安官バッジの的)。</summary>
+    public partial class GameManager
+    {
+        // ---- 西部劇モード ----
+
+        /// <summary>この的を保安官バッジの的 (西部劇モード) に化けさせてよいか (WeaponDropper が聞く)。条件は海戦モードと同じ</summary>
+        public bool CanOfferWestern(Target target, float lifetime)
+        {
+            if (westernTrain == null || target == null || State != GameState.Playing) return false;
+            if (ChallengeActive || DeluxeActive || (bonusStage != null && bonusStage.IsBusy)) return false;
+            var stall = target.GetComponentInParent<Stall>();
+            if (stall == null || !stall.IsSettled) return false;
+            return timeLeft > lifetime + westernTrain.duration + westernTrain.CloseTime + 2f;
+        }
+
+        void StartWestern(Target target) => StartWestern(YawToward(target));
+
+        /// <summary>
+        /// 保安官バッジの的を撃った: 出ている屋台を全部沈め、目の前を暗くしてから、その的があった方へ走る列車の屋根の上に立たせる。
+        /// 武器はリボルバー (6発撃つと弾込め)。
+        /// </summary>
+        void StartWestern(float yaw)
+        {
+            if (DebugClearFor(() => StartWestern(yaw))) return;
+            if (westernTrain == null || ChallengeActive || DeluxeActive || (bonusStage != null && bonusStage.IsBusy)) return;
+            PutAwayStalls(false);
+            westernTrain.dropDelay = StallsAwayTime; // 屋台が沈みきってから暗くなる
+            westernTrain.Begin(yaw);
+            player.GiveWeapon(WeaponType.Revolver, westernTrain.duration);
+            Sfx.Play("stageup");
+            ShowMessage("WILD WEST!!", 1.2f, new Color(0.95f, 0.75f, 0.35f));
+        }
+
+        /// <summary>西部劇モードの時間切れ: 暗くしていつもの地面へ戻し、明るくなったら沈めた屋台を戻す</summary>
+        void EndWestern()
+        {
+            if (!WesternActive) return;
+            int downed = westernTrain.Downed;
+            westernTrain.End();
+            if (player.Weapon == WeaponType.Revolver) player.ResetWeapon();
+            StartCoroutine(RiseStallsAfter(new List<Stall>(stageStalls), westernTrain.CloseTime));
+            stageStalls.Clear();
+            if (State == GameState.Playing)
+            {
+                Sfx.Play(downed > 0 ? "complete" : "end");
+                ShowMessage($"WILD WEST END\nDOWN {downed} OUTLAWS", 2.5f, new Color(0.95f, 0.75f, 0.35f));
+            }
+        }
+
+        // 真っ暗な間に列車の上へ来た: 昼の荒野の空と霧にすぐ切り替える (明るくなった時にはもう荒野)
+        void OnWesternArrived()
+        {
+            RenderSettings.fogStartDistance = Mathf.Max(normalFogStart, 30f);
+            RenderSettings.fogEndDistance = Mathf.Max(normalFogEnd, 90f);
+            FadeAmbience(westernFogColor, westernAmbient, westernSkyColor, 0.05f);
+            if (State == GameState.Playing) ShowMessage("WILD WEST!!\nSHOOT THE OUTLAWS!", 3f, new Color(0.95f, 0.75f, 0.35f));
+        }
+
+        // 真っ暗な間にいつもの地面へ戻った: 夜祭りの空と霧に戻す
+        void OnWesternLeft()
+        {
+            RenderSettings.fogStartDistance = normalFogStart;
+            RenderSettings.fogEndDistance = normalFogEnd;
+            FadeAmbience(normalFogColor, normalAmbient, normalSkyColor, 0.05f);
+        }
+
+        // カウボーイ / 馬車を倒した: 大きな表示 (点数は当てた時にもう入っている)
+        void OnRiderDown(WesternRider rider)
+        {
+            if (State != GameState.Playing) return;
+            var color = new Color(0.95f, 0.75f, 0.35f);
+            ScorePopup.Spawn(font, rider.transform.position + Vector3.up * 3f, "BANG!", color, 0.45f);
+            ShowMessage($"{rider.displayName} DOWN!!\n+{rider.Points}", 1.5f, color);
+        }
+    }
+}
