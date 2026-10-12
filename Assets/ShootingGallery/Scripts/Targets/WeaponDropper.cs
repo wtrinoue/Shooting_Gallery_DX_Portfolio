@@ -219,6 +219,7 @@ namespace ShootingGallery
             wasNinja = ninja;
             wasStageMode = stageMode;
             UpdateStagePlan(gm, stageMode, gm != null && gm.State == GameState.Playing);
+            UpdateStageReservation(gm);
 
             UpdateChallengeReservation();
         }
@@ -251,7 +252,9 @@ namespace ShootingGallery
                 stagePlan.Clear();
                 stageClock = 0f;
                 stageResumeAt = 0f;
-                PlanStageWindow(stageFirstDelay);
+                stageNextWindow = 0f;
+                stageBag.Clear();
+                PlanNextStage();
                 nextSniperTime = Time.time + Random.Range(sniperStartDelay.x, sniperStartDelay.y);
                 nextMgChallengeTime = Time.time + Random.Range(mgChallengeStartDelay.x, mgChallengeStartDelay.y);
                 sniperShown = mgChallengeShown = false;
@@ -351,15 +354,13 @@ namespace ShootingGallery
             return kind == TargetKind.Sniper ? gm.CanOfferSniper(target, lifetime) : gm.CanOfferMachineGunChallenge(target, lifetime);
         }
 
-        [Header("別の世界へ飛ぶモードの的の出方 (30秒ごとに決まった数を、いろいろな種類で出す)")]
-        [Tooltip("1回分の区切りの秒数")]
-        public float stageWindow = 30f;
-        [Tooltip("区切りごとに出す数 (7種類を一通り + 足りない分はランダム)")]
-        public int stagePerWindow = 9;
-        [Tooltip("同時に出ていてよい数")]
-        public int stageMaxOut = 2;
-        [Tooltip("ゲーム開始から1つ目までの秒数")]
-        public float stageFirstDelay = 3f;
+        [Header("別の世界へ飛ぶモードの的の出方 (5秒ごとに、その5秒のどこかのランダムな時刻に、3か所同時に出す)")]
+        [Tooltip("区切りの秒数。区切りごとに、その中の 0〜この秒数 のランダムな時刻を抽選し、その時刻にまとめて出す")]
+        public float stageBatchWindow = 5f;   // 名前を変えて、シーンに保存された前の値 (10秒ごとに1つ) を使わないようにしている
+        [Tooltip("1回に同時に出す数 (それぞれ別の種類・ランダムな別の的)")]
+        public int stageBatchCount = 3;
+        [Tooltip("同時に出ていてよい数 (前の回の的がまだ残っている時の上限)")]
+        public int stageMaxOutTotal = 6;
         [Tooltip("モードが終わってから、次を出し始めるまでの秒数")]
         public float stageResumeDelay = 3f;
         [Tooltip("予定の時間からこの秒数たっても出せなかった (時間切れが近いなど) ものはとばす")]
@@ -367,30 +368,50 @@ namespace ShootingGallery
 
         static readonly TargetKind[] StageKinds =
             { TargetKind.Naval, TargetKind.Sky, TargetKind.Ninja, TargetKind.Kaiju, TargetKind.Casino, TargetKind.Western, TargetKind.Space };
-        readonly List<(TargetKind kind, float at)> stagePlan = new List<(TargetKind, float)>();
+
+        /// <summary>出す予定の、別の世界へ飛ぶモードの的 1つ分</summary>
+        class StageSpawn
+        {
+            public TargetKind kind;
+            public float at;           // 出す時刻 (stageClock)
+            public Target target;      // 化けさせるために選んで、起き上がるのを待っている的 (まだなら null)
+            public float reservedAt;
+        }
+        readonly List<StageSpawn> stagePlan = new List<StageSpawn>();
         float stageClock;       // モードやチャレンジの最中は止まる時計 (予定はこの時計で数える)
         float stageResumeAt;    // モードが終わってから、ここまでは時計を止めておく
+        float stageNextWindow;  // 次の区切りの始まり (stageClock の時刻)
+        readonly List<TargetKind> stageBag = new List<TargetKind>(); // 出す種類の袋 (7種類を一通り出してから、また詰め直す)
 
-        // 区切り1回分の予定を作る: 7種類を順番をばらばらにして並べ、足りない分はランダムな種類を足す (同じ種類が続かないように)。
-        // 区切りの中にほぼ等間隔で散らす
-        void PlanStageWindow(float start)
+        // 次の区切りの予定を作る: 区切りの中の 0〜stageBatchWindow 秒のランダムな時刻を1つ抽選し、その時刻に stageBatchCount 個をまとめて出す。
+        // 種類は袋から順に出す (7種類がまんべんなく出る。同じ回の中では同じ種類にしない)
+        void PlanNextStage()
         {
-            var kinds = new List<TargetKind>(StageKinds);
-            for (int i = kinds.Count - 1; i > 0; i--)
+            float window = Mathf.Max(0.5f, stageBatchWindow);
+            // 出せずに遅れていた分 (時計がもう先に進んでいる区切り) は飛ばして、今の区切りから数える
+            if (stageClock >= stageNextWindow + window) stageNextWindow = Mathf.Floor(stageClock / window) * window;
+            float at = stageNextWindow + Random.Range(0f, window);
+            stageNextWindow += window;
+
+            var used = new List<TargetKind>();
+            int count = Mathf.Clamp(stageBatchCount, 1, StageKinds.Length);
+            for (int n = 0; n < count; n++)
             {
-                int j = Random.Range(0, i + 1);
-                (kinds[i], kinds[j]) = (kinds[j], kinds[i]);
+                if (stageBag.Count == 0)
+                {
+                    stageBag.AddRange(StageKinds);
+                    for (int i = stageBag.Count - 1; i > 0; i--)
+                    {
+                        int j = Random.Range(0, i + 1);
+                        (stageBag[i], stageBag[j]) = (stageBag[j], stageBag[i]);
+                    }
+                }
+                int k = stageBag.FindIndex(x => !used.Contains(x));
+                if (k < 0) { stageBag.Clear(); n--; continue; } // 袋の残りが全部この回で使った種類: 詰め直す
+                used.Add(stageBag[k]);
+                stagePlan.Add(new StageSpawn { kind = stageBag[k], at = at });
+                stageBag.RemoveAt(k);
             }
-            while (kinds.Count < stagePerWindow)
-            {
-                TargetKind k;
-                do k = StageKinds[Random.Range(0, StageKinds.Length)]; while (k == kinds[kinds.Count - 1]);
-                kinds.Add(k);
-            }
-            if (kinds.Count > stagePerWindow) kinds.RemoveRange(stagePerWindow, kinds.Count - stagePerWindow);
-            float step = stageWindow / Mathf.Max(1, kinds.Count);
-            for (int i = 0; i < kinds.Count; i++)
-                stagePlan.Add((kinds[i], start + step * i + Random.Range(0f, step * 0.4f)));
         }
 
         // 予定の時計を進める。モード・チャレンジ・豪華タイム・ボーナスステージの最中と、モードが終わってすぐは止める
@@ -400,42 +421,75 @@ namespace ShootingGallery
             bool paused = stageMode || gm.ChallengeActive || gm.DeluxeActive || (gm.bonusStage != null && gm.bonusStage.IsBusy);
             if (stageMode) stageResumeAt = Time.time + stageResumeDelay;
             if (!paused && Time.time >= stageResumeAt) stageClock += Time.deltaTime;
-            if (stagePlan.Count == 0) PlanStageWindow(stageClock);
+            if (stagePlan.Count == 0) PlanNextStage(); // 1回分を出しきったら (またはとばしたら)、次の区切りの時刻を抽選
             // 予定から長く遅れたもの (出せる状態にならなかった) はとばす
-            while (stagePlan.Count > 0 && stageClock - stagePlan[0].at > stageGiveUp) stagePlan.RemoveAt(0);
+            stagePlan.RemoveAll(s => s.target == null && stageClock - s.at > stageGiveUp);
         }
 
-        // 時間が来た予定の的に化けさせる (同時に出ている数と、同じ種類が2つ出ないことを守る)
-        bool TryOfferPlannedStage(Target target, GameManager gm)
+        // ---- 別の世界へ飛ぶモードの的 (海戦・空中・忍者・怪獣・カジノ・西部劇・宇宙) を、ランダムな普通の的から化けさせる ----
+        // 予定の時刻が来たら、今出ている屋台全部の、立っている普通の的の中からランダムに選び (1回分の数だけ。なるべく別の屋台から)、
+        // いっせいに倒して起き上がらせる (起き上がる瞬間に OnTargetRising で化ける)。起き上がるのが早い屋台にばかり出ないように、的そのものをランダムに選ぶ
+        void UpdateStageReservation(GameManager gm)
         {
-            if (stagePlan.Count == 0 || stagePlan[0].at > stageClock) return false;
+            if (gm == null || gm.State != GameState.Playing || gm.DebugMode)
+            {
+                foreach (var s in stagePlan) s.target = null;
+                return;
+            }
+            foreach (var s in stagePlan)
+                if (s.target != null && Time.time - s.reservedAt > 2f) s.target = null; // 起き上がらなかった: 選び直す
+
+            bool paused = gm.ChallengeActive || gm.DeluxeActive || (gm.bonusStage != null && gm.bonusStage.IsBusy) || Time.time < stageResumeAt;
+            if (paused) return;
+
             int outCount = 0;
             foreach (var k in StageKinds) outCount += Count(k);
-            if (outCount >= stageMaxOut || !StageStallAllows(target, gm)) return false;
-            var kind = stagePlan[0].kind;
-            if (Count(kind) > 0 || !CanOfferStage(kind, target, LifetimeOf(kind))) return false;
-            if (!ApplyDisguise(target, kind, PointsOf(kind))) return false;
-            stagePlan.RemoveAt(0);
-            return true;
+            foreach (var s in stagePlan) if (s.target != null) outCount++;
+
+            List<Target> candidates = null;
+            var usedStalls = new List<Stall>();
+            foreach (var s in stagePlan)
+            {
+                if (s.target != null || s.at > stageClock) continue;
+                if (outCount >= stageMaxOutTotal) break;
+                if (Count(s.kind) > 0) continue; // 同じ種類がまだ出ている
+                if (candidates == null)
+                {
+                    candidates = new List<Target>();
+                    foreach (var stall in gm.ShownStalls())
+                        foreach (var t in stall.targets)
+                            if (t != null && t.kind == TargetKind.Normal && t.face != null && t.IsUp && !t.manualControl && !active.ContainsKey(t)
+                                && t != reservedTarget && !IsStageReserved(t))
+                                candidates.Add(t);
+                }
+                if (candidates.Count == 0) break;
+                // なるべく、この回でまだ選んでいない屋台の的から選ぶ (3か所にばらける)
+                var pool = candidates.FindAll(t => !usedStalls.Contains(t.GetComponentInParent<Stall>()));
+                if (pool.Count == 0) pool = candidates;
+                var pick = pool[Random.Range(0, pool.Count)];
+                if (!CanOfferStage(s.kind, pick, LifetimeOf(s.kind) + 1f)) continue; // 時間切れが近いなど (遅れすぎたら UpdateStagePlan がとばす)
+                if (!pick.Reappear(0.4f)) { candidates.Remove(pick); continue; }
+                s.target = pick;
+                s.reservedAt = Time.time;
+                candidates.Remove(pick);
+                usedStalls.Add(pick.GetComponentInParent<Stall>());
+                outCount++;
+            }
         }
 
-        // 別の世界へ飛ぶモード (海戦・空中・忍者・怪獣・カジノ・西部劇・宇宙) の的を出す屋台。フィーバー中は、まわりの屋台から数秒ごとに
-        // ランダムに選び直し、その屋台で起き上がった的だけを化けさせる (起き上がるのが早いメイン屋台にばかり出ないように)。フィーバーでない時はメイン屋台
-        Stall stageStall;
-        float stageStallUntil;
-
-        bool StageStallAllows(Target target, GameManager gm)
+        bool IsStageReserved(Target t)
         {
-            if (!gm.IsFever) return true;
-            var shown = gm.ShownStalls();
-            if (stageStall == null || Time.time >= stageStallUntil || !shown.Contains(stageStall))
-            {
-                shown.Remove(gm.mainStall);
-                if (shown.Count == 0) return true;
-                stageStall = shown[Random.Range(0, shown.Count)];
-                stageStallUntil = Time.time + 4f;
-            }
-            return target.GetComponentInParent<Stall>() == stageStall;
+            foreach (var s in stagePlan) if (s.target == t) return true;
+            return false;
+        }
+
+        // 選んだ的が起き上がった: 予定の種類に化けさせる
+        bool TryOfferReservedStage(Target target)
+        {
+            var s = stagePlan.Find(x => x.target == target);
+            if (s == null) return false;
+            stagePlan.Remove(s);
+            return Count(s.kind) == 0 && CanOfferStage(s.kind, target, LifetimeOf(s.kind)) && ApplyDisguise(target, s.kind, PointsOf(s.kind));
         }
 
         void OnTargetRising(Target target)
@@ -469,8 +523,8 @@ namespace ShootingGallery
                 }
             }
 
-            // 別の世界へ飛ぶモードの的 (錨・プロペラ・手裏剣・怪獣・カジノ・保安官バッジ・宇宙): 予定 (stagePlan) の時間が来たものから化ける
-            if (TryOfferPlannedStage(target, gm)) return;
+            // 別の世界へ飛ぶモードの的 (錨・プロペラ・手裏剣・怪獣・カジノ・保安官バッジ・宇宙): 予定の時刻にランダムに選んだ普通の的だけが化ける (UpdateStageReservation)
+            if (TryOfferReservedStage(target)) return;
 
             // DELUXE の的: どの屋台にも出る。撃たれずに消えたら少ししてまた出る
             if (Time.time >= nextDeluxeTime && Count(TargetKind.Deluxe) == 0 && Random.value < deluxeChance

@@ -57,11 +57,9 @@ namespace ShootingGallery
         }
 
         /// <summary>スナイパーの的を撃った: その屋台を引っ込め、屋台があった方の遠くに大きな的を出し、スナイパーライフルを渡す</summary>
-        void StartSniper(Target target)
+        void StartSniper(Stall stall)
         {
-            if (sniper == null || ChallengeActive) return;
-            var stall = target.GetComponentInParent<Stall>();
-            if (stall == null) return;
+            if (sniper == null || ChallengeActive || stall == null) return;
 
             sniperStall = stall;
             stall.Sink(stallMoveDuration);
@@ -108,9 +106,9 @@ namespace ShootingGallery
             sniperStall = null;
             sniper.Hide(success);
 
-            // 屋台を戻す (チャレンジ中にフィーバーが終わったフィーバー屋台は戻さない)
-            bool show = stall == mainStall || (IsFever && activeFeverStalls.Contains(stall));
-            if (stall != null && show) stall.Rise(stallMoveDuration, State == GameState.Playing);
+            // 屋台を戻す: 引っ込めた場所に今並んでいる版 (豪華版 / 普通版) を出す (チャレンジ中にフィーバーが終わったフィーバー屋台の場所は戻さない)
+            var cur = CurrentStallAt(stall);
+            if (cur != null) cur.Rise(stallMoveDuration, State == GameState.Playing);
 
             if (player.Weapon == WeaponType.Sniper) player.ResetWeapon(); // 外した1発で別の武器の的を取った時はそのまま
             player.SetDualWield(IsFever);
@@ -127,11 +125,9 @@ namespace ShootingGallery
         /// マシンガンチャレンジの的を撃った: その屋台と両隣の屋台を引っ込め、同じ方向に横長の屋台 (棚にカップが並ぶ) をせり上げる。
         /// 屋台がせり上がり終わったらマシンガンを渡す (Update)。フィーバー外はメイン屋台しか出ていないので、引っ込むのはメイン屋台だけ。
         /// </summary>
-        void StartMachineGunChallenge(Target target)
+        void StartMachineGunChallenge(Stall stall)
         {
-            if (machineGunChallenge == null || ChallengeActive) return;
-            var stall = target.GetComponentInParent<Stall>();
-            if (stall == null) return;
+            if (machineGunChallenge == null || ChallengeActive || stall == null) return;
 
             // 輪に並んでいる順 (メイン屋台 → フィーバー屋台。ArrangeFeverStalls と同じ順) から両隣を探す
             var ring = new List<Stall> { mainStall };
@@ -193,17 +189,47 @@ namespace ShootingGallery
             }
         }
 
-        // 引っ込めた屋台を戻す (待っている間にフィーバーが終わったフィーバー屋台は戻さない)
+        // 引っ込めた屋台を戻す。待っている間に豪華版 ⇔ 普通版に入れ替わっていたら、その場所の今の版を戻す
+        // (待っている間にフィーバーが終わったフィーバー屋台の場所は戻さない)
         IEnumerator RiseStallsAfter(List<Stall> stalls, float delay)
         {
+            HoldStallsFor(delay + stallMoveDuration + 0.1f); // 戻りきるまで、屋台の拡張・入れ替えを待たせる
             yield return new WaitForSeconds(delay);
             ShowHatch(); // 別の世界から戻った: 床下のハッチも戻す (隠していなければ何もしない)
+            var done = new List<Stall>();
             foreach (var s in stalls)
             {
-                if (ChallengeActive && (machineGunStalls.Contains(s) || s == sniperStall)) continue; // 念のため: もう次のチャレンジで使っている
-                bool show = s == mainStall || (IsFever && activeFeverStalls.Contains(s));
-                if (show) s.Rise(stallMoveDuration, State == GameState.Playing);
+                var cur = CurrentStallAt(s);
+                if (cur == null || done.Contains(cur) || IsChallengeSpot(cur)) continue; // 念のため: もう次のチャレンジで引っ込めている場所
+                done.Add(cur);
+                cur.Rise(stallMoveDuration, State == GameState.Playing);
             }
+        }
+
+        // ---- 屋台の「場所」 ----
+        // 豪華タイムの入れ替えでは、同じ場所に別の屋台 (豪華版 ⇔ 普通版) が入る。チャレンジで引っ込めるのは屋台そのものではなく「場所」として扱い、
+        // どちらの版が入っていても、チャレンジの間はその場所に屋台を出さない (入れ替えで前に出てきて、的を撃つじゃまにならないように)
+
+        /// <summary>2つの屋台が同じ場所か (同じ屋台か、止まる場所がほぼ同じ)</summary>
+        static bool SameSpot(Stall a, Stall b) => a != null && b != null && (a == b || (a.RestPosition - b.RestPosition).sqrMagnitude < 0.09f);
+
+        /// <summary>この屋台の場所は、今チャレンジのために引っ込めている場所か (豪華版・普通版どちらでも)</summary>
+        bool IsChallengeSpot(Stall s)
+        {
+            if (s == null) return false;
+            if (SameSpot(s, sniperStall)) return true;
+            foreach (var m in machineGunStalls) if (SameSpot(s, m)) return true;
+            return false;
+        }
+
+        /// <summary>s と同じ場所に今並んでいる版の屋台 (メイン / フィーバー中の屋台)。その場所がもう輪にない時は null</summary>
+        Stall CurrentStallAt(Stall s)
+        {
+            if (s == null) return null;
+            if (SameSpot(s, mainStall)) return mainStall;
+            if (IsFever)
+                foreach (var f in activeFeverStalls) if (SameSpot(s, f)) return f;
+            return null;
         }
     }
 }

@@ -55,18 +55,7 @@ namespace ShootingGallery
         bool DebugClearFor(System.Action start)
         {
             if (!DebugMode || State != GameState.Playing) return false;
-            float wait = 0f;
-            if (SniperActive) { EndSniper(false, null); wait = Mathf.Max(wait, stallMoveDuration); }
-            if (MachineGunChallengeActive) { EndMachineGunChallenge(); wait = Mathf.Max(wait, machineGunChallenge.SwapBackDelay + stallMoveDuration); }
-            if (NavalActive) { EndNaval(); wait = Mathf.Max(wait, navalBattle.riseTime * 0.6f + stallMoveDuration); }
-            if (SkyActive) { EndSky(); wait = Mathf.Max(wait, skyBattle.riseTime + 0.1f + stallMoveDuration); }
-            if (NinjaActive) { EndNinja(); wait = Mathf.Max(wait, ninjaDojo.CloseTime + 0.1f + stallMoveDuration); }
-            if (KaijuActive) { EndKaiju(); wait = Mathf.Max(wait, kaijuCity.CloseTime + KaijuGrowTime + 0.3f); }
-            if (CasinoActive) { EndCasino(); wait = Mathf.Max(wait, casinoHall.CloseTime + 0.1f + stallMoveDuration); }
-            if (WesternActive) { EndWestern(); wait = Mathf.Max(wait, westernTrain.CloseTime + stallMoveDuration); }
-            if (SpaceActive) { EndSpace(); wait = Mathf.Max(wait, spaceStage.CloseTime + 0.1f + stallMoveDuration); }
-            if (DeluxeActive) { EndDeluxe(); wait = Mathf.Max(wait, swapOutTime + swapInTime); }
-            if (bonusStage != null && bonusStage.IsBusy) { bonusStage.Close(); wait = Mathf.Max(wait, bonusStage.slideTime + 0.3f); }
+            float wait = EndAllForNewMode(); // 普段のゲームと同じ片付け (GameManager.ModeQueue.cs)
             if (wait <= 0f) return false;
             StartCoroutine(StartAfter(wait + 0.2f, start));
             return true;

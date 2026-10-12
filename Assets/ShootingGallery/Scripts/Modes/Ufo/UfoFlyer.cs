@@ -3,7 +3,8 @@ using UnityEngine;
 namespace ShootingGallery
 {
     /// <summary>
-    /// ときどき UFO がプレイヤーの頭上を一直線に横切る。当てると 1000 点。
+    /// ときどき UFO がプレイヤーの頭上を一直線に横切る。当てると 1000 点。いつものプレイ中 (フィーバー中も含む) だけ飛び、
+    /// チャレンジや別の世界のモードなどが始まったら、飛んでいる途中でもすぐに消える (GameManager.IsNormalPlay)。
     /// 飛んでいる間は UFO から立体音響でうなり音が鳴るので、音のする方を見れば見つけられる。
     /// </summary>
     public class UfoFlyer : MonoBehaviour
@@ -50,6 +51,14 @@ namespace ShootingGallery
                 return;
             }
             wasPlaying = true;
+
+            // いつものプレイ中だけ飛ぶ。チャレンジや別の世界のモード (とそこから戻る途中)・DX・ボーナスステージが始まったら、
+            // 飛んでいる UFO はその場で消し (うなり音も止める)、待ち時間も進めない
+            if (!gm.IsNormalPlay)
+            {
+                if (flying) EndFlight();
+                return;
+            }
 
             if (!flying)
             {

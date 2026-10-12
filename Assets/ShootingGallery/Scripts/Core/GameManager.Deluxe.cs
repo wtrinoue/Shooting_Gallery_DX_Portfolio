@@ -89,7 +89,7 @@ namespace ShootingGallery
         {
             if (delay > 0f) yield return new WaitForSeconds(delay);
             bool show = stall == mainStall || (IsFever && activeFeverStalls.Contains(stall));
-            if (ChallengeActive && (machineGunStalls.Contains(stall) || stall == sniperStall)) show = false;
+            if (IsChallengeSpot(stall)) show = false; // チャレンジで引っ込めている場所には、どちらの版も出さない
             if (!show) yield break;
             stall.SwapIn(swapInTime, State == GameState.Playing);
             SwapSparkle(stall.transform);

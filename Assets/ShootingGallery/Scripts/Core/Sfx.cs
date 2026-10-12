@@ -28,6 +28,8 @@ namespace ShootingGallery
         public AudioClip missile, twinkle, warpIn, warpOut;
         [Header("マシンガンチャレンジ (カップを倒した音。空なら自動生成。複数入れると毎回ランダムに選ぶ)")]
         public AudioClip[] canHits = new AudioClip[0];
+        [Header("西部劇の砂嵐 (ゴーッと吹き荒れる風の音)")]
+        public AudioClip sandstorm;
         [Header("同時に鳴る音の抑え方")]
         [Tooltip("同じ種類の音がこの秒数以内に続いたら、2回目以降は鳴らさない (複数の的を同時に倒した時など)")]
         public float sameSoundGap = 0.07f;
@@ -77,6 +79,7 @@ namespace ShootingGallery
             if (coin == null) coin = Tones("Coin", new[] { 1975.5f, 2637f }, 0.06f);                 // チャリン
             if (reload == null) reload = Tones("Reload", new[] { 1400f, 0f, 0f, 1700f, 0f, 2100f }, 0.035f); // カチャカチャ
             if (whistle == null) whistle = Bell("Whistle", new[] { 587.33f, 739.99f, 880f }, 1.3f);  // ポーッ (汽笛)
+            if (sandstorm == null) sandstorm = Wind();                                                 // ゴォーッ (砂嵐)
             if (blackout == null) blackout = Blackout();                                             // バツン
             if (drumroll == null) drumroll = Drumroll(3.6f);                                         // ドロロロロ…
             if (crash == null) crash = Noise("Crash", 2f, 2.2f, 1.6f, 0.9f);                         // ジャーン (シンバル)
@@ -179,6 +182,7 @@ namespace ShootingGallery
                 "reload" => instance.reload,
                 "whistle" => instance.whistle,
                 "blackout" => instance.blackout,
+                "sandstorm" => instance.sandstorm,
                 "drumroll" => instance.drumroll,
                 "crash" => instance.crash,
                 "cheer" => instance.cheer,
@@ -406,6 +410,33 @@ namespace ShootingGallery
         }
 
         /// <summary>大きなスイッチを切って真っ暗になる音: 「バツン」(短い金属音) と、低い「ドン」、電気が落ちる「ブゥン…」</summary>
+        /// <summary>
+        /// 砂嵐の風の音 (3.4 秒): こもったノイズが、ゴォーッと強まったり弱まったり (突風) しながら吹き荒れ、最後に静まる。
+        /// 砂がぶつかるザラザラした高い音も少し混ぜる。
+        /// </summary>
+        static AudioClip Wind()
+        {
+            const float Length = 3.4f;
+            int n = (int)(Rate * Length);
+            var data = new float[n];
+            var rng = new System.Random(7);
+            float low = 0f, mid = 0f;
+            for (int i = 0; i < n; i++)
+            {
+                float t = i / (float)Rate;
+                float white = (float)rng.NextDouble() * 2f - 1f;
+                float gust = 0.6f + 0.25f * Mathf.Sin(2f * Mathf.PI * 0.9f * t) + 0.15f * Mathf.Sin(2f * Mathf.PI * 2.3f * t + 1f);
+                low = Mathf.Lerp(low, white, 0.02f + 0.03f * gust); // 突風の時は少し高い音になる (ヒューッ)
+                mid = Mathf.Lerp(mid, white, 0.25f);
+                float env = Mathf.Clamp01(t / 0.5f) * Mathf.Clamp01((Length - t) / 1.0f);
+                float grit = (mid - low) * 0.12f * gust;  // ザラザラ
+                data[i] = Mathf.Clamp((low * 5.5f * gust + grit) * env, -1f, 1f);
+            }
+            var clip = AudioClip.Create("Sandstorm", n, 1, Rate, false);
+            clip.SetData(data, 0);
+            return clip;
+        }
+
         static AudioClip Blackout()
         {
             const float Length = 0.9f;

@@ -22,8 +22,8 @@ namespace ShootingGallery
         [Tooltip("床の材質 (fadeSourceMaterials) と、その半透明版 (fadeMaterials。同じ順)。透ける間だけ差し替える")]
         public Material[] fadeSourceMaterials;
         public Material[] fadeMaterials;
-        [Tooltip("床が透けて消えていく秒数 (戻る時も同じ)")]
-        public float fallTime = 3.2f;
+        [Tooltip("床が透けて消えていく秒数 (戻る時も同じ)。早めに消して、すぐにまわり中が宇宙になるように")]
+        public float groundFadeTime = 1.2f; // 名前を変えて、シーンに保存された前の値 (3.2秒) を使わないようにしている
         [Tooltip("宇宙モードの間だけ表示する物 (星空)")]
         public GameObject[] showDuringStage;
 
@@ -68,7 +68,7 @@ namespace ShootingGallery
         /// <summary>今回壊した的の数</summary>
         public int Hits { get; private set; }
         /// <summary>片付け (星が消えて床が戻る) にかかる秒数</summary>
-        public float CloseTime => starFadeOut + fallTime + 0.1f;
+        public float CloseTime => starFadeOut + groundFadeTime + 0.1f;
 
         /// <summary>暗くなる時 (GameManager が宇宙の暗さにする)</summary>
         public event System.Action Darken;
@@ -85,6 +85,7 @@ namespace ShootingGallery
         readonly List<(Renderer r, Material[] originals, bool enabled)> swapped = new List<(Renderer, Material[], bool)>();
         readonly Dictionary<Material, Material> fadeInstances = new Dictionary<Material, Material>();
         readonly Dictionary<Material, Color> fadeBaseColor = new Dictionary<Material, Color>();
+        readonly Dictionary<Material, Color> fadeBaseEmission = new Dictionary<Material, Color>();
         bool[] groundWasActive;
         float groundK;
         Coroutine groundRoutine;
@@ -219,13 +220,13 @@ namespace ShootingGallery
             anim = null;
         }
 
-        // 床を透けさせて消す (to = 1) / 戻す (to = 0)。消える時はだんだん速く、戻る時はだんだんゆっくり
+        // 床を透けさせて消す (to = 1) / 戻す (to = 0)
         IEnumerator FadeGround(float to)
         {
             float from = groundK;
-            for (float t = 0f; t < 1f; t += Time.deltaTime / fallTime)
+            for (float t = 0f; t < 1f; t += Time.deltaTime / groundFadeTime)
             {
-                float e = to > from ? t * t : 1f - (1f - t) * (1f - t);
+                float e = t * t * (3f - 2f * t); // なめらかに (消え始めからすぐ透けていく)
                 SetGround(Mathf.Lerp(from, to, e));
                 yield return null;
             }
@@ -242,9 +243,12 @@ namespace ShootingGallery
             float a = 1f - k;
             foreach (var pair in fadeInstances)
             {
-                var c = fadeBaseColor[pair.Value];
-                c.a *= a;
-                pair.Value.SetColor("_BaseColor", c);
+                // 透明にするだけだと、半透明の床に空や光の色 (濃い紫など) が映って見えることがあるので、
+                // 色も宇宙と同じ黒へ近づけながら透けさせる (光る線も同じように消す)
+                var m = pair.Value;
+                var c = fadeBaseColor[m];
+                m.SetColor("_BaseColor", new Color(c.r * a, c.g * a, c.b * a, c.a * a));
+                if (fadeBaseEmission.TryGetValue(m, out var e)) m.SetColor("_EmissionColor", e * a);
             }
         }
 
@@ -290,8 +294,13 @@ namespace ShootingGallery
             int i = System.Array.IndexOf(fadeSourceMaterials, original);
             if (i < 0 || i >= fadeMaterials.Length || fadeMaterials[i] == null) return null;
             inst = new Material(fadeMaterials[i]);
+            // 透けている床に、つやの照り返し (まわりの空の色) が残って色づいて見えないよう、つやと映り込みを切る
+            if (inst.HasProperty("_Smoothness")) inst.SetFloat("_Smoothness", 0f);
+            if (inst.HasProperty("_SpecularHighlights")) { inst.SetFloat("_SpecularHighlights", 0f); inst.EnableKeyword("_SPECULARHIGHLIGHTS_OFF"); }
+            if (inst.HasProperty("_EnvironmentReflections")) { inst.SetFloat("_EnvironmentReflections", 0f); inst.EnableKeyword("_ENVIRONMENTREFLECTIONS_OFF"); }
             fadeInstances[original] = inst;
             fadeBaseColor[inst] = inst.GetColor("_BaseColor");
+            if (inst.IsKeywordEnabled("_EMISSION") && inst.HasProperty("_EmissionColor")) fadeBaseEmission[inst] = inst.GetColor("_EmissionColor");
             return inst;
         }
 

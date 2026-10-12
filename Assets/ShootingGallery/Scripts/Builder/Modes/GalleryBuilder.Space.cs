@@ -167,6 +167,12 @@ namespace ShootingGallery
             mat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
             mat.SetOverrideTag("RenderType", "Transparent");
             mat.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+            // 透けている間に、つやの照り返し (空の色) が残って色づいて見えないよう、つやと映り込みを切っておく
+            mat.SetFloat("_Smoothness", 0f);
+            mat.SetFloat("_SpecularHighlights", 0f);
+            mat.EnableKeyword("_SPECULARHIGHLIGHTS_OFF");
+            mat.SetFloat("_EnvironmentReflections", 0f);
+            mat.EnableKeyword("_ENVIRONMENTREFLECTIONS_OFF");
             mat = SaveAsAssetIfEditing(mat, name);
             mats[name] = mat;
             return mat;

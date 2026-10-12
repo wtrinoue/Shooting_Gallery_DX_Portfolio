@@ -4,7 +4,7 @@ using UnityEngine;
 namespace ShootingGallery
 {
     /// <summary>
-    /// 西部劇モードの舞台。屋台が沈んだあと目の前がいったん暗くなり、明るくなると、プレイヤーは機関車・炭水車・客車3両の列車の
+    /// 西部劇モードの舞台。屋台が沈んだあと砂嵐が吹きつけて何も見えなくなり、砂嵐が晴れると、プレイヤーは機関車・炭水車・客車3両の列車の
     /// 1両目の屋根の上にもう立っている (床が動くところは見せない)。列車は的を撃った方へまっすぐ走っていて、線路の枕木・荒野のでこぼこ・サボテン・
     /// 電柱・遠くの岩山が後ろへ流れ、タンブルウィードが転がっていく。まわりを馬に乗ったカウボーイ (たまに馬車) が並んで走る。
     /// 屋台の出し入れ・点数・終わる時間の判断は GameManager が行い、ここは見た目と的の出し方だけを受け持つ。
@@ -36,14 +36,22 @@ namespace ShootingGallery
         public int maxRunning = 5;
         public float stopLaunchBefore = 2f;
 
+        [Header("砂嵐 (行きも帰りも、砂嵐で何も見えない間に舞台を入れ替える)")]
+        [Tooltip("視界を覆う砂の色")]
+        public Color sandColor = new Color(0.78f, 0.62f, 0.4f);
+        [Tooltip("吹き飛んでいく砂粒の材質 (半透明。なければ煙の材質を使う)")]
+        public Material sandMaterial;
+        [Tooltip("1秒あたりに飛ばす砂粒の数")]
+        public float grainsPerSecond = 160f;
+
         [Header("Timing")]
         public float duration = 19f;
-        [Tooltip("始まってから暗くなり始めるまでの秒数 (屋台が沈み終わるのを待つ)")]
+        [Tooltip("始まってから砂嵐が来るまでの秒数 (屋台が沈み終わるのを待つ)")]
         public float dropDelay = 1.2f;
-        [Tooltip("暗くなる / 真っ暗なまま入れ替える / 明るくなる 秒数")]
-        public float fadeOutTime = 0.7f;
-        public float darkHold = 0.4f;
-        public float fadeInTime = 0.9f;
+        [Tooltip("砂嵐で視界が覆われるまで / 何も見えないまま入れ替える / 砂嵐が晴れるまで の秒数")]
+        public float stormInTime = 1.1f;
+        public float stormHold = 0.7f;
+        public float stormOutTime = 1.4f;
 
         public bool IsActive { get; private set; }
         public float TimeLeft => IsActive ? Mathf.Max(0f, duration - (Time.time - startTime)) : 0f;
@@ -51,8 +59,8 @@ namespace ShootingGallery
         public int Downed { get; private set; }
         public event System.Action<WesternRider> RiderDown;
         /// <summary>片付けにかかる秒数</summary>
-        public float CloseTime => fadeOutTime + darkHold + fadeInTime * 0.5f + 0.1f;
-        /// <summary>真っ暗な間に列車の上へ来た時 / いつもの地面へ戻った時 (GameManager が空や霧の色を切り替える)</summary>
+        public float CloseTime => stormInTime + stormHold + stormOutTime * 0.5f + 0.1f;
+        /// <summary>砂嵐で何も見えない間に列車の上へ来た時 / いつもの地面へ戻った時 (GameManager が空や霧の色を切り替え、帰りは屋台と的を用意する)</summary>
         public event System.Action Arrived, Left;
 
         float startTime, nextLaunchTime;
@@ -61,6 +69,10 @@ namespace ShootingGallery
         bool onTrain;
         bool[] groundWasActive;
         float wheelSpeed;
+        // 砂嵐
+        float sandLevel, sandAccum; // 砂嵐の強さ (0〜1) / 次の砂粒までのたまり
+        Vector3 windDir = Vector3.right;
+        readonly System.Collections.Generic.List<Grain> grains = new System.Collections.Generic.List<Grain>();
         float nextSmokeTime;
         readonly System.Collections.Generic.List<(Transform t, float age)> smoke = new System.Collections.Generic.List<(Transform, float)>();
 
@@ -76,7 +88,7 @@ namespace ShootingGallery
             if (IsActive) return;
             IsActive = true;
             startTime = Time.time;
-            nextLaunchTime = Time.time + dropDelay + fadeOutTime + darkHold + fadeInTime * 0.5f;
+            nextLaunchTime = Time.time + dropDelay + stormInTime + stormHold + stormOutTime * 0.5f;
             Downed = 0;
             transform.localRotation = Quaternion.Euler(0f, yawDeg, 0f);
             for (int i = 0; i < scenery.Length; i++)
@@ -95,6 +107,7 @@ namespace ShootingGallery
         void Update()
         {
             UpdateSmoke();
+            UpdateSand();
             if (onTrain)
                 foreach (var w in wheels) w.Rotate(wheelSpeed * Time.deltaTime, 0f, 0f, Space.Self);
             if (!IsActive) return;
@@ -150,30 +163,107 @@ namespace ShootingGallery
             smoke.Add((puff.transform, 0f));
         }
 
-        // 始まり: 屋台が沈んだら目の前を暗くし、真っ暗な間に列車の屋根の上へ (床は動かさない)。汽笛とともに明るくなる
+        // 始まり: 屋台が沈んだら砂嵐が吹きつけて何も見えなくなり、その間に列車の屋根の上へ (床は動かさない)。汽笛とともに砂嵐が晴れる
         IEnumerator Enter()
         {
             yield return new WaitForSeconds(dropDelay);
-            ScreenFader.FadeTo(1f, fadeOutTime);
-            yield return new WaitForSeconds(fadeOutTime + darkHold * 0.5f);
-            SetOnTrain(true);
-            Arrived?.Invoke();
-            yield return new WaitForSeconds(darkHold * 0.5f);
-            Sfx.Play("whistle");
-            ScreenFader.FadeTo(0f, fadeInTime);
+            yield return Storm(() => { SetOnTrain(true); Arrived?.Invoke(); }, "whistle");
             anim = null;
         }
 
-        // 終わり: 暗くして、真っ暗な間にいつものお祭りの地面へ戻す
+        // 終わり: また砂嵐に覆われ、その間にいつものお祭りの地面へ戻す (GameManager が屋台と的をもう並べておく)。晴れると屋台が並んでいる
         IEnumerator Leave()
         {
-            ScreenFader.FadeTo(1f, fadeOutTime);
-            yield return new WaitForSeconds(fadeOutTime + darkHold * 0.5f);
-            SetOnTrain(false);
-            Left?.Invoke();
-            yield return new WaitForSeconds(darkHold * 0.5f);
-            ScreenFader.FadeTo(0f, fadeInTime);
+            yield return Storm(() => { SetOnTrain(false); Left?.Invoke(); }, null);
             anim = null;
+        }
+
+        // 砂嵐: 風の音とともに砂粒が横殴りに吹き、視界が砂の色に覆われる → 何も見えない間に atPeak (舞台の入れ替え) → だんだん晴れる
+        IEnumerator Storm(System.Action atPeak, string clearSound)
+        {
+            Sfx.Play("sandstorm");
+            windDir = transform.right * (Random.value < 0.5f ? 1f : -1f); // 列車の横から吹きつける
+            ScreenFader.FadeTo(1f, stormInTime, sandColor);
+            for (float t = 0f; t < stormInTime; t += Time.deltaTime)
+            {
+                sandLevel = t / stormInTime;
+                yield return null;
+            }
+            sandLevel = 1f;
+            yield return new WaitForSeconds(stormHold * 0.5f);
+            atPeak?.Invoke();
+            yield return new WaitForSeconds(stormHold * 0.5f);
+            if (clearSound != null) Sfx.Play(clearSound);
+            ScreenFader.FadeTo(0f, stormOutTime);
+            for (float t = 0f; t < stormOutTime; t += Time.deltaTime)
+            {
+                sandLevel = 1f - t / stormOutTime;
+                yield return null;
+            }
+            sandLevel = 0f;
+        }
+
+        // 砂粒: カメラのまわりに横殴りに飛んでくる細い筋 (と、ときどき大きな砂煙)。砂嵐の強さ (sandLevel) に合わせた数だけ出す
+        void UpdateSand()
+        {
+            float dt = Time.deltaTime;
+            var cam = Camera.main;
+            for (int i = grains.Count - 1; i >= 0; i--)
+            {
+                var g = grains[i];
+                g.age += dt;
+                if (g.t == null || g.age > g.life)
+                {
+                    if (g.t != null) Destroy(g.t.gameObject);
+                    grains.RemoveAt(i);
+                    continue;
+                }
+                g.t.position += g.vel * dt;
+                if (!g.puff && cam != null)
+                {
+                    // 筋の長い方が飛ぶ向きに沿い、面がカメラを向くように
+                    var fwd = g.t.position - cam.transform.position;
+                    var up = Vector3.Cross(fwd, g.vel);
+                    if (fwd.sqrMagnitude > 0.0001f && up.sqrMagnitude > 0.0001f) g.t.rotation = Quaternion.LookRotation(fwd, up);
+                }
+                grains[i] = g;
+            }
+
+            var mat = sandMaterial != null ? sandMaterial : smokeMaterial;
+            if (sandLevel <= 0f || cam == null || mat == null) { sandAccum = 0f; return; }
+            sandAccum += grainsPerSecond * sandLevel * dt;
+            while (sandAccum >= 1f)
+            {
+                sandAccum -= 1f;
+                SpawnGrain(cam.transform.position, mat, Random.value < 0.08f);
+            }
+        }
+
+        void SpawnGrain(Vector3 eye, Material mat, bool puff)
+        {
+            var go = GameObject.CreatePrimitive(puff ? PrimitiveType.Sphere : PrimitiveType.Quad);
+            go.name = puff ? "SandPuff" : "SandGrain";
+            Destroy(go.GetComponent<Collider>());
+            var r = go.GetComponent<Renderer>();
+            r.sharedMaterial = mat;
+            r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            r.receiveShadows = false;
+            // カメラのまわり (少し風上) に出して、風下へ吹き飛ばす
+            var dir = Quaternion.Euler(Random.Range(-25f, 20f), Random.Range(0f, 360f), 0f) * Vector3.forward;
+            float dist = puff ? Random.Range(2f, 6f) : Random.Range(0.4f, 4.5f);
+            go.transform.position = eye + dir * dist - windDir * Random.Range(0f, 3f);
+            go.transform.localScale = puff ? Vector3.one * Random.Range(0.8f, 1.8f)
+                                           : new Vector3(Random.Range(0.12f, 0.35f), Random.Range(0.012f, 0.03f), 1f);
+            var vel = windDir * (puff ? Random.Range(5f, 8f) : Random.Range(10f, 18f)) + Vector3.down * Random.Range(0f, 1.5f) + Random.insideUnitSphere * 1.5f;
+            grains.Add(new Grain { t = go.transform, vel = vel, life = puff ? Random.Range(0.7f, 1.1f) : Random.Range(0.35f, 0.7f), puff = puff });
+        }
+
+        struct Grain
+        {
+            public Transform t;
+            public Vector3 vel;
+            public float age, life;
+            public bool puff;
         }
 
         // 列車の屋根の上にいる (荒野・列車・景色を出して、お祭りの地面を隠す) / いない

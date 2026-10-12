@@ -8,8 +8,9 @@ namespace ShootingGallery
     /// </summary>
     public partial class GalleryBuilder
     {
-        // 足元の丸い穴の半径。メイン屋台のカウンターの手前 (中心から 2.1m) に届かない大きさ
-        const float PitRadius = 1.95f;
+        // 足元の丸い穴 (ハッチ) の半径。屋台6軒の輪 (半径 3.5m。屋台は中心から 2.3m 〜 4.3m) の、屋台の奥行きの半分くらいまで重なる大きさ。
+        // 時間がたって輪が広がっても、ハッチは広がらない
+        const float PitRadius = 3.3f;
         // 地面の厚さ。絞り羽根はこの厚さの中を回り、開くと周りの地面の下に隠れる
         const float GroundThickness = 0.2f;
 
@@ -135,6 +136,7 @@ namespace ShootingGallery
             var eye = new Vector3(0f, 1.75f, 0f); // プレイヤーの目のだいたいの位置
 
             var targets = new List<Target>();
+            var labels = new List<TextMesh>();
             Target WallTarget(string name, float thetaDeg, float phi, float diameter, int colorIndex)
             {
                 var wall = OnDome(thetaDeg, phi, 0f);
@@ -152,22 +154,28 @@ namespace ShootingGallery
 
                 var target = root.gameObject.AddComponent<Target>();
                 target.kind = TargetKind.BigBonus;
-                target.points = 100; // 実際の点数は当てた回数で BonusStage が決める
+                target.points = 1000; // 実際の点数は開くたびに BonusStage がランダムに決める (1000 / 2000 / 3000)
                 target.manualControl = true;
                 target.shrinkOnHit = true; // 後ろは壁なので、倒れずに縮んで消える
                 var pivot = Group(root, "Pivot");
                 target.visual = pivot;
                 Disc(pivot, "Back", 0f, diameter * 1.12f, 0.008f, gold);
                 Bullseye(pivot, 0f, diameter, colorMats[colorIndex % colorMats.Length], white, colorMats[(colorIndex + 4) % colorMats.Length]);
+                // 点数の文字 (BonusStage が開くたびに書き換える)。真ん中の円に重ねる
+                labels.Add(MakeText(pivot, "Points", "1000", new Vector3(0f, 0f, -0.022f), diameter * 0.3f, Color.white));
                 targets.Add(target);
                 return target;
             }
-            for (int i = 0; i < 8; i++)
-                WallTarget($"Target_Upper_{i}", 70f, i * Mathf.PI * 2f / 8, 0.42f, i);
-            for (int i = 0; i < 8; i++)
-                WallTarget($"Target_Lower_{i}", 42f, (i + 0.5f) * Mathf.PI * 2f / 8, 0.42f, i + 3);
-            var bottom = WallTarget("Target_Bottom", 0f, 0f, 0.8f, 5);
-            MakeText(bottom.visual, "Label", "DO RE MI", new Vector3(0f, 0.27f, -0.02f), 0.09f, Color.white);
+            // 穴が大きくなったので、輪の的の数を増やして同じくらいの間隔でまんべんなく並べる
+            const int RingCount = 12;
+            const float RingDiameter = 0.62f;
+            for (int i = 0; i < RingCount; i++)
+                WallTarget($"Target_Upper_{i}", 70f, i * Mathf.PI * 2f / RingCount, RingDiameter, i);
+            for (int i = 0; i < RingCount; i++)
+                WallTarget($"Target_Lower_{i}", 42f, (i + 0.5f) * Mathf.PI * 2f / RingCount, RingDiameter, i + 3);
+            const float BottomDiameter = 1.2f;
+            var bottom = WallTarget("Target_Bottom", 0f, 0f, BottomDiameter, 5);
+            MakeText(bottom.visual, "Label", "DO RE MI", new Vector3(0f, BottomDiameter * 0.34f, -0.02f), BottomDiameter * 0.11f, Color.white);
 
             // ---- 当てるたびに点くランプ (穴のふちに8個、ド〜ドの虹色。メイン屋台側から時計回り) ----
             var lampOff = Mat("Lamp_Off", new Color(0.25f, 0.25f, 0.3f));
@@ -175,7 +183,7 @@ namespace ShootingGallery
             for (int i = 0; i < rainbow.Length; i++)
             {
                 float a = i * Mathf.PI * 2f / rainbow.Length;
-                var pos = new Vector3(Mathf.Sin(a), 0f, Mathf.Cos(a)) * (PitRadius + 0.05f) + Vector3.up * 0.02f; // ふちの輪の上 (メイン屋台のカウンターは中心から 2.1m)
+                var pos = new Vector3(Mathf.Sin(a), 0f, Mathf.Cos(a)) * (PitRadius + 0.05f) + Vector3.up * 0.02f; // ふちの輪の上
                 Prim(PrimitiveType.Sphere, $"Lamp_{i}_Off", go.transform, pos, Vector3.one * 0.1f, lampOff, false);
                 lampsOn[i] = Prim(PrimitiveType.Sphere, $"Lamp_{i}_On", go.transform, pos, Vector3.one * 0.13f, Mat($"Lamp_On_{i}", rainbow[i], rainbow[i] * 2.2f), false);
             }
@@ -184,6 +192,7 @@ namespace ShootingGallery
             stage.irisBlades = blades;
             stage.irisOpenAngle = 180f - Lean; // 羽根がまっすぐ外を向くまで回して、全部地面の下に隠す
             stage.targets = targets.ToArray();
+            stage.pointLabels = labels.ToArray();
             stage.lampsOn = lampsOn;
             stage.hideWhileOpen = playerMark != null ? new[] { playerMark } : new GameObject[0];
             foreach (var t in targets) t.SetAvailable(false);

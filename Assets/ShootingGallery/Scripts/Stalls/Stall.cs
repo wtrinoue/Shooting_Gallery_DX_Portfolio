@@ -51,6 +51,25 @@ namespace ShootingGallery
                 if (t != null) t.SetAvailable(value);
         }
 
+        /// <summary>
+        /// 止まる場所に瞬時に出す (動きを見せない)。enableTargets なら的もすぐ出す。
+        /// 西部劇モードの帰り: 砂嵐で何も見えない間に屋台と的を並べておき、晴れた時にはもう遊べるようにする
+        /// </summary>
+        public void ShowImmediate(bool enableTargets)
+        {
+            CaptureRestPos();
+            CaptureScale();
+            if (moveRoutine != null) StopCoroutine(moveRoutine);
+            moveRoutine = null;
+            worldScaling = false;
+            enableTargetsOnArrive = false;
+            gameObject.SetActive(true);
+            transform.localPosition = restPos;
+            transform.localRotation = restRot;
+            transform.localScale = restScale;
+            SetTargetsAvailable(enableTargets);
+        }
+
         /// <summary>地面の下へ瞬時に隠す (起動時用)</summary>
         public void HideImmediate()
         {

@@ -38,8 +38,8 @@ namespace ShootingGallery
         // 暗くなる: 夜空よりも暗い宇宙の色にする。太陽は少し弱めて残す (惑星に光の当たる側と影の側ができる)。遠くの星が霧に隠れないように、霧をずっと遠くからにする
         void OnSpaceDarken()
         {
-            FadeAmbience(spaceSkyColor, spaceAmbient, spaceSkyColor, 2.5f);
-            FadeSun(sunIntensity * 0.7f, 2.5f);
+            FadeAmbience(spaceSkyColor, spaceAmbient, spaceSkyColor, 1.0f); // 床が消えるのと同じくらいの早さで、まわり中を宇宙の暗さに
+            FadeSun(sunIntensity * 0.7f, 1.0f);
             RenderSettings.fogStartDistance = 250f;
             RenderSettings.fogEndDistance = 500f;
             ShowMessage("WELCOME TO SPACE!\nSHOOT THE STARS & PLANETS WITH MISSILES!", 3.5f, new Color(0.6f, 0.75f, 1f));

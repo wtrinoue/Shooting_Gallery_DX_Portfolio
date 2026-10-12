@@ -10,7 +10,7 @@ namespace ShootingGallery
     /// プレイヤー。中心から移動せず、見回して撃つだけ。
     /// 右手トリガーで右の銃を撃つ。フィーバー中の左手の銃は左手トリガーで撃つ。
     /// 右手の A ボタンを長押しすると (インジケーターがたまりきると) 最初に戻る。B ボタンの長押しでエンドレスモード、左手の X ボタンの長押しでデバッグモードが始まる。
-    /// VRデバイスが無い時はマウスでテストできる (右ドラッグで視点, 左クリック/Spaceで右の銃, Fキーで左の銃, R キー長押しでリセット, E キー長押しでエンドレス, X キー長押しでデバッグ)。
+    /// VRデバイスが無い時はマウスでテストできる (右ドラッグで視点, 左クリック/Spaceで右の銃, Fキーで左の銃, 1 キー長押しでデバッグ, 2 キー長押しでエンドレス, 3 キー長押しでリセット。VR のボタンと同じく長押しで発動)。
     /// </summary>
     public class PlayerRig : MonoBehaviour
     {
@@ -94,15 +94,18 @@ namespace ShootingGallery
 
             resetButton = new InputAction("Reset", InputActionType.Button);
             resetButton.AddBinding("<XRController>{RightHand}/primaryButton"); // Quest の A ボタン
-            resetButton.AddBinding("<Keyboard>/r");
+            resetButton.AddBinding("<Keyboard>/3");       // PC: 3 キー (テンキーも可)
+            resetButton.AddBinding("<Keyboard>/numpad3");
 
             endlessButton = new InputAction("Endless", InputActionType.Button);
             endlessButton.AddBinding("<XRController>{RightHand}/secondaryButton"); // Quest の B ボタン
-            endlessButton.AddBinding("<Keyboard>/e");
+            endlessButton.AddBinding("<Keyboard>/2");     // PC: 2 キー
+            endlessButton.AddBinding("<Keyboard>/numpad2");
 
             debugButton = new InputAction("Debug", InputActionType.Button);
             debugButton.AddBinding("<XRController>{LeftHand}/primaryButton"); // Quest の X ボタン
-            debugButton.AddBinding("<Keyboard>/x");
+            debugButton.AddBinding("<Keyboard>/1");       // PC: 1 キー
+            debugButton.AddBinding("<Keyboard>/numpad1");
         }
 
         void OnEnable()

@@ -38,14 +38,19 @@ namespace ShootingGallery
             ShowMessage("WILD WEST!!", 1.2f, new Color(0.95f, 0.75f, 0.35f));
         }
 
-        /// <summary>西部劇モードの時間切れ: 暗くしていつもの地面へ戻し、明るくなったら沈めた屋台を戻す</summary>
+        /// <summary>
+        /// 西部劇モードの時間切れ: 砂嵐で覆っていつもの地面へ戻す。屋台と的は砂嵐で何も見えない間に並べておき (OnWesternLeft)、
+        /// 晴れた時にはもう普通に遊べるようにする
+        /// </summary>
         void EndWestern()
         {
             if (!WesternActive) return;
             int downed = westernTrain.Downed;
             westernTrain.End();
             if (player.Weapon == WeaponType.Revolver) player.ResetWeapon();
-            StartCoroutine(RiseStallsAfter(new List<Stall>(stageStalls), westernTrain.CloseTime));
+            westernReturnStalls.Clear();
+            westernReturnStalls.AddRange(stageStalls);
+            HoldStallsFor(westernTrain.CloseTime); // 屋台を並べるまで、屋台の拡張・入れ替えを待たせる
             stageStalls.Clear();
             if (State == GameState.Playing)
             {
@@ -63,13 +68,23 @@ namespace ShootingGallery
             if (State == GameState.Playing) ShowMessage("WILD WEST!!\nSHOOT THE OUTLAWS!", 3f, new Color(0.95f, 0.75f, 0.35f));
         }
 
-        // 真っ暗な間にいつもの地面へ戻った: 夜祭りの空と霧に戻す
+        // 砂嵐で何も見えない間にいつもの地面へ戻った: 夜祭りの空と霧に戻し、沈めておいた屋台と的をその場にすぐ並べる (晴れた時にはもう遊べる)。
+        // 待っている間にフィーバーが終わったフィーバー屋台は出さない
         void OnWesternLeft()
         {
             RenderSettings.fogStartDistance = normalFogStart;
             RenderSettings.fogEndDistance = normalFogEnd;
             FadeAmbience(normalFogColor, normalAmbient, normalSkyColor, 0.05f);
+            ShowHatch();
+            foreach (var s in westernReturnStalls)
+            {
+                bool show = s == mainStall || (IsFever && activeFeverStalls.Contains(s));
+                if (show) s.ShowImmediate(State == GameState.Playing);
+            }
+            westernReturnStalls.Clear();
         }
+
+        readonly List<Stall> westernReturnStalls = new List<Stall>(); // 西部劇モードの帰りに並べ直す屋台
 
         // カウボーイ / 馬車を倒した: 大きな表示 (点数は当てた時にもう入っている)
         void OnRiderDown(WesternRider rider)

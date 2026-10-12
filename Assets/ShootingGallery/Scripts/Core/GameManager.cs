@@ -120,6 +120,16 @@ namespace ShootingGallery
         readonly List<Stall> machineGunStalls = new List<Stall>(); // マシンガンチャレンジのために引っ込めた屋台 (撃った屋台と両隣)
         bool machineGunGiven;       // マシンガンチャレンジのマシンガンをもう渡したか (屋台がせり上がってから渡す)
         /// <summary>スナイパー / マシンガンのどちらかのチャレンジ中か (この間はフィーバーの残り時間と屋台の拡張を止める)</summary>
+        /// <summary>チャレンジ / 別の世界のモード中か、そこから屋台が戻ってくる途中か (この間は屋台の拡張・入れ替えをしない。戻る途中に別の屋台がひょっこり出ないように)</summary>
+        bool StallsBusy => ChallengeActive || Time.time < stallsReturnUntil;
+        /// <summary>
+        /// いつものプレイ中か (フィーバー中も含む)。チャレンジ・別の世界のモード・そこから戻る途中・DX モード・ボーナスステージの間は false。
+        /// UFO はこの間だけ飛ぶ (うなり音がモードの演出のじゃまにならないように)
+        /// </summary>
+        public bool IsNormalPlay => State == GameState.Playing && !StallsBusy && !DeluxeActive && (bonusStage == null || !bonusStage.IsBusy);
+        float stallsReturnUntil; // 屋台が元の場所に戻りきる時刻
+        /// <summary>屋台が戻りきるまで (今から seconds 秒) 屋台の拡張・入れ替えを待たせる</summary>
+        void HoldStallsFor(float seconds) => stallsReturnUntil = Mathf.Max(stallsReturnUntil, Time.time + seconds);
         public bool ChallengeActive => SniperActive || MachineGunChallengeActive || NavalActive || SkyActive || NinjaActive || KaijuActive || CasinoActive || WesternActive || SpaceActive;
         /// <summary>海戦モード中か (チャレンジの1つとして扱う: この間はフィーバーの残り時間と屋台の拡張を止め、他のチャレンジや豪華屋台チェンジは出さない)</summary>
         public bool NavalActive => navalBattle != null && navalBattle.IsActive;
@@ -268,19 +278,19 @@ namespace ShootingGallery
                 elapsed += Time.deltaTime;
                 if (!Endless) timeLeft -= Time.deltaTime;
                 int stage = Mathf.Min((int)(elapsed / Mathf.Max(1f, stageInterval)), stageStallCounts.Length - 1);
-                if (stage > Stage && !ChallengeActive && !DebugMode) StageUp(stage); // デバッグモードは6軒のまま // チャレンジ中は拡張を待つ (念のため)
+                if (stage > Stage && !StallsBusy && !DebugMode) StageUp(stage); // デバッグモードは6軒のまま。チャレンジ中と、別の世界から屋台が戻ってくる途中は拡張を待つ
                 if (SniperActive && sniper.TimeLeft <= 0f) EndSniper(false, "TIME OVER...");
                 if (MachineGunChallengeActive && !machineGunGiven && machineGunChallenge.IsReady) GiveChallengeMachineGun();
                 if (MachineGunChallengeActive && machineGunChallenge.TimeLeft <= 0f) EndMachineGunChallenge();
                 if (IsFever)
                 {
-                    if (!ChallengeActive) feverLeft -= Time.deltaTime; // チャレンジ中はフィーバーの残り時間を止める
+                    if (!StallsBusy) feverLeft -= Time.deltaTime; // チャレンジ中と、屋台が戻ってくる途中はフィーバーの残り時間を止める
                     if (feverLeft <= 0f) EndFever();
                 }
                 if (DeluxeActive)
                 {
-                    if (!ChallengeActive) deluxeLeft -= Time.deltaTime; // チャレンジ中は止める (屋台を入れ替えない)
-                    if (deluxeLeft <= 0f && !ChallengeActive) EndDeluxe();
+                    if (!StallsBusy) deluxeLeft -= Time.deltaTime; // チャレンジ中と、屋台が戻ってくる途中は止める (屋台を入れ替えない)
+                    if (deluxeLeft <= 0f && !StallsBusy) EndDeluxe();
                     else if (Time.time >= nextFireworkTime) LaunchFirework();
                 }
                 if (NavalActive && navalBattle.TimeLeft <= 0f) EndNaval();
@@ -362,6 +372,7 @@ namespace ShootingGallery
             DebugMode = debug; // 的を出す前に決めておく (起き上がる時に種類別に化ける)
             Score = 0;
             Stage = 0;
+            stallsReturnUntil = 0f;
             elapsed = 0f;
             timeLeft = endless ? EndlessTime : roundDuration;
             startTarget.SetAvailable(false);
@@ -394,6 +405,7 @@ namespace ShootingGallery
         // ラウンド中のチャレンジ・モードを全部終わらせ、普通のメイン屋台だけ (的は出さない) の状態に戻す。State は先に Playing 以外にしておくこと
         void StopEverything()
         {
+            CancelPendingMode(); // 片付け待ちのモードも取り消す
             if (SniperActive) EndSniper(false, null);
             if (MachineGunChallengeActive) EndMachineGunChallenge();
             if (NavalActive) EndNaval();
@@ -459,11 +471,11 @@ namespace ShootingGallery
             if (State != GameState.Playing) return;
             if (target.kind == TargetKind.SniperBig) target.points = sniper.PointsAt(point); // 真ん中に近いほど高い
 
-            // ボーナスの大きな的: 当てるたびに 100, 200, 300… と点数が上がる (音階もここで鳴る)
+            // ボーナスの的: 的ごとにランダムな点数 (1000 / 2000 / 3000)。当てるたびに音階が上がる (音もここで鳴る)
             if (target.kind == TargetKind.BigBonus)
             {
                 if (bonusStage == null) return;
-                target.points = bonusStage.RegisterHit();
+                target.points = bonusStage.RegisterHit(target);
                 if (target.points <= 0) return;
             }
 
@@ -555,7 +567,7 @@ namespace ShootingGallery
                     break;
                 case TargetKind.Sniper:
                     popupColor = new Color(1f, 0.25f, 0.3f);
-                    StartSniper(target);
+                    RequestMode(target); // 順番待ちに入れる (他のモードの途中なら、終わってから始まる)
                     break;
                 case TargetKind.SniperBig:
                     popupColor = new Color(1f, 0.85f, 0.3f);
@@ -565,22 +577,22 @@ namespace ShootingGallery
                     break;
                 case TargetKind.MachineGunChallenge:
                     popupColor = new Color(1f, 0.85f, 0.2f);
-                    StartMachineGunChallenge(target);
+                    RequestMode(target); // 順番待ちに入れる (他のモードの途中なら、終わってから始まる)
                     break;
                 case TargetKind.Naval:
                     popupColor = new Color(0.4f, 0.75f, 1f);
-                    StartNaval();
+                    RequestMode(target); // 順番待ちに入れる (他のモードの途中なら、終わってから始まる)
                     break;
                 case TargetKind.Sky:
                     popupColor = new Color(0.55f, 0.85f, 1f);
-                    StartSky();
+                    RequestMode(target); // 順番待ちに入れる (他のモードの途中なら、終わってから始まる)
                     break;
                 case TargetKind.Aerial:
                     popupColor = new Color(1f, 0.7f, 0.25f); // 撃墜の演出は OnEnemyDown
                     break;
                 case TargetKind.Ninja:
                     popupColor = new Color(0.75f, 0.5f, 1f);
-                    StartNinja(target);
+                    RequestMode(target); // 順番待ちに入れる (他のモードの途中なら、終わってから始まる)
                     break;
                 case TargetKind.NinjaPanel:
                     popupColor = target.points >= 500 ? new Color(1f, 0.85f, 0.3f) : new Color(0.85f, 0.75f, 1f);
@@ -589,11 +601,11 @@ namespace ShootingGallery
                     break;
                 case TargetKind.Deluxe:
                     popupColor = new Color(1f, 0.8f, 0.3f);
-                    StartDeluxe();
+                    RequestMode(target); // 順番待ちに入れる (他のモードの途中なら、終わってから始まる)
                     break;
                 case TargetKind.Kaiju:
                     popupColor = new Color(0.4f, 1f, 0.4f);
-                    StartKaiju();
+                    RequestMode(target); // 順番待ちに入れる (他のモードの途中なら、終わってから始まる)
                     break;
                 case TargetKind.KaijuBuilding:
                     popupColor = new Color(1f, 0.75f, 0.3f);
@@ -602,7 +614,7 @@ namespace ShootingGallery
                     break;
                 case TargetKind.Casino:
                     popupColor = new Color(1f, 0.4f, 0.6f);
-                    StartCasino(target);
+                    RequestMode(target); // 順番待ちに入れる (他のモードの途中なら、終わってから始まる)
                     break;
                 case TargetKind.Roulette:
                     popupColor = target.points >= 500 ? new Color(1f, 0.85f, 0.3f) : new Color(1f, 0.5f, 0.7f);
@@ -611,7 +623,7 @@ namespace ShootingGallery
                     break;
                 case TargetKind.Western:
                     popupColor = new Color(0.95f, 0.75f, 0.35f);
-                    StartWestern(target);
+                    RequestMode(target); // 順番待ちに入れる (他のモードの途中なら、終わってから始まる)
                     break;
                 case TargetKind.Rider:
                     popupColor = new Color(0.95f, 0.75f, 0.35f);
@@ -619,7 +631,7 @@ namespace ShootingGallery
                     break;
                 case TargetKind.Space:
                     popupColor = new Color(0.6f, 0.7f, 1f);
-                    StartSpace();
+                    RequestMode(target); // 順番待ちに入れる (他のモードの途中なら、終わってから始まる)
                     break;
                 case TargetKind.SpaceObject:
                     popupColor = target.points >= 500 ? new Color(1f, 0.85f, 0.35f) : new Color(0.6f, 0.9f, 1f);

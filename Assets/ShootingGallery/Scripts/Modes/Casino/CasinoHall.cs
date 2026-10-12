@@ -7,11 +7,11 @@ namespace ShootingGallery
     /// <summary>
     /// カジノモードの舞台 (円柱形の大広間)。演出の流れ (どれもゆっくり):
     ///   1. 屋台が沈んだあと、地味な灰色の円柱の壁が、的を撃った方から左右へ順に床下から伸びてプレイヤーを囲み、天井がふたをする。
-    ///   2. 「バツン」と一気に真っ暗になり (Darken)、しばらく静かな暗闇が続く。
-    ///   3. ドラムロールの中、天井のスポットライトがガシャン、ガシャンと1つずつ点き、照らされた所にルーレットがぽんと現れる。最後に正面の壇のスロットが照らされ、
-    ///      ジャーン! と全部の明かりがまぶしく点く。壁は赤いビロードと金の飾りの豪華な姿に変わり、ネオンがチカチカと灯り、シャンデリアが輝き、
+    ///   2. 「バツン」と一気に真っ暗になり (Darken)、目の前の黒い板 (ScreenFader) で視界を完全にふさぐ。しばらく静かな暗闇が続く。
+    ///   3. 視界をふさいだまま、ドラムロールの中でスポットライトがガシャン、ガシャンと1つずつ点く音がする (ルーレットとスロットはその間に現れる)。
+    ///      ジャーン! と視界が一気に開け、全部の明かりがまぶしく点く。壁は赤いビロードと金の飾りの豪華な姿に変わり、ネオンがチカチカと灯り、シャンデリアが輝き、
     ///      紙吹雪が舞って歓声が上がる (LightUp)。ここからゲーム開始。
-    ///   4. 時間切れでまた真っ暗になり、壁は元の地味な姿に戻って、天井が上がり、壁が床下へゆっくり下がっていく (Restore)。
+    ///   4. 時間切れでまた視界をふさいで真っ暗になり、その間に地味な壁・天井・床だけに戻す (Restore)。しばらくして視界が開けたら、天井が外れ、壁が床下へゆっくりしまわれていく。
     /// 広さは屋台6軒の輪が入るくらい、天井は普通の3倍ほど。武器はダーツ。
     /// 屋台の出し入れ・点数・終わる時間・明るさの判断は GameManager が行い、ここは見た目の順番だけを受け持つ。プレイヤーは動かない。
     /// </summary>
@@ -62,6 +62,13 @@ namespace ShootingGallery
         public float darkHold = 1.6f;
         public float revealInterval = 0.4f;
         public float finaleHold = 0.8f;
+        [Tooltip("目の前の黒い板で視界をふさぐ秒数 (バツンと一気に) / 全部の明かりが点く時に視界が開ける秒数 (一気に)")]
+        public float blackoutTime = 0.12f;
+        public float revealOpenTime = 0.15f;
+        [Tooltip("終わり: 真っ暗なまま待つ秒数 (この間に飾りを消し、地味な壁・天井・床だけにする) / 視界が開ける秒数 / 開けてから天井が外れ始めるまでの秒数")]
+        public float outroDarkHold = 1.6f;
+        public float outroOpenTime = 0.6f;
+        public float outroLookTime = 0.7f;
 
         public bool IsActive { get; private set; }
         /// <summary>明かりが点いて、スロットとルーレットが使える状態</summary>
@@ -71,7 +78,7 @@ namespace ShootingGallery
         /// <summary>明かりが点くまでの秒数 (始めてから)</summary>
         public float IntroTime => dropDelay + panelTime + spreadTime + ceilingTime + darkDelay + darkHold + revealInterval * ((revealSteps?.Length ?? 0) + 1) + finaleHold;
         /// <summary>片付けにかかる秒数</summary>
-        public float CloseTime => 0.8f + ceilingTime + panelTime + spreadTime * 0.5f;
+        public float CloseTime => blackoutTime + outroDarkHold + outroOpenTime + outroLookTime + ceilingTime + panelTime + spreadTime * 0.5f;
 
         /// <summary>真っ暗にする時 (GameManager が環境光を落とす)</summary>
         public event System.Action Darken;
@@ -150,10 +157,11 @@ namespace ShootingGallery
             SetCeiling(1f);
             Sfx.Play("thunk");
 
-            // 2. 「バツン」と一気に真っ暗に。しばらく何も見えず、静かなまま
+            // 2. 「バツン」と一気に真っ暗に。目の前の黒い板で視界をふさぎ、何も見えないまま静かに待つ
             yield return new WaitForSeconds(darkDelay);
             Darken?.Invoke();
             Sfx.Play("blackout");
+            ScreenFader.FadeTo(1f, blackoutTime);
             yield return new WaitForSeconds(darkHold);
 
             // 3. ドラムロールの中、スポットライトがガシャン、ガシャンと1つずつ点いてルーレットが現れる → 最後にスロットが照らされる
@@ -171,7 +179,9 @@ namespace ShootingGallery
             Sfx.Play("lever");
             yield return new WaitForSeconds(finaleHold);
 
-            // 4. ジャーン! 全部の明かりが一度にまぶしく点き、ネオンがチカチカと灯り、紙吹雪が舞って歓声が上がる
+            // 4. ジャーン! 視界が一気に開け、全部の明かりが一度にまぶしく点き、ネオンがチカチカと灯り、紙吹雪が舞って歓声が上がる
+            //    (ここまでのスポットライトとスロットは、視界をふさいだまま音だけで聞かせる)
+            ScreenFader.FadeTo(0f, revealOpenTime);
             Sfx.Play("crash");
             Sfx.Play("deluxe");
             Sfx.Play("cheer");
@@ -188,16 +198,20 @@ namespace ShootingGallery
 
         IEnumerator Outro()
         {
-            // 4. また真っ暗になり、豪華な飾りが消えて地味な壁に戻る → 天井が上がり、壁がゆっくり下がる
+            // 4. また視界をふさいで真っ暗に。何も見えない間に豪華な飾りを消し、地味な壁・天井・床だけにして、明るさも夜に戻す
+            //    → しばらくして視界が開ける (地味な部屋の中) → 天井が外れ、壁がゆっくり地面へしまわれていく
             slot.Deactivate();
             foreach (var w in wheels) w.Deactivate();
-            ClearConfetti();
             Darken?.Invoke();
             Sfx.Play("blackout");
-            yield return new WaitForSeconds(0.4f);
+            ScreenFader.FadeTo(1f, blackoutTime);
+            yield return new WaitForSeconds(blackoutTime);
+            ClearConfetti();
             SetLuxury(false);
-            yield return new WaitForSeconds(0.4f);
             Restore?.Invoke();
+            yield return new WaitForSeconds(outroDarkHold);
+            ScreenFader.FadeTo(0f, outroOpenTime);
+            yield return new WaitForSeconds(outroOpenTime + outroLookTime);
             if (ceiling.gameObject.activeSelf)
             {
                 float from = ceilingK;

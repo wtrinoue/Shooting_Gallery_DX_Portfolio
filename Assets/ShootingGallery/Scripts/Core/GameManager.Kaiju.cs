@@ -71,6 +71,7 @@ namespace ShootingGallery
             kaijuCity.End();
             if (player.Weapon == WeaponType.FireBall) player.ResetWeapon();
             StartWorldScale(ScaleWorld(new List<Stall>(stageStalls), false, KaijuGrowTime, kaijuCity.CloseTime));
+            HoldStallsFor(kaijuCity.CloseTime + KaijuGrowTime + 0.2f); // 大きくなって戻りきるまで、屋台の拡張 (別の屋台がせり上がる) を待たせる
             stageStalls.Clear();
             FadeAmbience(normalFogColor, normalAmbient, normalSkyColor);
             RenderSettings.fogStartDistance = normalFogStart;

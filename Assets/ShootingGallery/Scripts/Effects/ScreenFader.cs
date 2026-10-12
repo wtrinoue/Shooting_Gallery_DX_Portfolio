@@ -4,7 +4,8 @@ namespace ShootingGallery
 {
     /// <summary>
     /// 目の前を暗くする (場面の切り替え用)。カメラのすぐ前に置いた黒い板の透明度を少しずつ変える。
-    /// 暗い間に舞台を入れ替えると、床が動くのを見せずに別の場所へ来たように見える (西部劇モードの列車の上など)。
+    /// 覆っている間に舞台を入れ替えると、床が動くのを見せずに別の場所へ来たように見える (カジノの暗転、西部劇の砂嵐など)。
+    /// 色を渡すと、その色で覆う (西部劇は砂の色)。渡さなければ黒。
     /// </summary>
     [RequireComponent(typeof(Renderer))]
     public class ScreenFader : MonoBehaviour
@@ -27,10 +28,17 @@ namespace ShootingGallery
             Apply();
         }
 
-        /// <summary>duration 秒かけて、暗さ a (0 = 見える, 1 = 真っ暗) にする</summary>
-        public static void FadeTo(float a, float duration)
+        /// <summary>duration 秒かけて、覆い方 a (0 = 見える, 1 = 何も見えない) にする。color を渡すとその色で覆う (省略すると黒)</summary>
+        public static void FadeTo(float a, float duration, Color? color = null)
         {
             if (instance == null) return;
+            // 色は覆い始める時だけ変える (晴れていく途中で色が変わらないように)
+            if (a > instance.alpha || instance.alpha <= 0.001f)
+            {
+                var c = color ?? Color.black;
+                instance.baseColor = new Color(c.r, c.g, c.b, instance.baseColor.a);
+                instance.Apply();
+            }
             instance.target = Mathf.Clamp01(a);
             instance.speed = Mathf.Abs(instance.target - instance.alpha) / Mathf.Max(0.01f, duration);
         }

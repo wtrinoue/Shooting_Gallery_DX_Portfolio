@@ -147,6 +147,7 @@ namespace ShootingGallery
             western.wheels = wheels.ToArray();
             western.smokeStack = stack;
             western.smokeMaterial = TransparentMat("Smoke_Train", new Color(0.85f, 0.85f, 0.85f, 0.45f));
+            western.sandMaterial = TransparentMat("Western_Sand", new Color(0.84f, 0.68f, 0.44f, 0.55f)); // 砂嵐の砂粒
             western.riders = riders.ToArray();
             western.maxRunning = 9;
             western.launchInterval = new Vector2(0.45f, 0.9f);

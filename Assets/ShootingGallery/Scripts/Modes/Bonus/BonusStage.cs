@@ -6,7 +6,7 @@ namespace ShootingGallery
     /// ボーナスステージ (フィーバー中の青い玉を撃つと始まる)。
     /// プレイヤーの足元の丸い穴をふさいでいる絞り羽根が、カメラの絞りのように回りながら開き、半球の地下室が現れる
     /// (プレイヤーは空中に浮いたまま)。地下室の内側にずらりと並んだ的のどれを撃っても、撃つたびに
-    /// ド→レ→ミ…→ド と音階が上がり、点数も 100, 200, 300… と増える。当たった的は縮んで消える。
+    /// ド→レ→ミ…→ド と音階が上がる。的の点数は開くたびに 1000 / 2000 / 3000 からランダムに決まり、的に書いてある。当たった的は縮んで消える。
     /// 8回当て切るとファンファーレが鳴り、絞りが閉じる。
     /// </summary>
     public class BonusStage : MonoBehaviour
@@ -24,9 +24,13 @@ namespace ShootingGallery
         [Tooltip("床が開いている間は隠す物 (足元の目印など)")]
         public GameObject[] hideWhileOpen;
 
+        [Tooltip("的の点数を書く文字 (targets と同じ順)")]
+        public TextMesh[] pointLabels;
+
         [Tooltip("当てる回数 (ドレミファソラシド = 8)")]
         public int notes = 8;
-        public int pointStep = 100;
+        [Tooltip("開くたびに、的ごとにこの中からランダムに点数を決める")]
+        public int[] pointChoices = { 1000, 2000, 3000 };
         [Tooltip("当て切ってから絞りが閉じ始めるまでの秒数 (ファンファーレを聞く間)")]
         public float finishWait = 1.5f;
         [Tooltip("開き終わってから、的が1つずつ出てくる間隔 (秒)")]
@@ -61,14 +65,15 @@ namespace ShootingGallery
             if (IsBusy) return;
             hits = 0;
             SetLamps(0);
+            AssignPoints();
             foreach (var go in hideWhileOpen) if (go != null) go.SetActive(false);
             phase = Phase.Opening;
             timer = 0f;
             Sfx.Play("door");
         }
 
-        /// <summary>地下室の的に当たった時に GameManager から呼ばれる。今回の点数を返す (どの的でも同じ)。</summary>
-        public int RegisterHit()
+        /// <summary>地下室の的に当たった時に GameManager から呼ばれる。当たった的の点数を返す (0 なら数えない)。</summary>
+        public int RegisterHit(Target target)
         {
             if (phase != Phase.Active) return 0;
             Sfx.PlayNote(hits);
@@ -80,7 +85,7 @@ namespace ShootingGallery
                 phase = Phase.Finishing;
                 timer = 0f;
             }
-            return hits * pointStep;
+            return target.points;
         }
 
         /// <summary>途中で終わる (フィーバー終了など)</summary>
@@ -136,6 +141,20 @@ namespace ShootingGallery
                         phase = Phase.Closed;
                     }
                     break;
+            }
+        }
+
+        // 的ごとに点数をランダムに決めて、的の文字も書き換える。点数が高いほど派手な色の文字
+        void AssignPoints()
+        {
+            if (pointChoices == null || pointChoices.Length == 0) return;
+            for (int i = 0; i < targets.Length; i++)
+            {
+                int p = pointChoices[Random.Range(0, pointChoices.Length)];
+                targets[i].points = p;
+                if (pointLabels == null || i >= pointLabels.Length || pointLabels[i] == null) continue;
+                pointLabels[i].text = p.ToString();
+                pointLabels[i].color = p >= 3000 ? new Color(1f, 0.35f, 0.55f) : p >= 2000 ? new Color(1f, 0.85f, 0.25f) : Color.white;
             }
         }
 
