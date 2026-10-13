@@ -2,7 +2,7 @@ using UnityEngine;
 
 namespace ShootingGallery
 {
-    public enum TargetKind { Normal, MachineGun, Shotgun, Bomb, Fever, Start, Ufo, Explosive, BlueOrb, BigBonus, Sniper, SniperBig, MachineGunChallenge, MachineGunChallengeTarget, Deluxe, Naval, Sky, Aerial, Ninja, NinjaPanel, Kaiju, KaijuBuilding, Casino, SlotMachine, Roulette, Western, Rider, Space, SpaceObject }
+    public enum TargetKind { Normal, MachineGun, Shotgun, Bomb, Fever, Start, Ufo, Explosive, BlueOrb, BigBonus, Sniper, SniperBig, MachineGunChallenge, MachineGunChallengeTarget, Deluxe, Naval, Sky, Aerial, Ninja, NinjaPanel, Kaiju, KaijuBuilding, Casino, SlotMachine, Roulette, Western, Rider, Space, SpaceObject, Ghost, GhostSpook }
 
     /// <summary>
     /// 的。撃たれると後ろに倒れて消え、一定時間後に起き上がる。

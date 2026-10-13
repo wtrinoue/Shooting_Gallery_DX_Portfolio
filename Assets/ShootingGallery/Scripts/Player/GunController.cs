@@ -7,10 +7,10 @@ namespace ShootingGallery
     /// <summary>1丁の銃。見た目の切り替えと発射(レイキャスト)を担当する。</summary>
     public class GunController : MonoBehaviour
     {
-        [Tooltip("WeaponType の順 (Handgun, MachineGun, Shotgun, Bomb, Sniper, Bazooka, Shuriken, FireBall, Dart, Revolver, Missile) に並べた見た目")]
-        public GameObject[] models = new GameObject[11];
+        [Tooltip("WeaponType の順 (Handgun, MachineGun, Shotgun, Bomb, Sniper, Bazooka, Shuriken, FireBall, Dart, Revolver, Missile, Flashlight) に並べた見た目")]
+        public GameObject[] models = new GameObject[12];
         [Tooltip("各見た目の銃口。最初の子をマズルフラッシュとして使う")]
-        public Transform[] muzzles = new Transform[11];
+        public Transform[] muzzles = new Transform[12];
         [Header("怪獣 / カジノ / 西部劇")]
         [Tooltip("怪獣の口から吐く炎の玉と、燃え上がる爆発")]
         public Material fireballMaterial;
@@ -63,6 +63,24 @@ namespace ShootingGallery
         [Tooltip("エイム補正の太さ (m)。射線からこの距離までにある的にも当たる。0 で補正なし (真っすぐ線上の的だけ)")]
         public float aimAssistRadius = 0.12f;
 
+        [Header("Flashlight (幽霊モード: トリガーを引いている間だけ光り、照らされた的はやられる)")]
+        [Tooltip("光の筋 (透ける円すい) と、本物のスポットライト")]
+        public GameObject flashlightBeam;
+        public Light flashlightLight;
+        [Tooltip("レンズ (点いている時 / 消えている時の材質)")]
+        public Renderer flashlightLens;
+        public Material lensOnMaterial, lensOffMaterial;
+        [Tooltip("照らして倒せる太さ (m)。光の筋のまわりのこの距離までの的に当たる")]
+        public float flashlightRadius = 0.6f;
+        [Tooltip("満タンから点けっぱなしで電池が切れるまでの秒数")]
+        public float flashlightDrainTime = 3.5f;
+        [Tooltip("空から満タンまで回復する秒数 (点けていない間に回復する)")]
+        public float flashlightRechargeTime = 3f;
+        [Tooltip("電池の残り: 銃の上に並ぶ目盛り (左から。緑 → 黄 → 赤、切れて充電中は赤)")]
+        public Transform batteryRoot;
+        public Renderer[] batteryCells;
+        public Material batteryGreenMaterial, batteryYellowMaterial, batteryRedMaterial, batteryEmptyMaterial;
+
         WeaponType current;
         float nextFireTime;
         Coroutine flashRoutine;
@@ -74,7 +92,14 @@ namespace ShootingGallery
         /// 次を撃てるようになるのを待っている間: スナイパーライフルの次の1発まで (レーザーを消して、撃てないことが分かるようにする) /
         /// リボルバーの弾込め中
         /// </summary>
-        public bool IsReloading => (current == WeaponType.Sniper && Time.time < nextFireTime) || Time.time < reloadUntil;
+        public bool IsReloading => (current == WeaponType.Sniper && Time.time < nextFireTime) || Time.time < reloadUntil || (current == WeaponType.Flashlight && batteryDepleted);
+        /// <summary>懐中電灯の電池が切れて、満タンまで回復するのを待っている間か</summary>
+        public bool IsCharging => current == WeaponType.Flashlight && batteryDepleted;
+
+        float battery = 1f;      // 懐中電灯の電池 (0〜1)
+        bool batteryDepleted;    // 一度切れたら、満タンになるまで点かない
+        bool flashlightHeld;     // このフレームにトリガーを引いているか (TriggerInput で受け取る)
+        bool beamOn;
         /// <summary>弾数のある武器の、残りの弾の数 (弾数のない武器は 0)</summary>
         public int Ammo => ammo;
 
@@ -120,6 +145,10 @@ namespace ShootingGallery
             // 弾数のある武器は弾を満タンにして持つ
             ammo = Weapons.Get(type).magazine;
             reloadUntil = 0f;
+            // 懐中電灯は電池を満タンにして持つ
+            battery = 1f;
+            batteryDepleted = false;
+            SetBeam(false);
         }
 
         static bool HasLaser(WeaponType type) => type == WeaponType.Sniper || type == WeaponType.Shuriken || type == WeaponType.Dart;
@@ -202,6 +231,7 @@ namespace ShootingGallery
         /// <summary>毎フレーム呼ぶ。pressed=このフレームで引いた, held=引きっぱなし</summary>
         public void TriggerInput(bool pressed, bool held)
         {
+            if (current == WeaponType.Flashlight) { flashlightHeld = held; return; } // 光らせるのは LateUpdate
             var def = Weapons.Get(current);
             bool wantFire = def.automatic ? held : pressed;
             if (wantFire && Time.time >= nextFireTime && Time.time >= reloadUntil)
@@ -212,6 +242,7 @@ namespace ShootingGallery
         {
             UpdateLaser();
             UpdateAmmoRow();
+            UpdateFlashlight();
             // 弾込め中はリボルバーの弾倉がくるくる回る
             if (revolverCylinder != null && current == WeaponType.Revolver && Time.time < reloadUntil)
                 revolverCylinder.Rotate(0f, 720f * Time.deltaTime, 0f, Space.Self);
@@ -220,6 +251,92 @@ namespace ShootingGallery
             FaceCamera(infoText != null ? infoText.transform : null);
             FaceCamera(gaugeRoot);
             FaceCamera(ammoRoot);
+            FaceCamera(batteryRoot);
+        }
+
+        // ---- 懐中電灯 ----
+
+        // トリガーを引いている間だけ光る (電池が減る)。点けていない間は電池が回復する。切れたら満タンになるまで点かない
+        void UpdateFlashlight()
+        {
+            bool isLight = current == WeaponType.Flashlight;
+            if (batteryRoot != null && batteryRoot.gameObject.activeSelf != isLight) batteryRoot.gameObject.SetActive(isLight);
+            if (!isLight)
+            {
+                SetBeam(false);
+                return;
+            }
+            float dt = Time.deltaTime;
+            bool on = flashlightHeld && !batteryDepleted;
+            flashlightHeld = false; // 毎フレーム TriggerInput で受け取り直す
+            if (on)
+            {
+                battery -= dt / Mathf.Max(0.1f, flashlightDrainTime);
+                if (battery <= 0f)
+                {
+                    battery = 0f;
+                    batteryDepleted = true; // 切れた
+                    on = false;
+                    Sfx.Play("powerdown");
+                }
+            }
+            else
+            {
+                battery = Mathf.Min(1f, battery + dt / Mathf.Max(0.1f, flashlightRechargeTime));
+                if (batteryDepleted && battery >= 1f)
+                {
+                    batteryDepleted = false; // 満タンになった: また点けられる
+                    Sfx.Play("click");
+                }
+            }
+            if (on && !beamOn) Sfx.Play("click");
+            SetBeam(on);
+            if (on) Shine();
+            UpdateBatteryRow();
+        }
+
+        void SetBeam(bool on)
+        {
+            if (beamOn == on && (flashlightBeam == null || flashlightBeam.activeSelf == on)) return;
+            beamOn = on;
+            if (flashlightBeam != null) flashlightBeam.SetActive(on);
+            if (flashlightLight != null) flashlightLight.enabled = on;
+            if (flashlightLens != null && lensOnMaterial != null && lensOffMaterial != null) flashlightLens.sharedMaterial = on ? lensOnMaterial : lensOffMaterial;
+        }
+
+        // 光の筋に照らされた的は、その場でやられる (光っている間は、照らした的を次々に倒せる)。壁などの向こうの的は照らせない
+        void Shine()
+        {
+            var muzzle = MuzzleOf(current);
+            Vector3 origin = muzzle.position, dir = muzzle.forward;
+            float range = Weapons.Get(current).range;
+            int n = Physics.SphereCastNonAlloc(origin, flashlightRadius, dir, castHits, range, hitMask, QueryTriggerInteraction.Ignore);
+            for (int i = 0; i < n; i++)
+            {
+                var h = castHits[i];
+                var t = h.collider.GetComponentInParent<Target>();
+                if (t == null || !t.IsUp) continue;
+                Vector3 point = h.distance > 0f ? h.point : h.collider.bounds.center; // 0 = 始めから光の中に重なっていた物
+                if (Physics.Linecast(origin, point, out var block, hitMask, QueryTriggerInteraction.Ignore)
+                    && block.collider.GetComponentInParent<Target>() != t) continue;
+                t.Hit(point);
+                InputDevices.GetDeviceAtXRNode(hapticNode).SendHapticImpulse(0, 0.4f, 0.05f);
+            }
+        }
+
+        // 電池の目盛り: 残りの分だけ左から点く (多い時は緑、減ると黄、少ないと赤)。切れて充電中は、たまった分が赤
+        void UpdateBatteryRow()
+        {
+            if (batteryCells == null || batteryCells.Length == 0) return;
+            int count = batteryCells.Length;
+            int lit = Mathf.CeilToInt(battery * count - 0.001f);
+            var fill = batteryDepleted || battery <= 0.25f ? batteryRedMaterial : battery <= 0.55f ? batteryYellowMaterial : batteryGreenMaterial;
+            for (int i = 0; i < count; i++)
+            {
+                if (batteryCells[i] == null) continue;
+                var m = i < lit ? fill : batteryEmptyMaterial;
+                if (batteryCells[i].sharedMaterial != m) batteryCells[i].sharedMaterial = m;
+            }
         }
 
         // 銃の上の弾の列: 弾数のある武器の時だけ出す。残りの弾は黄色、撃った分は右から灰色。弾込めの間は左から1発ずつ黄色に戻る

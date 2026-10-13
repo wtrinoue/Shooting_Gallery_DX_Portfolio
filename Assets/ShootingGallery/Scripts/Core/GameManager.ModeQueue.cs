@@ -27,7 +27,7 @@ namespace ShootingGallery
         static bool IsModeKind(TargetKind kind) =>
             kind == TargetKind.Sniper || kind == TargetKind.MachineGunChallenge || kind == TargetKind.Deluxe ||
             kind == TargetKind.Naval || kind == TargetKind.Sky || kind == TargetKind.Ninja || kind == TargetKind.Kaiju ||
-            kind == TargetKind.Casino || kind == TargetKind.Western || kind == TargetKind.Space;
+            kind == TargetKind.Casino || kind == TargetKind.Western || kind == TargetKind.Space || kind == TargetKind.Ghost;
 
         /// <summary>モードの的を撃った: すぐに始める (同時に撃った2番目以降は取り消す)</summary>
         void RequestMode(Target target)
@@ -83,6 +83,7 @@ namespace ShootingGallery
             if (CasinoActive) { EndCasino(); wait = Mathf.Max(wait, casinoHall.CloseTime + 0.1f + stallMoveDuration); }
             if (WesternActive) { EndWestern(); wait = Mathf.Max(wait, westernTrain.CloseTime + stallMoveDuration); }
             if (SpaceActive) { EndSpace(); wait = Mathf.Max(wait, spaceStage.CloseTime + 0.1f + stallMoveDuration); }
+            if (GhostActive) { EndGhost(); wait = Mathf.Max(wait, ghostManor.CloseTime + stallMoveDuration); }
             if (DeluxeActive && !keepDeluxe) { EndDeluxe(); wait = Mathf.Max(wait, swapOutTime + swapInTime); }
             if (bonusStage != null && bonusStage.IsBusy) { bonusStage.Close(); wait = Mathf.Max(wait, bonusStage.slideTime + 0.3f); }
             return wait;
@@ -105,6 +106,7 @@ namespace ShootingGallery
                 case TargetKind.Casino: StartCasino(p.yaw); break;
                 case TargetKind.Western: StartWestern(p.yaw); break;
                 case TargetKind.Space: StartSpace(); break;
+                case TargetKind.Ghost: StartGhost(p.yaw); break;
             }
         }
     }

@@ -214,6 +214,7 @@ namespace ShootingGallery
             var casinoHall = BuildCasino();
             var westernTrain = BuildWestern();
             var spaceStage = BuildSpace(bonusStage);
+            var ghostManor = BuildGhost();
             LogStep("武器の的 / UFO", step);
 
             // ---- 5. ゲーム開始 ----
@@ -234,6 +235,7 @@ namespace ShootingGallery
             gm.casinoHall = casinoHall;
             gm.westernTrain = westernTrain;
             gm.spaceStage = spaceStage;
+            gm.ghostManor = ghostManor;
             gm.deluxeMainStall = deluxeMain;
             gm.deluxeFeverStalls = deluxeFever;
             gm.fireworkMaterials = FireworkMaterials();

@@ -96,6 +96,12 @@ namespace ShootingGallery
         public Color spaceSkyColor = new Color(0.005f, 0.006f, 0.02f);
         public Color spaceAmbient = new Color(0.35f, 0.36f, 0.45f);
 
+        [Header("Ghost (幽霊モード: おばけの的を撃つと、屋台もハッチも消えて月夜の墓場に。まわりのお化け・魔女・ゾンビ・骸骨を撃つ)")]
+        public GhostManor ghostManor;
+        public Color ghostSkyColor = new Color(0.2f, 0.07f, 0.3f);
+        public Color ghostFogColor = new Color(0.24f, 0.11f, 0.32f);
+        public Color ghostAmbient = new Color(0.45f, 0.38f, 0.58f);
+
         [Header("Rules")]
         public float roundDuration = 90f;
         public float feverDuration = 20f;
@@ -130,7 +136,7 @@ namespace ShootingGallery
         float stallsReturnUntil; // 屋台が元の場所に戻りきる時刻
         /// <summary>屋台が戻りきるまで (今から seconds 秒) 屋台の拡張・入れ替えを待たせる</summary>
         void HoldStallsFor(float seconds) => stallsReturnUntil = Mathf.Max(stallsReturnUntil, Time.time + seconds);
-        public bool ChallengeActive => SniperActive || MachineGunChallengeActive || NavalActive || SkyActive || NinjaActive || KaijuActive || CasinoActive || WesternActive || SpaceActive;
+        public bool ChallengeActive => SniperActive || MachineGunChallengeActive || NavalActive || SkyActive || NinjaActive || KaijuActive || CasinoActive || WesternActive || SpaceActive || GhostActive;
         /// <summary>海戦モード中か (チャレンジの1つとして扱う: この間はフィーバーの残り時間と屋台の拡張を止め、他のチャレンジや豪華屋台チェンジは出さない)</summary>
         public bool NavalActive => navalBattle != null && navalBattle.IsActive;
         readonly List<Stall> navalStalls = new List<Stall>(); // 海戦モードのために沈めた屋台
@@ -145,6 +151,7 @@ namespace ShootingGallery
         public bool CasinoActive => casinoHall != null && casinoHall.IsActive;
         public bool WesternActive => westernTrain != null && westernTrain.IsActive;
         public bool SpaceActive => spaceStage != null && spaceStage.IsActive;
+        public bool GhostActive => ghostManor != null && ghostManor.IsActive;
         readonly List<Stall> stageStalls = new List<Stall>(); // 怪獣 / カジノ / 西部劇モードのために縮めた・沈めた屋台 (同時には1つしか動かない)
 
         /// <summary>エンドレスモード中か (B ボタン長押しで始まる。時間切れがなく、A ボタン長押しで終わる)</summary>
@@ -165,7 +172,7 @@ namespace ShootingGallery
             new[] { TargetKind.Explosive, TargetKind.BlueOrb },
             new[] { TargetKind.Deluxe, TargetKind.Kaiju, TargetKind.Space },
             new[] { TargetKind.Naval, TargetKind.Sky, TargetKind.Western },
-            new[] { TargetKind.Ninja, TargetKind.Casino },
+            new[] { TargetKind.Ninja, TargetKind.Casino, TargetKind.Ghost },
         };
 
         /// <summary>デバッグモードで、この屋台に並べる特殊な的の種類 (デバッグモードでない / 輪にない屋台なら null)</summary>
@@ -258,6 +265,12 @@ namespace ShootingGallery
                 spaceStage.Darken += OnSpaceDarken;
                 spaceStage.Restore += OnSpaceRestore;
             }
+            if (ghostManor != null)
+            {
+                ghostManor.SpookDown += OnSpookDown;
+                ghostManor.Arrived += OnGhostArrived;
+                ghostManor.Left += OnGhostLeft;
+            }
             player.DebugRequested += StartDebug; // X ボタン長押しでデバッグモード
             player.ResetRequested += ResetToTitle; // A ボタン長押しで最初に戻る
             player.EndlessRequested += StartEndless; // B ボタン長押しでエンドレスモード
@@ -300,6 +313,7 @@ namespace ShootingGallery
                 if (CasinoActive && casinoHall.TimeLeft <= 0f) EndCasino();
                 if (WesternActive && westernTrain.TimeLeft <= 0f) EndWestern();
                 if (SpaceActive && spaceStage.TimeLeft <= 0f) EndSpace();
+                if (GhostActive && ghostManor.TimeLeft <= 0f) EndGhost();
                 if (timeLeft <= 0f) EndRound();
             }
 
@@ -339,6 +353,7 @@ namespace ShootingGallery
             h = Mix(h, CasinoActive, CasinoActive ? Mathf.CeilToInt(casinoHall.TimeLeft) : 0);
             h = Mix(h, WesternActive, WesternActive ? Mathf.CeilToInt(westernTrain.TimeLeft) * 1000 + westernTrain.Downed : 0);
             h = Mix(h, SpaceActive, SpaceActive ? Mathf.CeilToInt(spaceStage.TimeLeft) * 1000 + spaceStage.Hits : 0);
+            h = Mix(h, GhostActive, GhostActive ? Mathf.CeilToInt(ghostManor.TimeLeft) * 1000 + ghostManor.Hits : 0);
             return h;
         }
 
@@ -366,7 +381,8 @@ namespace ShootingGallery
                     string casino = CasinoActive ? $"   CASINO {Mathf.CeilToInt(casinoHall.TimeLeft)}" : "";
                     string western = WesternActive ? $"   WEST {Mathf.CeilToInt(westernTrain.TimeLeft)}  DOWN {westernTrain.Downed}" : "";
                     string space = SpaceActive ? $"   SPACE {Mathf.CeilToInt(spaceStage.TimeLeft)}  HIT {spaceStage.Hits}" : "";
-                    ninja += kaiju + casino + western + space;
+                    string ghost = GhostActive ? $"   GHOST {Mathf.CeilToInt(ghostManor.TimeLeft)}  BUSTED {ghostManor.Hits}" : "";
+                    ninja += kaiju + casino + western + space + ghost;
                     int secs = (int)elapsed;
                     string time = DebugMode ? $"DEBUG {secs / 60}:{secs % 60:00}" : Endless ? $"ENDLESS {secs / 60}:{secs % 60:00}" : $"TIME {Mathf.CeilToInt(Mathf.Max(0f, timeLeft))}";
                     hudText.text = $"SCORE {Score}   STAGE {Stage + 1}\n{time}{fever}{deluxe}{sniperShots}{mg}{naval}{sky}{ninja}";
@@ -449,6 +465,7 @@ namespace ShootingGallery
             if (CasinoActive) EndCasino();
             if (WesternActive) EndWestern();
             if (SpaceActive) EndSpace();
+            if (GhostActive) EndGhost();
             if (IsFever) EndFever();
             if (DeluxeActive) EndDeluxe(); // 普通のメイン屋台に戻してからタイトルへ (身長の的は普通のメイン屋台にある)
             if (bonusStage != null) bonusStage.Close();
@@ -669,6 +686,14 @@ namespace ShootingGallery
                     break;
                 case TargetKind.SpaceObject:
                     popupColor = target.points >= 500 ? new Color(1f, 0.85f, 0.35f) : new Color(0.6f, 0.9f, 1f);
+                    Sfx.Play(target.points >= 500 ? "bonus" : "hit");
+                    break;
+                case TargetKind.Ghost:
+                    popupColor = new Color(0.75f, 0.5f, 1f);
+                    RequestMode(target); // 順番待ちに入れる (他のモードの途中なら、終わってから始まる)
+                    break;
+                case TargetKind.GhostSpook:
+                    popupColor = target.points >= 500 ? new Color(1f, 0.85f, 0.35f) : new Color(0.8f, 0.6f, 1f);
                     Sfx.Play(target.points >= 500 ? "bonus" : "hit");
                     break;
                 case TargetKind.MachineGunChallengeTarget:

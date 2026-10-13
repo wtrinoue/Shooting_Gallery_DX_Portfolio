@@ -69,6 +69,8 @@ namespace ShootingGallery
         public float outroDarkHold = 1.6f;
         public float outroOpenTime = 0.6f;
         public float outroLookTime = 0.7f;
+        [Tooltip("視界が開けてスロットが見える瞬間の、ジャーン・歓声の音の大きさ (1 = いつもの大きさ)")]
+        [Range(0f, 1f)] public float revealVolume = 0.45f;
 
         public bool IsActive { get; private set; }
         /// <summary>明かりが点いて、スロットとルーレットが使える状態</summary>
@@ -182,9 +184,9 @@ namespace ShootingGallery
             // 4. ジャーン! 視界が一気に開け、全部の明かりが一度にまぶしく点き、ネオンがチカチカと灯り、紙吹雪が舞って歓声が上がる
             //    (ここまでのスポットライトとスロットは、視界をふさいだまま音だけで聞かせる)
             ScreenFader.FadeTo(0f, revealOpenTime);
-            Sfx.Play("crash");
-            Sfx.Play("deluxe");
-            Sfx.Play("cheer");
+            Sfx.Play("crash", revealVolume);
+            Sfx.Play("deluxe", revealVolume);
+            Sfx.Play("cheer", revealVolume);
             if (luxury != null) luxury.SetActive(true);
             StartCoroutine(LightShow());
             SpawnConfetti();

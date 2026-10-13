@@ -30,6 +30,10 @@ namespace ShootingGallery
         public AudioClip[] canHits = new AudioClip[0];
         [Header("西部劇の砂嵐 (ゴーッと吹き荒れる風の音)")]
         public AudioClip sandstorm;
+        [Header("幽霊モード (ひゅ～どろどろ… と闇に包まれる音 / 的を倒した時のぽわんという音)")]
+        public AudioClip ghostWail, ghostPop;
+        [Header("懐中電灯 (カチッと点く・消える音 / 電池が切れる音)")]
+        public AudioClip click, powerDown;
         [Header("同時に鳴る音の抑え方")]
         [Tooltip("同じ種類の音がこの秒数以内に続いたら、2回目以降は鳴らさない (複数の的を同時に倒した時など)")]
         public float sameSoundGap = 0.07f;
@@ -65,6 +69,8 @@ namespace ShootingGallery
             if (start == null) start = Tones("Start", new[] { 784f, 1046f }, 0.12f);
             if (end == null) end = Tones("End", new[] { 1046f, 784f, 659f, 523f }, 0.15f);
             if (thunk == null) thunk = Noise("Thunk", 0.08f, 60f, 1.2f, 0.15f);                     // トッ (刺さる)
+            if (click == null) click = Noise("Click", 0.03f, 90f, 0.9f, 0.5f);                    // カチッ
+            if (powerDown == null) powerDown = Tones("PowerDown", new[] { 880f, 660f, 440f, 220f }, 0.07f); // ピュルル… (電池切れ)
             if (reelStop == null) reelStop = Tones("ReelStop", new[] { 880f }, 0.05f);               // ピッ
             if (coin == null) coin = Tones("Coin", new[] { 1975.5f, 2637f }, 0.06f);                 // チャリン
             if (reload == null) reload = Tones("Reload", new[] { 1400f, 0f, 0f, 1700f, 0f, 2100f }, 0.035f); // カチャカチャ
@@ -93,6 +99,8 @@ namespace ShootingGallery
                 () => { if (slotLever == null) slotLever = Noise("SlotLever", 0.25f, 14f, 1.4f, 0.08f); }, // ガシャン
                 () => { if (whistle == null) whistle = Bell("Whistle", new[] { 587.33f, 739.99f, 880f }, 1.3f); }, // ポーッ (汽笛)
                 () => { if (sandstorm == null) sandstorm = Wind(); }, // ゴォーッ (砂嵐)
+                () => { if (ghostWail == null) ghostWail = GhostWail(); }, // ひゅ～どろどろ…
+                () => { if (ghostPop == null) ghostPop = GhostPop(); }, // ぽわん
                 () => { if (blackout == null) blackout = Blackout(); }, // バツン
                 () => { if (drumroll == null) drumroll = Drumroll(3.6f); }, // ドロロロロ…
                 () => { if (crash == null) crash = Noise("Crash", 2f, 2.2f, 1.6f, 0.9f); }, // ジャーン (シンバル)
@@ -167,18 +175,21 @@ namespace ShootingGallery
             source.PlayOneShot(clip, volume);
         }
 
-        public static void Play(string name)
+        public static void Play(string name) => Play(name, 1f);
+
+        /// <summary>volumeScale 倍の大きさで鳴らす (1 = いつもの大きさ)</summary>
+        public static void Play(string name, float volumeScale)
         {
             if (instance == null) return;
             if (name == "can")
             {
                 var cans = instance.canHits;
-                if (cans != null && cans.Length > 0) instance.PlayLimited("can", cans[Random.Range(0, cans.Length)], 0.7f);
+                if (cans != null && cans.Length > 0) instance.PlayLimited("can", cans[Random.Range(0, cans.Length)], 0.7f * volumeScale);
                 return;
             }
             // 的に当たった音 (hit / bonus) は同じ種類として扱い、同時に倒しても1回だけ鳴らす
             string group = name == "bonus" ? "hit" : name;
-            bool limited = name == "hit" || name == "bonus" || name == "explosion" || name == "pickup" || name == "ufo" || name == "thunk" || name == "fusuma" || name == "coin" || name == "reelstop";
+            bool limited = name == "hit" || name == "bonus" || name == "explosion" || name == "pickup" || name == "ufo" || name == "thunk" || name == "fusuma" || name == "coin" || name == "reelstop" || name == "ghostpop";
             AudioClip clip = name switch
             {
                 "stageup" => instance.stageUp,
@@ -210,13 +221,17 @@ namespace ShootingGallery
                 "cheer" => instance.cheer,
                 "missile" => instance.missile,
                 "twinkle" => instance.twinkle,
+                "ghost" => instance.ghostWail,
+                "ghostpop" => instance.ghostPop,
+                "click" => instance.click,
+                "powerdown" => instance.powerDown,
                 "warpin" => instance.warpIn,
                 "warpout" => instance.warpOut,
                 _ => null
             };
             if (clip == null) return;
-            if (limited) instance.PlayLimited(group, clip, 0.6f);
-            else instance.source.PlayOneShot(clip, 0.6f);
+            if (limited) instance.PlayLimited(group, clip, 0.6f * volumeScale);
+            else instance.source.PlayOneShot(clip, 0.6f * volumeScale);
         }
 
         /// <summary>
@@ -455,6 +470,54 @@ namespace ShootingGallery
                 data[i] = Mathf.Clamp((low * 5.5f * gust + grit) * env, -1f, 1f);
             }
             var clip = AudioClip.Create("Sandstorm", n, 1, Rate, false);
+            clip.SetData(data, 0);
+            return clip;
+        }
+
+        /// <summary>幽霊の世界へ入る音: ゆらゆら震える高い音が「ひゅ～」と上がって下がり、低い太鼓が「どろどろ…」と鳴る</summary>
+        static AudioClip GhostWail()
+        {
+            const float Length = 2.6f;
+            int n = (int)(Rate * Length);
+            var data = new float[n];
+            var rng = new System.Random(13);
+            float phase = 0f, low = 0f;
+            for (int i = 0; i < n; i++)
+            {
+                float t = i / (float)Rate, k = t / Length;
+                // ひゅ～: 上がってから長く下がる、ビブラートの強い音 (テルミンのような)
+                float f = 520f * Mathf.Pow(2f, 0.6f * Mathf.Sin(Mathf.PI * Mathf.Min(1f, k * 1.6f)) - 0.9f * Mathf.Max(0f, k - 0.45f)) * (1f + 0.035f * Mathf.Sin(2f * Mathf.PI * 6f * t));
+                phase += 2f * Mathf.PI * f / Rate;
+                float wail = (Mathf.Sin(phase) * 0.8f + Mathf.Sin(phase * 2f) * 0.12f) * Mathf.Clamp01(t * 4f) * Mathf.Clamp01((1.9f - t) * 1.5f);
+                // どろどろ: 低いうなりを速く揺らす (後半)
+                float white = (float)rng.NextDouble() * 2f - 1f;
+                low = Mathf.Lerp(low, white, 0.01f);
+                float roll = low * 9f * (0.55f + 0.45f * Mathf.Sin(2f * Mathf.PI * 11f * t)) * Mathf.Clamp01((t - 0.8f) * 2f) * Mathf.Clamp01((Length - t) * 1.5f);
+                data[i] = Mathf.Clamp(wail * 0.32f + roll * 0.5f, -1f, 1f);
+            }
+            var clip = AudioClip.Create("GhostWail", n, 1, Rate, false);
+            clip.SetData(data, 0);
+            return clip;
+        }
+
+        /// <summary>お化けを倒した音: 「ぽわん」と下がる柔らかい音と、煙が抜けるような小さなノイズ</summary>
+        static AudioClip GhostPop()
+        {
+            const float Length = 0.45f;
+            int n = (int)(Rate * Length);
+            var data = new float[n];
+            var rng = new System.Random(21);
+            float phase = 0f, soft = 0f;
+            for (int i = 0; i < n; i++)
+            {
+                float t = i / (float)Rate;
+                float f = 900f * Mathf.Exp(-t * 4.5f) + 180f;
+                phase += 2f * Mathf.PI * f / Rate;
+                float tone = Mathf.Sin(phase) * Mathf.Exp(-t * 7f) * Mathf.Clamp01(t * 200f);
+                soft = Mathf.Lerp(soft, (float)rng.NextDouble() * 2f - 1f, 0.15f);
+                data[i] = Mathf.Clamp(tone * 0.5f + soft * Mathf.Exp(-t * 12f) * 0.5f, -1f, 1f);
+            }
+            var clip = AudioClip.Create("GhostPop", n, 1, Rate, false);
             clip.SetData(data, 0);
             return clip;
         }

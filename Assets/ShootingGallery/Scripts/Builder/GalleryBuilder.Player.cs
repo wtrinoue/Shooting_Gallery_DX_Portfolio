@@ -229,6 +229,51 @@ namespace ShootingGallery
             GunPart(PrimitiveType.Cylinder, loaded, new Vector3(0f, 0.025f, 0.165f), new Vector3(0.036f, 0.01f, 0.036f), msWhite, 90f);
             var msMuzzle = Muzzle(ms, new Vector3(0f, 0.025f, 0.2f), Mat("Missile_Flash", new Color(0.7f, 0.85f, 1f), null, true));
 
+            // 11: 懐中電灯 (幽霊モード専用。黒い胴に金の頭、トリガーを引いている間だけレンズが光り、光の筋とスポットライトが出る)
+            var fl = Group(gunGo.transform, "Model_Flashlight");
+            var flBody = Mat("Flashlight_Body", new Color(0.12f, 0.12f, 0.14f), null, false, 0.6f);
+            var flTrim = Mat("Flashlight_Trim", new Color(0.95f, 0.75f, 0.15f), null, false, 0.5f);
+            GunPart(PrimitiveType.Cylinder, fl, new Vector3(0f, 0f, 0.03f), new Vector3(0.032f, 0.075f, 0.032f), flBody, 90f);   // 胴
+            for (int i = 0; i < 3; i++)
+                GunPart(PrimitiveType.Cylinder, fl, new Vector3(0f, 0f, -0.025f + i * 0.02f), new Vector3(0.035f, 0.004f, 0.035f), Mat("Flashlight_Rubber", new Color(0.05f, 0.05f, 0.05f)), 90f); // 滑り止め
+            GunPart(PrimitiveType.Cylinder, fl, new Vector3(0f, 0f, 0.125f), new Vector3(0.05f, 0.025f, 0.05f), flTrim, 90f);    // 頭
+            GunPart(PrimitiveType.Cylinder, fl, new Vector3(0f, 0f, 0.153f), new Vector3(0.056f, 0.006f, 0.056f), flBody, 90f);  // 縁
+            GunPart(PrimitiveType.Cube, fl, new Vector3(0f, 0.019f, 0.045f), new Vector3(0.012f, 0.008f, 0.02f), Mat("Flashlight_Switch", new Color(0.85f, 0.15f, 0.12f))); // スイッチ
+            var lensOff = Mat("Flashlight_LensOff", new Color(0.55f, 0.55f, 0.5f), null, false, 0.9f);
+            var lensOn = Mat("Flashlight_LensOn", new Color(1f, 0.97f, 0.85f), new Color(3f, 2.8f, 2.2f), true);
+            var lens = RemoveCollider(Prim(PrimitiveType.Cylinder, "Lens", fl, new Vector3(0f, 0f, 0.158f), new Vector3(0.046f, 0.003f, 0.046f), lensOff));
+            lens.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            lens.GetComponent<Renderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            var flMuzzle = Group(fl, "Muzzle"); // マズルフラッシュは無し
+            flMuzzle.localPosition = new Vector3(0f, 0f, 0.16f);
+            // 光の筋 (先が広がる透ける円すいを2重に) とスポットライト。光っている間だけ出す
+            var beam = Group(fl, "Beam");
+            beam.localPosition = new Vector3(0f, 0f, 0.16f);
+            foreach (var (radius, length, alpha, name2) in new[] { (0.9f, 7f, 0.1f, "Flashlight_Beam"), (0.4f, 5f, 0.12f, "Flashlight_BeamCore") })
+            {
+                var cone = new GameObject("BeamCone");
+                cone.transform.SetParent(beam, false);
+                cone.transform.localScale = new Vector3(radius, radius, length);
+                cone.AddComponent<MeshFilter>().sharedMesh = ConeMesh();
+                var cr = cone.AddComponent<MeshRenderer>();
+                cr.sharedMaterial = TransparentMat(name2, new Color(1f, 0.95f, 0.75f, alpha));
+                cr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                cr.receiveShadows = false;
+            }
+            var lightGo = new GameObject("FlashlightLight");
+            lightGo.transform.SetParent(fl, false);
+            lightGo.transform.localPosition = new Vector3(0f, 0f, 0.16f);
+            var spot = lightGo.AddComponent<Light>();
+            spot.type = LightType.Spot;
+            spot.range = 30f;
+            spot.spotAngle = 30f;
+            spot.innerSpotAngle = 16f;
+            spot.intensity = 8f;
+            spot.color = new Color(1f, 0.95f, 0.8f);
+            spot.shadows = LightShadows.None;
+            spot.enabled = false;
+            beam.gameObject.SetActive(false);
+
             var laserMat = Mat("Laser", new Color(1f, 0.1f, 0.1f), null, true);
             var laserGo = new GameObject("Laser");
             laserGo.transform.SetParent(gunGo.transform, false);
@@ -253,8 +298,8 @@ namespace ShootingGallery
 
             gun.bombMaterial = Mat("Bomb", new Color(0.12f, 0.12f, 0.14f), new Color(0.5f, 0.15f, 0f));
             gun.explosionMaterial = TransparentMat("Explosion", new Color(1f, 0.55f, 0.15f, 0.8f));
-            gun.models = new[] { hg.gameObject, mg.gameObject, sg.gameObject, bm.gameObject, sr.gameObject, bz.gameObject, sk.gameObject, kj.gameObject, dt.gameObject, rv.gameObject, ms.gameObject };
-            gun.muzzles = new[] { hgMuzzle, mgMuzzle, sgMuzzle, bmMuzzle, srMuzzle, bzMuzzle, skMuzzle, kjMuzzle, dtMuzzle, rvMuzzle, msMuzzle };
+            gun.models = new[] { hg.gameObject, mg.gameObject, sg.gameObject, bm.gameObject, sr.gameObject, bz.gameObject, sk.gameObject, kj.gameObject, dt.gameObject, rv.gameObject, ms.gameObject, fl.gameObject };
+            gun.muzzles = new[] { hgMuzzle, mgMuzzle, sgMuzzle, bmMuzzle, srMuzzle, bzMuzzle, skMuzzle, kjMuzzle, dtMuzzle, rvMuzzle, msMuzzle, flMuzzle };
             gun.fireballMaterial = Mat("Fireball", new Color(1f, 0.55f, 0.1f), new Color(3f, 1.2f, 0.2f));
             gun.fireballExplosionMaterial = TransparentMat("Fire_Explosion", new Color(1f, 0.45f, 0.08f, 0.85f));
             gun.dartShaftMaterial = dartShaft;
@@ -297,6 +342,38 @@ namespace ShootingGallery
             gun.ammoBullets = bullets.ToArray();
             gun.ammoFullMaterial = ammoFull;
             gun.ammoEmptyMaterial = ammoEmpty;
+            gun.flashlightBeam = beam.gameObject;
+            gun.flashlightLight = spot;
+            gun.flashlightLens = lens.GetComponent<Renderer>();
+            gun.lensOnMaterial = lensOn;
+            gun.lensOffMaterial = lensOff;
+
+            // 懐中電灯の電池: 銃の上 (文字の上) に、電池の形の枠と5つの目盛り。残りの分だけ左から点く (緑 → 黄 → 赤、切れて充電中は赤)
+            var batteryRow = Group(gunGo.transform, "BatteryRow");
+            batteryRow.localPosition = new Vector3(0f, 0.145f, 0f);
+            const int Cells = 5;
+            const float CellW = 0.017f;
+            var frameMat = Mat("Battery_Frame", new Color(0.85f, 0.85f, 0.88f), null, true);
+            float bodyW = Cells * CellW + 0.008f;
+            RemoveCollider(Prim(PrimitiveType.Cube, "BatteryFrame", batteryRow, new Vector3(0f, 0f, 0.001f), new Vector3(bodyW + 0.004f, 0.022f, 0.001f), frameMat));
+            RemoveCollider(Prim(PrimitiveType.Cube, "BatteryInside", batteryRow, new Vector3(0f, 0f, 0f), new Vector3(bodyW, 0.018f, 0.001f), Mat("Battery_Inside", new Color(0.05f, 0.05f, 0.06f), null, true)));
+            RemoveCollider(Prim(PrimitiveType.Cube, "BatteryTip", batteryRow, new Vector3(bodyW / 2f + 0.004f, 0f, 0.001f), new Vector3(0.005f, 0.01f, 0.001f), frameMat));
+            var cells = new List<Renderer>();
+            var cellEmpty = Mat("Battery_Empty", new Color(0.2f, 0.2f, 0.22f), null, true);
+            for (int i = 0; i < Cells; i++)
+            {
+                var c = RemoveCollider(Prim(PrimitiveType.Cube, "Cell", batteryRow, new Vector3((i - (Cells - 1) / 2f) * CellW, 0f, -0.001f), new Vector3(CellW - 0.004f, 0.013f, 0.001f), cellEmpty));
+                var r = c.GetComponent<Renderer>();
+                r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                cells.Add(r);
+            }
+            batteryRow.gameObject.SetActive(false);
+            gun.batteryRoot = batteryRow;
+            gun.batteryCells = cells.ToArray();
+            gun.batteryGreenMaterial = Mat("Battery_Green", new Color(0.3f, 1f, 0.35f), null, true);
+            gun.batteryYellowMaterial = Mat("Battery_Yellow", new Color(1f, 0.85f, 0.2f), null, true);
+            gun.batteryRedMaterial = Mat("Battery_Red", new Color(1f, 0.25f, 0.2f), null, true);
+            gun.batteryEmptyMaterial = cellEmpty;
             return gun;
         }
 

@@ -153,7 +153,8 @@ namespace ShootingGallery
         public StageOffer casinoOffer = new StageOffer { kind = TargetKind.Casino, startDelay = new Vector2(35f, 60f) };
         public StageOffer westernOffer = new StageOffer { kind = TargetKind.Western, startDelay = new Vector2(30f, 60f) };
         public StageOffer spaceOffer = new StageOffer { kind = TargetKind.Space, startDelay = new Vector2(30f, 60f) };
-        StageOffer[] Offers => new[] { kaijuOffer, casinoOffer, westernOffer, spaceOffer };
+        public StageOffer ghostOffer = new StageOffer { kind = TargetKind.Ghost, startDelay = new Vector2(30f, 60f) };
+        StageOffer[] Offers => new[] { kaijuOffer, casinoOffer, westernOffer, spaceOffer, ghostOffer };
         bool wasStageMode;
 
         bool wasPlaying, wasFever, challengeWasBusy;
@@ -206,7 +207,7 @@ namespace ShootingGallery
             bool sky = gm != null && gm.SkyActive;
             bool ninja = gm != null && gm.NinjaActive;
             // 海戦・空中ステージ・忍者モードが続けて来すぎないように、どれかが終わったら全部の間隔をあける
-            bool stageMode = naval || sky || ninja || (gm != null && (gm.KaijuActive || gm.CasinoActive || gm.WesternActive || gm.SpaceActive));
+            bool stageMode = naval || sky || ninja || (gm != null && (gm.KaijuActive || gm.CasinoActive || gm.WesternActive || gm.SpaceActive || gm.GhostActive));
             if (wasStageMode && !stageMode)
             {
                 foreach (var o in Offers) o.next = Mathf.Max(o.next, Time.time + Random.Range(o.gap.x, o.gap.y));
@@ -372,7 +373,7 @@ namespace ShootingGallery
         [Range(0f, 1f)] public float stageMainStallWeight = 0.3f;
 
         static readonly TargetKind[] StageKinds =
-            { TargetKind.Naval, TargetKind.Sky, TargetKind.Ninja, TargetKind.Kaiju, TargetKind.Casino, TargetKind.Western, TargetKind.Space };
+            { TargetKind.Naval, TargetKind.Sky, TargetKind.Ninja, TargetKind.Kaiju, TargetKind.Casino, TargetKind.Western, TargetKind.Space, TargetKind.Ghost };
 
         /// <summary>出す予定の、別の世界へ飛ぶモードの的 1つ分</summary>
         class StageSpawn
@@ -590,7 +591,7 @@ namespace ShootingGallery
             }
 
             // 青い玉: フィーバー中だけ、メイン以外の屋台に1つまで (撃たれずに消えたらまた出る)
-            if (gm.IsFever && !gm.NavalActive && !gm.SkyActive && !gm.NinjaActive && !gm.KaijuActive && !gm.CasinoActive && !gm.WesternActive && !gm.SpaceActive && !gm.BonusUsedThisFever && (gm.bonusStage == null || !gm.bonusStage.IsBusy)
+            if (gm.IsFever && !gm.NavalActive && !gm.SkyActive && !gm.NinjaActive && !gm.KaijuActive && !gm.CasinoActive && !gm.WesternActive && !gm.SpaceActive && !gm.GhostActive && !gm.BonusUsedThisFever && (gm.bonusStage == null || !gm.bonusStage.IsBusy)
                 && Count(TargetKind.BlueOrb) == 0 && Time.time >= nextBlueOrbTime
                 && target.GetComponentInParent<Stall>() != gm.mainStall && Random.value < blueOrbChance)
             {
@@ -650,6 +651,7 @@ namespace ShootingGallery
             TargetKind.Casino => casinoOffer.lifetime,
             TargetKind.Western => westernOffer.lifetime,
             TargetKind.Space => spaceOffer.lifetime,
+            TargetKind.Ghost => ghostOffer.lifetime,
             _ => lifetime
         };
 
@@ -665,6 +667,7 @@ namespace ShootingGallery
                 TargetKind.Casino => gm.CanOfferCasino(target, lifetime),
                 TargetKind.Western => gm.CanOfferWestern(target, lifetime),
                 TargetKind.Space => gm.CanOfferSpace(target, lifetime),
+                TargetKind.Ghost => gm.CanOfferGhost(target, lifetime),
                 _ => false
             };
         }
@@ -683,6 +686,7 @@ namespace ShootingGallery
             TargetKind.Casino => casinoOffer.points,
             TargetKind.Western => westernOffer.points,
             TargetKind.Space => spaceOffer.points,
+            TargetKind.Ghost => ghostOffer.points,
             _ => weaponPoints
         };
 

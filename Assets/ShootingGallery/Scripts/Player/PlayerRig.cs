@@ -157,7 +157,7 @@ namespace ShootingGallery
                 if (weaponTimeLeft <= 0f) ResetWeapon();
             }
             var def = Weapons.Get(weapon);
-            rightGun.SetInfo(rightGun.IsReloading ? "RELOADING..." : def.displayName); // 残りの弾は銃の上の弾の列で見せる
+            rightGun.SetInfo(rightGun.IsCharging ? "CHARGING..." : rightGun.IsReloading ? "RELOADING..." : def.displayName); // 残りの弾は銃の上の弾の列で見せる
             if (leftGun != null) leftGun.SetInfo("");
 
             // 残り時間はゲージで表示 (ハンドガンの時は非表示)
@@ -178,6 +178,7 @@ namespace ShootingGallery
             WeaponType.FireBall => new Color(1f, 0.5f, 0.1f),
             WeaponType.Dart => new Color(1f, 0.3f, 0.5f),
             WeaponType.Revolver => new Color(0.9f, 0.7f, 0.4f),
+            WeaponType.Flashlight => new Color(1f, 0.92f, 0.55f),
             WeaponType.Missile => new Color(0.55f, 0.75f, 1f),
             _ => Color.white
         };
