@@ -274,6 +274,17 @@ namespace ShootingGallery
             spot.enabled = false;
             beam.gameObject.SetActive(false);
 
+            // 12: つるはし (発掘モード専用。木の柄の先に、前後に反った鉄の頭。投げると手から消え、少しして次の1本が出る)
+            var px = Group(gunGo.transform, "Model_Pickaxe");
+            var pxHandle = Mat("Mine_Wood", new Color(0.4f, 0.27f, 0.15f), null, false, 0.15f);
+            var pxHead = Mat("Pickaxe_Head", new Color(0.55f, 0.56f, 0.6f), null, false, 0.7f);
+            GunPart(PrimitiveType.Cylinder, px, new Vector3(0f, -0.01f, 0.06f), new Vector3(0.022f, 0.13f, 0.022f), pxHandle, 90f);   // 柄 (前へ伸びる)
+            GunPart(PrimitiveType.Cube, px, new Vector3(0f, 0.045f, 0.19f), new Vector3(0.026f, 0.12f, 0.026f), pxHead, -12f);       // 頭 (上へ反る)
+            GunPart(PrimitiveType.Cube, px, new Vector3(0f, -0.065f, 0.19f), new Vector3(0.026f, 0.12f, 0.026f), pxHead, 12f);       // 頭 (下へ反る)
+            GunPart(PrimitiveType.Cube, px, new Vector3(0f, -0.01f, 0.19f), new Vector3(0.034f, 0.04f, 0.04f), pxHead);              // 柄を通す所
+            var pxMuzzle = Group(px, "Muzzle"); // マズルフラッシュは無し
+            pxMuzzle.localPosition = new Vector3(0f, 0f, 0.22f);
+
             var laserMat = Mat("Laser", new Color(1f, 0.1f, 0.1f), null, true);
             var laserGo = new GameObject("Laser");
             laserGo.transform.SetParent(gunGo.transform, false);
@@ -298,12 +309,14 @@ namespace ShootingGallery
 
             gun.bombMaterial = Mat("Bomb", new Color(0.12f, 0.12f, 0.14f), new Color(0.5f, 0.15f, 0f));
             gun.explosionMaterial = TransparentMat("Explosion", new Color(1f, 0.55f, 0.15f, 0.8f));
-            gun.models = new[] { hg.gameObject, mg.gameObject, sg.gameObject, bm.gameObject, sr.gameObject, bz.gameObject, sk.gameObject, kj.gameObject, dt.gameObject, rv.gameObject, ms.gameObject, fl.gameObject };
-            gun.muzzles = new[] { hgMuzzle, mgMuzzle, sgMuzzle, bmMuzzle, srMuzzle, bzMuzzle, skMuzzle, kjMuzzle, dtMuzzle, rvMuzzle, msMuzzle, flMuzzle };
+            gun.models = new[] { hg.gameObject, mg.gameObject, sg.gameObject, bm.gameObject, sr.gameObject, bz.gameObject, sk.gameObject, kj.gameObject, dt.gameObject, rv.gameObject, ms.gameObject, fl.gameObject, px.gameObject };
+            gun.muzzles = new[] { hgMuzzle, mgMuzzle, sgMuzzle, bmMuzzle, srMuzzle, bzMuzzle, skMuzzle, kjMuzzle, dtMuzzle, rvMuzzle, msMuzzle, flMuzzle, pxMuzzle };
             gun.fireballMaterial = Mat("Fireball", new Color(1f, 0.55f, 0.1f), new Color(3f, 1.2f, 0.2f));
             gun.fireballExplosionMaterial = TransparentMat("Fire_Explosion", new Color(1f, 0.45f, 0.08f, 0.85f));
             gun.dartShaftMaterial = dartShaft;
             gun.dartFlightMaterial = dartFlight;
+            gun.pickaxeHandleMaterial = pxHandle;
+            gun.pickaxeHeadMaterial = pxHead;
             gun.revolverCylinder = cylinder;
             gun.missileBodyMaterial = msWhite;
             gun.missileFinMaterial = msRed;

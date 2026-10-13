@@ -7,10 +7,10 @@ namespace ShootingGallery
     /// <summary>1丁の銃。見た目の切り替えと発射(レイキャスト)を担当する。</summary>
     public class GunController : MonoBehaviour
     {
-        [Tooltip("WeaponType の順 (Handgun, MachineGun, Shotgun, Bomb, Sniper, Bazooka, Shuriken, FireBall, Dart, Revolver, Missile, Flashlight) に並べた見た目")]
-        public GameObject[] models = new GameObject[12];
+        [Tooltip("WeaponType の順 (Handgun, MachineGun, Shotgun, Bomb, Sniper, Bazooka, Shuriken, FireBall, Dart, Revolver, Missile, Flashlight, Pickaxe) に並べた見た目")]
+        public GameObject[] models = new GameObject[13];
         [Tooltip("各見た目の銃口。最初の子をマズルフラッシュとして使う")]
-        public Transform[] muzzles = new Transform[12];
+        public Transform[] muzzles = new Transform[13];
         [Header("怪獣 / カジノ / 西部劇")]
         [Tooltip("怪獣の口から吐く炎の玉と、燃え上がる爆発")]
         public Material fireballMaterial;
@@ -18,6 +18,8 @@ namespace ShootingGallery
         [Tooltip("投げたダーツの軸と羽根")]
         public Material dartShaftMaterial;
         public Material dartFlightMaterial;
+        public Material pickaxeHandleMaterial;
+        public Material pickaxeHeadMaterial;
         [Tooltip("リボルバーの弾倉 (弾込めの間だけ回る)")]
         public Transform revolverCylinder;
         [Tooltip("弾数のある武器 (リボルバー) の残りの弾を表す、銃の上に並んだ弾。撃つたびに右から灰色になり、弾込めで左から黄色に戻る")]
@@ -138,7 +140,7 @@ namespace ShootingGallery
                 if (models[i] != null) models[i].SetActive(i == (int)type);
             if (missileLoaded != null) missileLoaded.SetActive(true); // 込める途中で止まっていても、持ち替えたら込めてある
             // スナイパーは赤、手裏剣とダーツは白のレーザー
-            bool white = type == WeaponType.Shuriken || type == WeaponType.Dart;
+            bool white = type == WeaponType.Shuriken || type == WeaponType.Dart || type == WeaponType.Pickaxe;
             if (laser != null && whiteLaserMaterial != null) laser.sharedMaterial = white ? whiteLaserMaterial : redLaserMaterial;
             if (laserDotRenderer != null && whiteDotMaterial != null) laserDotRenderer.sharedMaterial = white ? whiteDotMaterial : redDotMaterial;
             ShowLaser(HasLaser(type));
@@ -151,7 +153,7 @@ namespace ShootingGallery
             SetBeam(false);
         }
 
-        static bool HasLaser(WeaponType type) => type == WeaponType.Sniper || type == WeaponType.Shuriken || type == WeaponType.Dart;
+        static bool HasLaser(WeaponType type) => type == WeaponType.Sniper || type == WeaponType.Shuriken || type == WeaponType.Dart || type == WeaponType.Pickaxe;
 
         void ShowLaser(bool show)
         {
@@ -372,13 +374,15 @@ namespace ShootingGallery
             var muzzle = MuzzleOf(current);
             Vector3 origin = muzzle.position;
 
-            if (current == WeaponType.Shuriken || current == WeaponType.Dart)
+            if (current == WeaponType.Shuriken || current == WeaponType.Dart || current == WeaponType.Pickaxe)
             {
                 if (current == WeaponType.Shuriken)
                     Shuriken.Spawn(origin, muzzle.forward, def.projectileSpeed, def.range, shurikenMaterial, shurikenCenterMaterial, hitMask);
+                else if (current == WeaponType.Pickaxe)
+                    Shuriken.SpawnPickaxe(origin, muzzle.forward, def.projectileSpeed, def.range, pickaxeHandleMaterial, pickaxeHeadMaterial, hitMask);
                 else
                     Shuriken.SpawnDart(origin, muzzle.forward, def.projectileSpeed, def.range, dartShaftMaterial, dartFlightMaterial, hitMask);
-                // 手に持った1本は投げたら消え、少しして次の1本が出る
+                // 手に持った1本 (つるはし) は投げたら消え、少しして次の1本が出る
                 if (reloadRoutine != null) StopCoroutine(reloadRoutine);
                 reloadRoutine = isActiveAndEnabled ? StartCoroutine(Reload(def.fireInterval * 0.8f)) : null;
             }

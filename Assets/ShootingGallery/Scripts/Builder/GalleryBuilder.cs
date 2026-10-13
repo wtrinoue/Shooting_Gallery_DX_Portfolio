@@ -215,6 +215,7 @@ namespace ShootingGallery
             var westernTrain = BuildWestern();
             var spaceStage = BuildSpace(bonusStage);
             var ghostManor = BuildGhost();
+            var mineCave = BuildMine();
             LogStep("武器の的 / UFO", step);
 
             // ---- 5. ゲーム開始 ----
@@ -236,6 +237,7 @@ namespace ShootingGallery
             gm.westernTrain = westernTrain;
             gm.spaceStage = spaceStage;
             gm.ghostManor = ghostManor;
+            gm.mineCave = mineCave;
             gm.deluxeMainStall = deluxeMain;
             gm.deluxeFeverStalls = deluxeFever;
             gm.fireworkMaterials = FireworkMaterials();
@@ -305,10 +307,7 @@ namespace ShootingGallery
             light.shadows = LightShadows.Soft;
 
             BuildGround();
-
-            // 足元の目印 (ここから動かない)。ボーナスステージで床が開いている間は隠れる
-            playerMark = Prim(PrimitiveType.Cylinder, "PlayerMark", world, new Vector3(0f, 0.005f, 0f), new Vector3(0.8f, 0.005f, 0.8f),
-                              Mat("PlayerMark", new Color(0.9f, 0.8f, 0.4f), new Color(0.3f, 0.25f, 0.05f)), false);
+            // 足元の目印 (黄色い丸) は不要になったので作らない。playerMark は null のまま (使う側はすべて null チェック済み)
         }
     }
 }

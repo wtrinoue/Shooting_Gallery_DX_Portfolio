@@ -26,7 +26,9 @@ namespace ShootingGallery
             var soilLight = Mat("Ghost_SoilLight", new Color(0.27f, 0.17f, 0.1f), null, false, 0.05f);
             var ground = Group(root, "GhostGround");
             shown.Add(ground.gameObject);
-            Prim(PrimitiveType.Cylinder, "Soil", ground, new Vector3(0f, -0.06f, 0f), new Vector3(180f, 0.06f, 180f), soil, false);
+            // 足元から外へ広がる土の円盤 (いつもの地面より少しだけ上。広がる間に地面とちらつかないように)
+            var soilDisc = Prim(PrimitiveType.Cylinder, "Soil", root, new Vector3(0f, -0.055f, 0f), new Vector3(180f, 0.06f, 180f), soil, false);
+            shown.Add(soilDisc);
             for (int i = 0; i < 110; i++)
             {
                 float a = Random.Range(0f, Mathf.PI * 2f);
@@ -104,7 +106,8 @@ namespace ShootingGallery
             shown.Add(manor.gameObject);
 
             // ---- 紫の空の月・雲・星 ----
-            shown.Add(BuildGhostSky(root).gameObject);
+            var sky = BuildGhostSky(root);
+            shown.Add(sky.gameObject);
 
             // ---- 鬼火 (的ではない) ----
             var wispRoot = Group(root, "Wisps");
@@ -142,6 +145,12 @@ namespace ShootingGallery
             if (playerMark != null) groundParts.Add(playerMark.transform);
             manorComp.groundParts = groundParts.ToArray();
             manorComp.showDuringStage = shown.ToArray();
+            // 組み上げる順番: 土のでこぼこ (真ん中から外へ) → 木・お墓・井戸・お化け屋敷 (下の部品から上へ) → 月と雲 → 鬼火
+            manorComp.soil = soilDisc.transform;
+            manorComp.assembleRoots = new[] { ground, trees, graves, well, manor, sky, wispRoot };
+            manorComp.assembleDelays = new[] { 0f, 0.8f, 0.9f, 1.1f, 1.0f, 3.6f, 4.1f };
+            manorComp.assembleSpreads = new[] { 1.8f, 1.8f, 1.3f, 1.0f, 3.4f, 1.0f, 0.5f };
+            manorComp.assembleRadial = new[] { true, false, false, false, false, false, false };
             manorComp.wellBucket = bucket;
             manorComp.wellRope = rope;
             manorComp.wellCrank = crank;

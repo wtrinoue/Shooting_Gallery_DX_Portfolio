@@ -181,6 +181,7 @@ namespace ShootingGallery
             WeaponType.Dart => new Color(1f, 0.3f, 0.5f),
             WeaponType.Revolver => new Color(0.9f, 0.7f, 0.4f),
             WeaponType.Flashlight => new Color(1f, 0.92f, 0.55f),
+            WeaponType.Pickaxe => new Color(0.85f, 0.65f, 0.4f),
             WeaponType.Missile => new Color(0.55f, 0.75f, 1f),
             _ => Color.white
         };

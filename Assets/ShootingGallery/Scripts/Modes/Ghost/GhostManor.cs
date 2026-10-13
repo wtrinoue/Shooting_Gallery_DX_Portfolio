@@ -5,11 +5,13 @@ using UnityEngine;
 namespace ShootingGallery
 {
     /// <summary>
-    /// 幽霊モードの舞台。屋台が沈んだあと、ひゅうぅ…という音とともに視界が濃い紫の闇に包まれ、その間に舞台を入れ替える。
-    /// 闇が晴れると、屋台もハッチもなく、足元はでこぼこの濃い茶色の土。朽ちたぎざぎざの木・バケツを上げ下ろしする古井戸・お墓が並び、
-    /// 的を撃った方の先には、上へいくほど太くなるいびつで豪華なお化け屋敷が建っている。空は紫で、月が照っている。
-    /// まわりをお化けがぐるぐる回り、ほうきに乗った魔女が飛び、お墓の前からゾンビや骸骨がこんにちはする (どれも点数の見えるパネル)。
-    /// 終わりはまた紫の闇に包まれ、その間にいつものお祭りの地面へ戻す (GameManager が屋台と的をもう並べておく)。
+    /// 幽霊モードの舞台。演出の流れ (視界はふさがない):
+    ///   1. 屋台が沈み、ハッチも消えて平らな床になる (GameManager)。
+    ///   2. ひゅうぅ…という音とともに、足元から外へ向かって床がでこぼこの濃い茶色の土に変わっていき、空が紫に変わる (GameManager)。
+    ///   3. 朽ちたぎざぎざの木・お墓・バケツを上げ下ろしする古井戸・お化け屋敷 (上へいくほど太くなるいびつで豪華な建物) が、
+    ///      下の部品から順にぽんぽんと組み上がっていく。最後に月と雲が出て、鬼火が灯る。
+    ///   4. まわりをお化けがぐるぐる回り、ほうきに乗った魔女が飛び、お墓の前からゾンビや骸骨がこんにちはする (どれも点数の見えるパネル)。
+    ///   5. 終わりは逆に、上の部品から順に崩れて消え、土が足元へ縮んで平らな床に戻る。そのあと GameManager が屋台とハッチを戻す。
     /// 屋台の出し入れ・点数・空の色の判断は GameManager が行い、ここは見た目の順番と的の出し方だけを受け持つ。プレイヤーは動かない。
     /// </summary>
     public class GhostManor : MonoBehaviour
@@ -51,25 +53,43 @@ namespace ShootingGallery
         public int maxRisers = 4;
         public float stopLaunchBefore = 2.5f;
 
-        [Header("紫の闇 (行きも帰りも、何も見えない間に舞台を入れ替える)")]
-        public Color darkColor = new Color(0.12f, 0.03f, 0.18f);
-        public float darkInTime = 1.0f;
-        public float darkHold = 0.6f;
-        public float darkOutTime = 1.5f;
+        [Header("土に変わる床と、組み上がる舞台")]
+        [Tooltip("足元から外へ広がる土の円盤 (ローカル X・Z の大きさを広げる)")]
+        public Transform soil;
+        [Tooltip("土が広がりきるまで / 足元へ縮みきるまでの秒数")]
+        public float soilInTime = 1.8f;
+        public float soilOutTime = 1.4f;
+        [Tooltip("組み上げる物のまとまり (土のでこぼこ・木・お墓・井戸・お化け屋敷・空・鬼火)。中の見える部品が1つずつぽんと出てくる")]
+        public Transform[] assembleRoots;
+        [Tooltip("まとまりごとの、組み上げ始める時刻 (秒。土が広がり始めてから)")]
+        public float[] assembleDelays;
+        [Tooltip("まとまりごとの、いちばん下の部品からいちばん上の部品までにかける秒数")]
+        public float[] assembleSpreads;
+        [Tooltip("まとまりごとに、高さの順ではなく、真ん中からの距離の順に出す (土のでこぼこ用)")]
+        public bool[] assembleRadial;
+        [Tooltip("1つの部品がぽんと出る秒数")]
+        public float popTime = 0.35f;
+        [Tooltip("終わりに崩れて消えるのにかける秒数")]
+        public float disassembleTime = 2.2f;
 
         [Header("Timing")]
-        public float duration = 24f;
-        [Tooltip("始まってから闇に包まれ始めるまでの秒数 (屋台が沈み終わるのを待つ)")]
+        public float duration = 26f;
+        [Tooltip("始まってから床が土に変わり始めるまでの秒数 (屋台が沈み、平らな床になるのを待つ)")]
         public float dropDelay = 1.2f;
 
         public bool IsActive { get; private set; }
         public float TimeLeft => IsActive ? Mathf.Max(0f, duration - (Time.time - startTime)) : 0f;
         /// <summary>今回倒した数</summary>
         public int Hits { get; private set; }
-        /// <summary>片付けにかかる秒数</summary>
-        public float CloseTime => darkInTime + darkHold + darkOutTime * 0.5f + 0.1f;
-        /// <summary>闇の中で幽霊の世界へ来た時 / いつもの地面へ戻った時 (GameManager が空や霧の色を切り替え、帰りは屋台と的を用意する)</summary>
-        public event System.Action Arrived, Left;
+        /// <summary>片付け (崩れて消え、土が縮んで平らな床に戻る) にかかる秒数</summary>
+        public float CloseTime => disassembleTime + soilOutTime + 0.1f;
+        /// <summary>組み上げにかかる秒数 (土が広がり始めてから、最後の部品が出るまで)</summary>
+        public float BuildTime { get; private set; }
+        /// <summary>
+        /// 床が土に変わり始めた時 (GameManager が空を紫に変えていく) / 崩れ始めた時 (いつもの夜空へ戻していく) /
+        /// 土が縮みきって平らな床に戻った時 (GameManager が屋台とハッチを戻す)
+        /// </summary>
+        public event System.Action Arrived, Left, Closed;
         /// <summary>的を倒した (点数はもう入っている)</summary>
         public event System.Action<GhostSpook> SpookDown;
 
@@ -92,7 +112,80 @@ namespace ShootingGallery
                 wispHome[i] = wisps[i].localPosition;
                 wispPhase[i] = Random.value * 10f;
             }
+            soilScale = soil != null ? soil.localScale : Vector3.one;
+            CollectParts();
             SetStageVisible(false);
+        }
+
+        // ---- 組み上げる部品 ----
+
+        struct Part
+        {
+            public Transform t;
+            public Vector3 scale;
+            public float at; // 出始める時刻 (土が広がり始めてから)
+        }
+        Part[] parts = new Part[0];
+        Vector3 soilScale;
+
+        // 組み上げるまとまりの中の、見える部品 (Renderer) を全部集め、出る時刻を決める: 下 (または真ん中) の部品ほど早い
+        void CollectParts()
+        {
+            var list = new List<Part>();
+            BuildTime = 0f;
+            for (int g = 0; g < assembleRoots.Length; g++)
+            {
+                var root = assembleRoots[g];
+                if (root == null) continue;
+                float delay = assembleDelays != null && g < assembleDelays.Length ? assembleDelays[g] : 0f;
+                float spread = assembleSpreads != null && g < assembleSpreads.Length ? assembleSpreads[g] : 1f;
+                bool radial = assembleRadial != null && g < assembleRadial.Length && assembleRadial[g];
+                var rends = root.GetComponentsInChildren<Renderer>(true);
+                float min = float.MaxValue, max = float.MinValue;
+                foreach (var r in rends) { float v = Key(r.transform, radial); min = Mathf.Min(min, v); max = Mathf.Max(max, v); }
+                foreach (var r in rends)
+                {
+                    float k = max > min ? (Key(r.transform, radial) - min) / (max - min) : 0f;
+                    float at = delay + k * spread + Random.Range(0f, 0.12f);
+                    list.Add(new Part { t = r.transform, scale = r.transform.localScale, at = at });
+                    BuildTime = Mathf.Max(BuildTime, at + popTime);
+                }
+            }
+            parts = list.ToArray();
+        }
+
+        // 出る順番を決める値: 高さ (舞台の中での y)、または真ん中からの水平の距離
+        float Key(Transform t, bool radial)
+        {
+            var p = transform.InverseTransformPoint(t.position);
+            return radial ? new Vector2(p.x, p.z).magnitude : p.y;
+        }
+
+        // 組み上げの進み具合 (土が広がり始めてから time 秒) に合わせて、部品の大きさを決める。出る時は少し大きくなってから戻る
+        void SetAssembly(float time)
+        {
+            for (int i = 0; i < parts.Length; i++)
+            {
+                var p = parts[i];
+                if (p.t == null) continue;
+                float k = Mathf.Clamp01((time - p.at) / popTime);
+                float s = k <= 0f ? 0.0001f : k >= 1f ? 1f : PopCurve(k);
+                p.t.localScale = p.scale * s;
+            }
+        }
+
+        static float PopCurve(float k)
+        {
+            const float c = 1.9f; // 行き過ぎる強さ
+            float x = k - 1f;
+            return Mathf.Max(0.0001f, 1f + (c + 1f) * x * x * x + c * x * x);
+        }
+
+        void SetSoil(float k)
+        {
+            if (soil == null) return;
+            float e = Mathf.Max(0.002f, k * k * (3f - 2f * k));
+            soil.localScale = new Vector3(soilScale.x * e, soilScale.y, soilScale.z * e);
         }
 
         /// <summary>幽霊モードを始める。yawDeg = お化け屋敷が建つ向き (的を撃った方)</summary>
@@ -104,19 +197,31 @@ namespace ShootingGallery
             Hits = 0;
             transform.localRotation = Quaternion.Euler(0f, yawDeg, 0f);
             lastAngle = Random.Range(0f, 360f);
-            launchStart = Time.time + dropDelay + darkInTime + darkHold + darkOutTime * 0.4f;
+            launchStart = Time.time + dropDelay + BuildTime * 0.85f; // ほとんど組み上がった頃から的を出す
             nextGhost = launchStart;
             nextRise = launchStart + 0.6f;
             nextWitch = launchStart + 2f;
             Play(Enter());
         }
 
-        public void End()
+        /// <summary>時間切れ: 崩れて消え、平らな床に戻る。immediate なら、その場ですぐ全部消す (ラウンドの終わり・リセット)</summary>
+        public void End(bool immediate = false)
         {
             if (!IsActive) return;
             IsActive = false;
             foreach (var s in AllSpooks()) s.Retreat();
-            Play(Leave());
+            if (!immediate)
+            {
+                Play(Leave());
+                return;
+            }
+            if (anim != null) StopCoroutine(anim);
+            anim = null;
+            SetAssembly(0f);
+            SetSoil(0f);
+            SetInWorld(false);
+            Left?.Invoke();
+            Closed?.Invoke();
         }
 
         IEnumerable<GhostSpook> AllSpooks()
@@ -126,29 +231,65 @@ namespace ShootingGallery
             foreach (var s in risers) yield return s;
         }
 
+        // 始まり: 平らな床になったら、足元から土が広がり、空が紫に変わり、木・お墓・井戸・お化け屋敷が下から組み上がっていく
         IEnumerator Enter()
         {
             yield return new WaitForSeconds(dropDelay);
-            yield return Dark(() => { SetInWorld(true); Arrived?.Invoke(); }, "ghost");
+            SetAssembly(0f);
+            SetSoil(0f);
+            SetStageVisible(true);
+            inWorld = true;
+            Arrived?.Invoke();
+            Sfx.Play("ghost");
+            bool groundHidden = false, rumble = false;
+            for (float t = 0f; t < BuildTime; t += Time.deltaTime)
+            {
+                SetSoil(Mathf.Clamp01(t / soilInTime));
+                SetAssembly(t);
+                if (!groundHidden && t >= soilInTime) { groundHidden = true; HideGround(true); } // 土で覆いきった: お祭りの地面を隠す
+                if (!rumble && t >= soilInTime * 0.6f) { rumble = true; Sfx.Play("door"); } // ゴゴゴ… と組み上がる
+                yield return null;
+            }
+            SetSoil(1f);
+            SetAssembly(BuildTime + 1f);
+            if (!groundHidden) HideGround(true);
             anim = null;
         }
 
+        // 終わり: 上の部品から順に崩れて消え、土が足元へ縮んで、平らな床に戻る
         IEnumerator Leave()
         {
-            yield return Dark(() => { SetInWorld(false); Left?.Invoke(); }, "ghost");
+            Left?.Invoke();
+            Sfx.Play("ghost");
+            float total = Mathf.Max(0.1f, BuildTime);
+            for (float t = 0f; t < disassembleTime; t += Time.deltaTime)
+            {
+                SetAssembly(total * (1f - t / disassembleTime));
+                yield return null;
+            }
+            SetAssembly(0f);
+            HideGround(false); // 土の下に、お祭りの地面を戻しておく
+            for (float t = 0f; t < soilOutTime; t += Time.deltaTime)
+            {
+                SetSoil(1f - t / soilOutTime);
+                yield return null;
+            }
+            SetInWorld(false);
+            Closed?.Invoke();
             anim = null;
         }
 
-        // 紫の闇に包まれる → 何も見えない間に atPeak (舞台の入れ替え) → だんだん晴れる
-        IEnumerator Dark(System.Action atPeak, string sound)
+        // お祭りの地面 (地面・穴のふち・足元の目印) を隠す / 戻す
+        void HideGround(bool hide)
         {
-            if (sound != null) Sfx.Play(sound);
-            ScreenFader.FadeTo(1f, darkInTime, darkColor);
-            yield return new WaitForSeconds(darkInTime + darkHold * 0.5f);
-            atPeak?.Invoke();
-            yield return new WaitForSeconds(darkHold * 0.5f);
-            ScreenFader.FadeTo(0f, darkOutTime);
+            for (int i = 0; i < groundParts.Length; i++)
+            {
+                if (hide) groundWasActive[i] = groundParts[i].gameObject.activeSelf;
+                groundParts[i].gameObject.SetActive(!hide && groundWasActive[i]);
+            }
+            groundHiddenNow = hide;
         }
+        bool groundHiddenNow;
 
         void Update()
         {
@@ -271,14 +412,11 @@ namespace ShootingGallery
         // 幽霊の世界にいる (土の地面・木・井戸・お墓・屋敷・月を出して、お祭りの地面を隠す) / いない
         void SetInWorld(bool on)
         {
-            if (on == inWorld) return;
             inWorld = on;
-            for (int i = 0; i < groundParts.Length; i++)
-            {
-                if (on) groundWasActive[i] = groundParts[i].gameObject.activeSelf;
-                groundParts[i].gameObject.SetActive(!on && groundWasActive[i]);
-            }
+            if (!on && groundHiddenNow) HideGround(false);
             SetStageVisible(on);
+            if (!on) SetSoil(1f); // 次に出す時のために、元の大きさへ (出す時に 0 から広げる)
+            if (!on) SetAssembly(BuildTime + 1f);
         }
 
         void SetStageVisible(bool visible)

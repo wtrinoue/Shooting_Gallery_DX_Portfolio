@@ -102,6 +102,12 @@ namespace ShootingGallery
         public Color ghostFogColor = new Color(0.24f, 0.11f, 0.32f);
         public Color ghostAmbient = new Color(0.45f, 0.38f, 0.58f);
 
+        [Header("Mine (発掘モード: つるはしの的を撃つと、足元に穴が掘られてゆっくり降りていき、宝石とトロッコの洞窟へ)")]
+        public MineCave mineCave;
+        public Color mineSkyColor = new Color(0.02f, 0.015f, 0.01f);
+        public Color mineFogColor = new Color(0.04f, 0.03f, 0.025f);
+        public Color mineAmbient = new Color(0.24f, 0.2f, 0.18f); // 暗め (ランプと結晶の明かりで照らされた所が浮かび上がるように)
+
         [Header("Rules")]
         public float roundDuration = 90f;
         public float feverDuration = 20f;
@@ -136,7 +142,7 @@ namespace ShootingGallery
         float stallsReturnUntil; // 屋台が元の場所に戻りきる時刻
         /// <summary>屋台が戻りきるまで (今から seconds 秒) 屋台の拡張・入れ替えを待たせる</summary>
         void HoldStallsFor(float seconds) => stallsReturnUntil = Mathf.Max(stallsReturnUntil, Time.time + seconds);
-        public bool ChallengeActive => SniperActive || MachineGunChallengeActive || NavalActive || SkyActive || NinjaActive || KaijuActive || CasinoActive || WesternActive || SpaceActive || GhostActive;
+        public bool ChallengeActive => SniperActive || MachineGunChallengeActive || NavalActive || SkyActive || NinjaActive || KaijuActive || CasinoActive || WesternActive || SpaceActive || GhostActive || MineActive;
         /// <summary>海戦モード中か (チャレンジの1つとして扱う: この間はフィーバーの残り時間と屋台の拡張を止め、他のチャレンジや豪華屋台チェンジは出さない)</summary>
         public bool NavalActive => navalBattle != null && navalBattle.IsActive;
         readonly List<Stall> navalStalls = new List<Stall>(); // 海戦モードのために沈めた屋台
@@ -152,6 +158,7 @@ namespace ShootingGallery
         public bool WesternActive => westernTrain != null && westernTrain.IsActive;
         public bool SpaceActive => spaceStage != null && spaceStage.IsActive;
         public bool GhostActive => ghostManor != null && ghostManor.IsActive;
+        public bool MineActive => mineCave != null && mineCave.IsActive;
         readonly List<Stall> stageStalls = new List<Stall>(); // 怪獣 / カジノ / 西部劇モードのために縮めた・沈めた屋台 (同時には1つしか動かない)
 
         /// <summary>エンドレスモード中か (B ボタン長押しで始まる。時間切れがなく、A ボタン長押しで終わる)</summary>
@@ -169,7 +176,7 @@ namespace ShootingGallery
         {
             new[] { TargetKind.MachineGun, TargetKind.Shotgun, TargetKind.Bomb },
             new[] { TargetKind.Sniper, TargetKind.MachineGunChallenge },
-            new[] { TargetKind.Explosive, TargetKind.BlueOrb },
+            new[] { TargetKind.Explosive, TargetKind.BlueOrb, TargetKind.Mine },
             new[] { TargetKind.Deluxe, TargetKind.Kaiju, TargetKind.Space },
             new[] { TargetKind.Naval, TargetKind.Sky, TargetKind.Western },
             new[] { TargetKind.Ninja, TargetKind.Casino, TargetKind.Ghost },
@@ -270,6 +277,17 @@ namespace ShootingGallery
                 ghostManor.SpookDown += OnSpookDown;
                 ghostManor.Arrived += OnGhostArrived;
                 ghostManor.Left += OnGhostLeft;
+                ghostManor.Closed += OnGhostClosed;
+            }
+            if (mineCave != null)
+            {
+                mineCave.WentDeep += OnMineDeep;
+                mineCave.EnteredCave += OnMineCave;
+                mineCave.Rising += OnMineRising;
+                mineCave.NearSurface += OnMineNearSurface;
+                mineCave.Closed += OnMineClosed;
+                mineCave.Covered += HideHatch; // 土の床が広がりきってから、その下でハッチを消す
+                mineCave.GemBroken += OnGemBroken;
             }
             player.DebugRequested += StartDebug; // X ボタン長押しでデバッグモード
             player.ResetRequested += ResetToTitle; // A ボタン長押しで最初に戻る
@@ -314,6 +332,7 @@ namespace ShootingGallery
                 if (WesternActive && westernTrain.TimeLeft <= 0f) EndWestern();
                 if (SpaceActive && spaceStage.TimeLeft <= 0f) EndSpace();
                 if (GhostActive && ghostManor.TimeLeft <= 0f) EndGhost();
+                if (MineActive && mineCave.TimeLeft <= 0f) EndMine();
                 if (timeLeft <= 0f) EndRound();
             }
 
@@ -354,6 +373,7 @@ namespace ShootingGallery
             h = Mix(h, WesternActive, WesternActive ? Mathf.CeilToInt(westernTrain.TimeLeft) * 1000 + westernTrain.Downed : 0);
             h = Mix(h, SpaceActive, SpaceActive ? Mathf.CeilToInt(spaceStage.TimeLeft) * 1000 + spaceStage.Hits : 0);
             h = Mix(h, GhostActive, GhostActive ? Mathf.CeilToInt(ghostManor.TimeLeft) * 1000 + ghostManor.Hits : 0);
+            h = Mix(h, MineActive, MineActive ? Mathf.CeilToInt(mineCave.TimeLeft) * 1000 + mineCave.Hits : 0);
             return h;
         }
 
@@ -382,7 +402,8 @@ namespace ShootingGallery
                     string western = WesternActive ? $"   WEST {Mathf.CeilToInt(westernTrain.TimeLeft)}  DOWN {westernTrain.Downed}" : "";
                     string space = SpaceActive ? $"   SPACE {Mathf.CeilToInt(spaceStage.TimeLeft)}  HIT {spaceStage.Hits}" : "";
                     string ghost = GhostActive ? $"   GHOST {Mathf.CeilToInt(ghostManor.TimeLeft)}  BUSTED {ghostManor.Hits}" : "";
-                    ninja += kaiju + casino + western + space + ghost;
+                    string mine = MineActive ? $"   MINE {Mathf.CeilToInt(mineCave.TimeLeft)}  DUG {mineCave.Hits}" : "";
+                    ninja += kaiju + casino + western + space + ghost + mine;
                     int secs = (int)elapsed;
                     string time = DebugMode ? $"DEBUG {secs / 60}:{secs % 60:00}" : Endless ? $"ENDLESS {secs / 60}:{secs % 60:00}" : $"TIME {Mathf.CeilToInt(Mathf.Max(0f, timeLeft))}";
                     hudText.text = $"SCORE {Score}   STAGE {Stage + 1}\n{time}{fever}{deluxe}{sniperShots}{mg}{naval}{sky}{ninja}";
@@ -466,6 +487,7 @@ namespace ShootingGallery
             if (WesternActive) EndWestern();
             if (SpaceActive) EndSpace();
             if (GhostActive) EndGhost();
+            if (MineActive) EndMine();
             if (IsFever) EndFever();
             if (DeluxeActive) EndDeluxe(); // 普通のメイン屋台に戻してからタイトルへ (身長の的は普通のメイン屋台にある)
             if (bonusStage != null) bonusStage.Close();
@@ -691,6 +713,15 @@ namespace ShootingGallery
                 case TargetKind.Ghost:
                     popupColor = new Color(0.75f, 0.5f, 1f);
                     RequestMode(target); // 順番待ちに入れる (他のモードの途中なら、終わってから始まる)
+                    break;
+                case TargetKind.Mine:
+                    popupColor = new Color(1f, 0.75f, 0.35f);
+                    RequestMode(target); // 順番待ちに入れる (他のモードの途中なら、終わってから始まる)
+                    break;
+                case TargetKind.MineObject:
+                    popupColor = target.points >= 500 ? new Color(1f, 0.85f, 0.35f) : new Color(0.7f, 0.95f, 1f);
+                    Sfx.Play(target.points >= 300 ? "bonus" : "hit");
+                    if (mineCave != null && target.GetComponentInParent<MineCart>() != null) mineCave.RegisterCartHit(); // 宝石は MineGem が数える
                     break;
                 case TargetKind.GhostSpook:
                     popupColor = target.points >= 500 ? new Color(1f, 0.85f, 0.35f) : new Color(0.8f, 0.6f, 1f);

@@ -64,7 +64,34 @@ namespace ShootingGallery
             Launch(go, origin, dir, speed, range, mask);
         }
 
-        string poolKey = "Shuriken"; // FxPool にしまう時の種類 (Shuriken / Dart)
+        /// <summary>
+        /// つるはしを投げる (発掘モード)。飛び方と刺さり方は手裏剣と同じで、見た目と回り方だけが違う:
+        /// 木の柄の先に、両側へ反った鉄の頭。縦にくるくる回りながら飛ぶ (少し大きめ)。
+        /// </summary>
+        public static void SpawnPickaxe(Vector3 origin, Vector3 dir, float speed, float range, Material handleMat, Material headMat, LayerMask mask)
+        {
+            var go = FxPool.Get("Pickaxe", () =>
+            {
+                var g = new GameObject("Pickaxe");
+                var s = g.AddComponent<Shuriken>();
+                s.poolKey = "Pickaxe";
+                s.spinSpeed = 900f;
+                s.spinAxis = Vector3.right; // 縦回り
+                s.spin = new GameObject("Spin").transform;
+                s.spin.SetParent(g.transform, false);
+                Part(PrimitiveType.Cylinder, s.spin, Quaternion.identity, new Vector3(0.025f, 0.14f, 0.025f), handleMat, new Vector3(0f, -0.04f, 0f)); // 柄
+                foreach (float side in new[] { -1f, 1f }) // 頭 (前後に反ったとがり)
+                {
+                    Part(PrimitiveType.Cube, s.spin, Quaternion.Euler(side * 12f, 0f, 0f), new Vector3(0.03f, 0.03f, 0.13f), headMat, new Vector3(0f, 0.09f, side * 0.06f));
+                    Part(PrimitiveType.Cube, s.spin, Quaternion.Euler(side * 35f, 0f, 0f), new Vector3(0.02f, 0.02f, 0.06f), headMat, new Vector3(0f, 0.065f, side * 0.135f));
+                }
+                return g;
+            });
+            Launch(go, origin, dir, speed, range, mask);
+        }
+
+        string poolKey = "Shuriken"; // FxPool にしまう時の種類 (Shuriken / Dart / Pickaxe)
+        Vector3 spinAxis = Vector3.up;
 
         // 使い回しの1本を、origin から dir へ飛ばし始める
         static void Launch(GameObject go, Vector3 origin, Vector3 dir, float speed, float range, LayerMask mask)
@@ -98,7 +125,7 @@ namespace ShootingGallery
             float dt = Time.deltaTime;
             float step = velocity.magnitude * dt;
             Vector3 dir = velocity.normalized;
-            if (spinSpeed != 0f) spin.Rotate(0f, spinSpeed * dt, 0f, Space.Self);
+            if (spinSpeed != 0f) spin.Rotate(spinAxis * (spinSpeed * dt), Space.Self);
 
             if (Physics.SphereCast(transform.position, Radius, dir, out var hit, step, mask, QueryTriggerInteraction.Ignore))
             {

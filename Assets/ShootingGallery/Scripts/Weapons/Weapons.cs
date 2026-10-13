@@ -2,7 +2,7 @@ using UnityEngine;
 
 namespace ShootingGallery
 {
-    public enum WeaponType { Handgun = 0, MachineGun = 1, Shotgun = 2, Bomb = 3, Sniper = 4, Bazooka = 5, Shuriken = 6, FireBall = 7, Dart = 8, Revolver = 9, Missile = 10, Flashlight = 11 }
+    public enum WeaponType { Handgun = 0, MachineGun = 1, Shotgun = 2, Bomb = 3, Sniper = 4, Bazooka = 5, Shuriken = 6, FireBall = 7, Dart = 8, Revolver = 9, Missile = 10, Flashlight = 11, Pickaxe = 12 }
 
     public struct WeaponDef
     {
@@ -48,6 +48,8 @@ namespace ShootingGallery
                     return new WeaponDef { displayName = "REVOLVER", fireInterval = 0.22f, automatic = false, pellets = 1, spreadDeg = 0f, range = 60f, magazine = 6, reloadTime = 1.6f };
                 case WeaponType.Missile: // 宇宙モード専用。ミサイルが煙を引いてまっすぐ速く飛び、当たった所で爆発する
                     return new WeaponDef { displayName = "MISSILE", fireInterval = 0.4f, automatic = false, pellets = 1, projectile = true, projectileSpeed = 26f, blastRadius = 1.5f, projectileGravity = 0f };
+                case WeaponType.Pickaxe: // 発掘モード専用。つるはしを縦にくるくる回しながら投げる。押しっぱなしで次々に投げられる (マシンガンほど速くない。手裏剣と同じく、当たった所に刺さる)。白いレーザーで狙う
+                    return new WeaponDef { displayName = "PICKAXE", fireInterval = 0.15f, automatic = true, pellets = 1, range = 35f, projectileSpeed = 19f };
                 case WeaponType.Flashlight: // 幽霊モード専用。トリガーを引いている間だけ光り、照らした的を倒す。電池が減り、使わないと回復する (GunController)
                     return new WeaponDef { displayName = "FLASHLIGHT", fireInterval = 0.1f, automatic = true, pellets = 1, range = 25f };
                 default:

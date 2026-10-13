@@ -34,6 +34,8 @@ namespace ShootingGallery
         public AudioClip ghostWail, ghostPop;
         [Header("懐中電灯 (カチッと点く・消える音 / 電池が切れる音)")]
         public AudioClip click, powerDown;
+        [Header("発掘モード (ザクッザクッと穴を掘る音)")]
+        public AudioClip dig;
         [Header("同時に鳴る音の抑え方")]
         [Tooltip("同じ種類の音がこの秒数以内に続いたら、2回目以降は鳴らさない (複数の的を同時に倒した時など)")]
         public float sameSoundGap = 0.07f;
@@ -101,6 +103,7 @@ namespace ShootingGallery
                 () => { if (sandstorm == null) sandstorm = Wind(); }, // ゴォーッ (砂嵐)
                 () => { if (ghostWail == null) ghostWail = GhostWail(); }, // ひゅ～どろどろ…
                 () => { if (ghostPop == null) ghostPop = GhostPop(); }, // ぽわん
+                () => { if (dig == null) dig = Dig(); }, // ザクッ ザクッ ザクッ
                 () => { if (blackout == null) blackout = Blackout(); }, // バツン
                 () => { if (drumroll == null) drumroll = Drumroll(3.6f); }, // ドロロロロ…
                 () => { if (crash == null) crash = Noise("Crash", 2f, 2.2f, 1.6f, 0.9f); }, // ジャーン (シンバル)
@@ -146,9 +149,10 @@ namespace ShootingGallery
                      : type == WeaponType.Bomb || type == WeaponType.Bazooka || type == WeaponType.FireBall ? instance.bombShot
                      : type == WeaponType.Missile ? instance.missile
                      : type == WeaponType.Sniper ? instance.sniperShot
-                     : type == WeaponType.Shuriken || type == WeaponType.Dart ? instance.shurikenThrow
+                     : type == WeaponType.Shuriken || type == WeaponType.Dart || type == WeaponType.Pickaxe ? instance.shurikenThrow
                      : instance.handgunShot;
-            instance.PlayLimited("shot", clip, 0.5f, fade: false); // 二丁拳銃で左右同時に撃っても1発分の音
+            // 二丁拳銃で左右同時に撃っても1発分の音。つるはしは押しっぱなしで次々に投げるので、続けて聞いても気にならない小ささに
+            instance.PlayLimited("shot", clip, type == WeaponType.Pickaxe ? 0.16f : 0.5f, fade: false);
         }
 
         // 音の種類ごとの、最後に鳴らした時刻と、続けて鳴った回数
@@ -225,6 +229,7 @@ namespace ShootingGallery
                 "ghostpop" => instance.ghostPop,
                 "click" => instance.click,
                 "powerdown" => instance.powerDown,
+                "dig" => instance.dig,
                 "warpin" => instance.warpIn,
                 "warpout" => instance.warpOut,
                 _ => null
@@ -496,6 +501,34 @@ namespace ShootingGallery
                 data[i] = Mathf.Clamp(wail * 0.32f + roll * 0.5f, -1f, 1f);
             }
             var clip = AudioClip.Create("GhostWail", n, 1, Rate, false);
+            clip.SetData(data, 0);
+            return clip;
+        }
+
+        /// <summary>穴を掘る音: 土にスコップが刺さる「ザクッ」を3回 (低いドスッと、土がこぼれるザラザラ)</summary>
+        static AudioClip Dig()
+        {
+            const float Length = 1.3f;
+            int n = (int)(Rate * Length);
+            var data = new float[n];
+            var rng = new System.Random(31);
+            float low = 0f, mid = 0f;
+            for (int i = 0; i < n; i++)
+            {
+                float t = i / (float)Rate;
+                float white = (float)rng.NextDouble() * 2f - 1f;
+                low = Mathf.Lerp(low, white, 0.04f);
+                mid = Mathf.Lerp(mid, white, 0.3f);
+                float sum = 0f;
+                for (int k = 0; k < 3; k++)
+                {
+                    float s = t - k * 0.4f;
+                    if (s < 0f) continue;
+                    sum += low * 6f * Mathf.Exp(-s * 25f) + mid * 0.5f * Mathf.Exp(-s * 9f);
+                }
+                data[i] = Mathf.Clamp(sum, -1f, 1f);
+            }
+            var clip = AudioClip.Create("Dig", n, 1, Rate, false);
             clip.SetData(data, 0);
             return clip;
         }

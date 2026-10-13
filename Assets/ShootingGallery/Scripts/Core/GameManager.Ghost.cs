@@ -28,9 +28,9 @@ namespace ShootingGallery
         {
             if (DebugClearFor(() => StartGhost(yaw))) return;
             if (ghostManor == null || ChallengeActive || DeluxeActive || (bonusStage != null && bonusStage.IsBusy)) return;
-            HideHatch(); // 床下のハッチはすぐに小さくなって消える
+            SetFlatFloor(true); // ハッチが小さくなって消え、穴がふさがって平らな床になる
             PutAwayStalls(false);
-            ghostManor.dropDelay = StallsAwayTime; // 屋台が沈みきってから闇に包まれる
+            ghostManor.dropDelay = StallsAwayTime; // 屋台が沈みきって平らな床になってから、土に変わり始める
             ghostManor.Begin(yaw);
             player.GiveWeapon(WeaponType.Flashlight, ghostManor.duration);
             Sfx.Play("stageup");
@@ -38,19 +38,19 @@ namespace ShootingGallery
         }
 
         /// <summary>
-        /// 幽霊モードの時間切れ: また紫の闇に包まれ、いつもの地面へ戻す。屋台と的は闇で何も見えない間に並べておき (OnGhostLeft)、
-        /// 晴れた時にはもう普通に遊べるようにする
+        /// 幽霊モードの時間切れ: 上の部品から崩れて消え、土が足元へ縮んで平らな床に戻る。そのあと穴のふちとハッチが出て、屋台がせり上がる (OnGhostClosed)。
+        /// ラウンドの終わり・リセットの時は、その場ですぐ全部消す
         /// </summary>
         void EndGhost()
         {
             if (!GhostActive) return;
             int hits = ghostManor.Hits;
-            ghostManor.End();
-            if (player.Weapon == WeaponType.Flashlight) player.ResetWeapon();
             ghostReturnStalls.Clear();
             ghostReturnStalls.AddRange(stageStalls);
-            HoldStallsFor(ghostManor.CloseTime); // 屋台を並べるまで、屋台の拡張・入れ替えを待たせる
             stageStalls.Clear();
+            HoldStallsFor(ghostManor.CloseTime + stallMoveDuration + 0.2f); // 屋台がせり上がりきるまで、屋台の拡張・入れ替えを待たせる
+            ghostManor.End(State != GameState.Playing);
+            if (player.Weapon == WeaponType.Flashlight) player.ResetWeapon();
             if (State == GameState.Playing)
             {
                 Sfx.Play(hits > 0 ? "complete" : "end");
@@ -58,30 +58,32 @@ namespace ShootingGallery
             }
         }
 
-        // 闇の中で幽霊の世界へ来た: 紫の空・紫の霧・月明かりの暗さにすぐ切り替える (晴れた時にはもう墓場)
+        // 床が土に変わり始めた: 空・霧をだんだん紫に、明るさを月明かりにしていく (土が広がり、木やお化け屋敷が組み上がる間に)
         void OnGhostArrived()
         {
             RenderSettings.fogStartDistance = 25f;  // お化け屋敷はくっきり、遠くの月は紫にかすむ
             RenderSettings.fogEndDistance = 140f;
-            FadeAmbience(ghostFogColor, ghostAmbient, ghostSkyColor, 0.05f);
-            FadeSun(sunIntensity * 0.55f, 0.05f); // 月明かり
+            FadeAmbience(ghostFogColor, ghostAmbient, ghostSkyColor, 2.5f);
+            FadeSun(sunIntensity * 0.55f, 2.5f); // 月明かり
             if (State == GameState.Playing) ShowMessage("GHOST MODE!!\nSHOOT THE SPOOKS!", 3f, new Color(0.75f, 0.5f, 1f));
         }
 
-        // 闇で何も見えない間にいつもの地面へ戻った: 夜祭りの空と霧に戻し、沈めておいた屋台と的をその場にすぐ並べる (晴れた時にはもう遊べる)。
-        // 待っている間にフィーバーが終わったフィーバー屋台は出さない
+        // 崩れ始めた: 夜祭りの空と霧へだんだん戻していく
         void OnGhostLeft()
         {
             RenderSettings.fogStartDistance = normalFogStart;
             RenderSettings.fogEndDistance = normalFogEnd;
-            FadeAmbience(normalFogColor, normalAmbient, normalSkyColor, 0.05f);
-            FadeSun(sunIntensity, 0.05f);
-            ShowHatch();
-            foreach (var s in ghostReturnStalls)
-            {
-                bool show = s == mainStall || (IsFever && activeFeverStalls.Contains(s));
-                if (show) s.ShowImmediate(State == GameState.Playing);
-            }
+            float t = State == GameState.Playing ? ghostManor.CloseTime : 0.05f;
+            FadeAmbience(normalFogColor, normalAmbient, normalSkyColor, t);
+            FadeSun(sunIntensity, t);
+        }
+
+        // 平らな床に戻った: 穴のふちとハッチが出て、沈めておいた屋台がせり上がる (待っている間にフィーバーが終わった屋台は出さない)。
+        // タイトルへ戻る途中なら床は平らなまま (屋台だけ戻す)
+        void OnGhostClosed()
+        {
+            if (State == GameState.Playing) SetFlatFloor(false);
+            StartCoroutine(RiseStallsAfter(new List<Stall>(ghostReturnStalls), 0f));
             ghostReturnStalls.Clear();
         }
 
