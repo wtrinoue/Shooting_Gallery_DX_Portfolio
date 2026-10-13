@@ -10,7 +10,7 @@ namespace ShootingGallery
     /// プレイヤー。中心から移動せず、見回して撃つだけ。
     /// 右手トリガーで右の銃を撃つ。フィーバー中の左手の銃は左手トリガーで撃つ。
     /// 右手の A ボタンを長押しすると (インジケーターがたまりきると) 最初に戻る。B ボタンの長押しでエンドレスモード、左手の X ボタンの長押しでデバッグモードが始まる。
-    /// VRデバイスが無い時はマウスでテストできる (右ドラッグで視点, 左クリック/Spaceで右の銃, Fキーで左の銃, 1 キー長押しでデバッグ, 2 キー長押しでエンドレス, 3 キー長押しでリセット。VR のボタンと同じく長押しで発動)。
+    /// VRデバイスが無い時はマウスでテストできる (右ドラッグか WASD で視点, 左クリック/Spaceで右の銃, Fキーで左の銃, 1 キー長押しでデバッグ, 2 キー長押しでエンドレス, 3 キー長押しでリセット。VR のボタンと同じく長押しで発動)。
     /// </summary>
     public class PlayerRig : MonoBehaviour
     {
@@ -29,6 +29,8 @@ namespace ShootingGallery
         [Tooltip("視点を合わせる身長 (cm)。誰が遊んでも、この身長の人と同じ高さから屋台が見える")]
         public int referenceHeightCm = 180;
         public float mouseSensitivity = 0.15f;
+        [Tooltip("PC: WASD キーで視点を回す速さ (度/秒)。A / D で左右、W / S で上下")]
+        public float keyLookSpeed = 90f;
 
         [Header("リセット (右手の A ボタン長押し)")]
         [Tooltip("最初に戻るまで押し続ける秒数")]
@@ -297,6 +299,21 @@ namespace ShootingGallery
                 yaw += d.x;
                 pitch = Mathf.Clamp(pitch - d.y, -80f, 80f);
                 head.transform.localRotation = Quaternion.Euler(pitch, yaw, 0f);
+            }
+
+            // WASD キーでも視点を回す (右ドラッグと同時に使ってもよい)
+            var kb = Keyboard.current;
+            if (kb != null)
+            {
+                float h = (kb.dKey.isPressed ? 1f : 0f) - (kb.aKey.isPressed ? 1f : 0f);
+                float v = (kb.wKey.isPressed ? 1f : 0f) - (kb.sKey.isPressed ? 1f : 0f);
+                if (h != 0f || v != 0f)
+                {
+                    float step = keyLookSpeed * Time.deltaTime;
+                    yaw += h * step;
+                    pitch = Mathf.Clamp(pitch - v * step, -80f, 80f);
+                    head.transform.localRotation = Quaternion.Euler(pitch, yaw, 0f);
+                }
             }
 
             // 銃はマウスカーソルの先を狙う
