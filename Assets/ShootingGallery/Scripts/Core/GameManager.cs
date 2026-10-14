@@ -108,6 +108,15 @@ namespace ShootingGallery
         public Color mineFogColor = new Color(0.04f, 0.03f, 0.025f);
         public Color mineAmbient = new Color(0.24f, 0.2f, 0.18f); // 暗め (ランプと結晶の明かりで照らされた所が浮かび上がるように)
 
+        [Header("Festival (夏祭りモード: 提灯の的を撃つと、屋台が射的・輪投げ・金魚すくい・食べ物の4軒に入れ替わる。見ている屋台で武器が変わり、スコアがお金になる)")]
+        public FestivalStage festivalStage;
+        [Tooltip("夏祭りモードの間だけ HUD に出す、お金 (= スコア) の大きな表示 (スコアなどの文字とは別)")]
+        public GameObject moneyPanel;
+        public TextMesh moneyText;
+        [Tooltip("お金の表示の下の、夏祭りモードの残り時間 (秒数と、減っていくバー。左はしが原点)")]
+        public TextMesh festivalTimeText;
+        public Transform festivalTimeBar;
+
         [Header("Rules")]
         public float roundDuration = 90f;
         public float feverDuration = 20f;
@@ -142,7 +151,7 @@ namespace ShootingGallery
         float stallsReturnUntil; // 屋台が元の場所に戻りきる時刻
         /// <summary>屋台が戻りきるまで (今から seconds 秒) 屋台の拡張・入れ替えを待たせる</summary>
         void HoldStallsFor(float seconds) => stallsReturnUntil = Mathf.Max(stallsReturnUntil, Time.time + seconds);
-        public bool ChallengeActive => SniperActive || MachineGunChallengeActive || NavalActive || SkyActive || NinjaActive || KaijuActive || CasinoActive || WesternActive || SpaceActive || GhostActive || MineActive;
+        public bool ChallengeActive => SniperActive || MachineGunChallengeActive || NavalActive || SkyActive || NinjaActive || KaijuActive || CasinoActive || WesternActive || SpaceActive || GhostActive || MineActive || FestivalActive;
         /// <summary>海戦モード中か (チャレンジの1つとして扱う: この間はフィーバーの残り時間と屋台の拡張を止め、他のチャレンジや豪華屋台チェンジは出さない)</summary>
         public bool NavalActive => navalBattle != null && navalBattle.IsActive;
         readonly List<Stall> navalStalls = new List<Stall>(); // 海戦モードのために沈めた屋台
@@ -159,6 +168,7 @@ namespace ShootingGallery
         public bool SpaceActive => spaceStage != null && spaceStage.IsActive;
         public bool GhostActive => ghostManor != null && ghostManor.IsActive;
         public bool MineActive => mineCave != null && mineCave.IsActive;
+        public bool FestivalActive => festivalStage != null && festivalStage.IsActive;
         readonly List<Stall> stageStalls = new List<Stall>(); // 怪獣 / カジノ / 西部劇モードのために縮めた・沈めた屋台 (同時には1つしか動かない)
 
         /// <summary>エンドレスモード中か (B ボタン長押しで始まる。時間切れがなく、A ボタン長押しで終わる)</summary>
@@ -175,7 +185,7 @@ namespace ShootingGallery
         static readonly TargetKind[][] DebugKindsByStall =
         {
             new[] { TargetKind.MachineGun, TargetKind.Shotgun, TargetKind.Bomb },
-            new[] { TargetKind.Sniper, TargetKind.MachineGunChallenge },
+            new[] { TargetKind.Sniper, TargetKind.MachineGunChallenge, TargetKind.Festival },
             new[] { TargetKind.Explosive, TargetKind.BlueOrb, TargetKind.Mine },
             new[] { TargetKind.Deluxe, TargetKind.Kaiju, TargetKind.Space },
             new[] { TargetKind.Naval, TargetKind.Sky, TargetKind.Western },
@@ -333,6 +343,7 @@ namespace ShootingGallery
                 if (SpaceActive && spaceStage.TimeLeft <= 0f) EndSpace();
                 if (GhostActive && ghostManor.TimeLeft <= 0f) EndGhost();
                 if (MineActive && mineCave.TimeLeft <= 0f) EndMine();
+                UpdateFestival(); // 見ている屋台の武器に持ち替える / 時間切れ
                 if (timeLeft <= 0f) EndRound();
             }
 
@@ -343,6 +354,70 @@ namespace ShootingGallery
             }
 
             UpdateHud();
+            UpdateMoneyPanel();
+        }
+
+        // ---- 夏祭りモードのお金の表示 ----
+        int shownMoney = -1;
+        float moneyPulse;   // お金が増えた / 減った時に、文字がふくらんで色が変わる (1 → 0)
+        bool moneyGained;
+        static readonly Color MoneyColor = new Color(1f, 0.85f, 0.3f);
+
+        int shownFestivalSeconds = -1;
+        int timeBarState = -1; // バーの色 (0 = 緑, 1 = 赤)。変わった時だけ渡す
+        Renderer timeBarRenderer;
+        MaterialPropertyBlock timeBarBlock;
+
+        // 夏祭りの残り時間: バーが右から減り、秒数が出る。残り 10 秒を切ると赤くなる
+        void UpdateFestivalTime()
+        {
+            float left = festivalStage.TimeLeft, ratio = Mathf.Clamp01(left / Mathf.Max(1f, festivalStage.duration));
+            bool hurry = left <= 10f;
+            if (festivalTimeBar != null)
+            {
+                festivalTimeBar.localScale = new Vector3(Mathf.Max(0.001f, ratio), 1f, 1f);
+                if (timeBarRenderer == null) timeBarRenderer = festivalTimeBar.GetComponentInChildren<Renderer>();
+                int state = hurry ? 1 : 0;
+                if (timeBarRenderer != null && state != timeBarState)
+                {
+                    timeBarState = state;
+                    if (timeBarBlock == null) timeBarBlock = new MaterialPropertyBlock();
+                    timeBarBlock.SetColor("_BaseColor", hurry ? new Color(1f, 0.3f, 0.25f) : new Color(0.45f, 0.95f, 0.55f));
+                    timeBarRenderer.SetPropertyBlock(timeBarBlock);
+                }
+            }
+            int secs = Mathf.CeilToInt(left);
+            if (festivalTimeText == null || secs == shownFestivalSeconds) return;
+            shownFestivalSeconds = secs;
+            festivalTimeText.text = $"{secs}s";
+            festivalTimeText.color = hurry ? new Color(1f, 0.4f, 0.35f) : Color.white;
+        }
+
+        void UpdateMoneyPanel()
+        {
+            if (moneyPanel == null || moneyText == null) return;
+            bool show = FestivalActive && State == GameState.Playing;
+            if (moneyPanel.activeSelf != show) moneyPanel.SetActive(show);
+            if (!show)
+            {
+                shownMoney = shownFestivalSeconds = -1;
+                return;
+            }
+            if (Score != shownMoney)
+            {
+                if (shownMoney >= 0)
+                {
+                    moneyPulse = 1f;
+                    moneyGained = Score > shownMoney;
+                }
+                shownMoney = Score;
+                moneyText.text = "¥" + Score.ToString("N0", System.Globalization.CultureInfo.InvariantCulture);
+            }
+            UpdateFestivalTime();
+            if (moneyPulse <= 0f) return;
+            moneyPulse = Mathf.Max(0f, moneyPulse - Time.deltaTime * 2.5f);
+            moneyText.transform.localScale = Vector3.one * (1f + 0.35f * moneyPulse);
+            moneyText.color = Color.Lerp(MoneyColor, moneyGained ? new Color(0.4f, 1f, 0.5f) : new Color(1f, 0.35f, 0.3f), moneyPulse);
         }
 
         // HUD に出す数字の組み合わせ (前のフレームと同じなら文字を作り直さない。文字の作り直しと文字列のごみを毎フレーム出さないように)
@@ -374,6 +449,7 @@ namespace ShootingGallery
             h = Mix(h, SpaceActive, SpaceActive ? Mathf.CeilToInt(spaceStage.TimeLeft) * 1000 + spaceStage.Hits : 0);
             h = Mix(h, GhostActive, GhostActive ? Mathf.CeilToInt(ghostManor.TimeLeft) * 1000 + ghostManor.Hits : 0);
             h = Mix(h, MineActive, MineActive ? Mathf.CeilToInt(mineCave.TimeLeft) * 1000 + mineCave.Hits : 0);
+            h = Mix(h, FestivalActive, FestivalActive ? Mathf.CeilToInt(festivalStage.TimeLeft) * 1000 + festivalStage.Hits : 0);
             return h;
         }
 
@@ -403,10 +479,12 @@ namespace ShootingGallery
                     string space = SpaceActive ? $"   SPACE {Mathf.CeilToInt(spaceStage.TimeLeft)}  HIT {spaceStage.Hits}" : "";
                     string ghost = GhostActive ? $"   GHOST {Mathf.CeilToInt(ghostManor.TimeLeft)}  BUSTED {ghostManor.Hits}" : "";
                     string mine = MineActive ? $"   MINE {Mathf.CeilToInt(mineCave.TimeLeft)}  DUG {mineCave.Hits}" : "";
-                    ninja += kaiju + casino + western + space + ghost + mine;
+                    string festival = FestivalActive ? $"   FESTIVAL {Mathf.CeilToInt(festivalStage.TimeLeft)}  GOT {festivalStage.Hits}" : "";
+                    ninja += kaiju + casino + western + space + ghost + mine + festival;
                     int secs = (int)elapsed;
                     string time = DebugMode ? $"DEBUG {secs / 60}:{secs % 60:00}" : Endless ? $"ENDLESS {secs / 60}:{secs % 60:00}" : $"TIME {Mathf.CeilToInt(Mathf.Max(0f, timeLeft))}";
-                    hudText.text = $"SCORE {Score}   STAGE {Stage + 1}\n{time}{fever}{deluxe}{sniperShots}{mg}{naval}{sky}{ninja}";
+                    string score = FestivalActive ? "" : $"SCORE {Score}   "; // 夏祭りの世界ではスコアがお金 (お金はその上の大きな表示に出す)
+                    hudText.text = $"{score}STAGE {Stage + 1}\n{time}{fever}{deluxe}{sniperShots}{mg}{naval}{sky}{ninja}";
                     break;
                 case GameState.Result:
                     hudText.text = $"SCORE {Score}\nHIGH SCORE {highScore}";
@@ -488,6 +566,7 @@ namespace ShootingGallery
             if (SpaceActive) EndSpace();
             if (GhostActive) EndGhost();
             if (MineActive) EndMine();
+            if (FestivalActive) EndFestival();
             if (IsFever) EndFever();
             if (DeluxeActive) EndDeluxe(); // 普通のメイン屋台に戻してからタイトルへ (身長の的は普通のメイン屋台にある)
             if (bonusStage != null) bonusStage.Close();
@@ -576,6 +655,13 @@ namespace ShootingGallery
             {
                 var wheel = target.GetComponent<RouletteWheel>();
                 target.points = wheel != null ? wheel.PointsAt(point) : 10;
+            }
+
+            // 夏祭りの食べ物: お金 (スコア) を払って買う (点数は入らない)
+            if (target.kind == TargetKind.FestivalFood)
+            {
+                BuyFood(target, point);
+                return;
             }
 
             Score += target.points;
@@ -723,6 +809,29 @@ namespace ShootingGallery
                     Sfx.Play(target.points >= 300 ? "bonus" : "hit");
                     if (mineCave != null && target.GetComponentInParent<MineCart>() != null) mineCave.RegisterCartHit(); // 宝石は MineGem が数える
                     break;
+                case TargetKind.Festival:
+                    popupColor = new Color(1f, 0.55f, 0.35f);
+                    RequestMode(target); // 順番待ちに入れる (他のモードの途中なら、終わってから始まる)
+                    break;
+                case TargetKind.FestivalPrize: // 射的の景品が後ろへ倒れて落ちた
+                    popupColor = target.points >= 500 ? new Color(1f, 0.85f, 0.35f) : new Color(1f, 0.7f, 0.45f);
+                    Sfx.Play(target.points >= 300 ? "bonus" : "hit");
+                    if (target.points >= 500) ShowMessage($"BIG PRIZE!!\n+{target.points}", 1.5f, popupColor);
+                    if (festivalStage != null) festivalStage.RegisterHit();
+                    break;
+                case TargetKind.FestivalRing: // 輪投げの輪が杭にかかった
+                    popupColor = target.points >= 500 ? new Color(1f, 0.85f, 0.35f) : new Color(1f, 0.55f, 0.45f);
+                    Sfx.Play("bonus");
+                    if (target.points >= 500) ShowMessage($"RINGER!!\n+{target.points}", 1.5f, popupColor);
+                    if (festivalStage != null) festivalStage.RegisterHit();
+                    break;
+                case TargetKind.FestivalFish: // 金魚をすくった
+                    popupColor = target.points >= 1000 ? new Color(1f, 0.85f, 0.25f) : new Color(1f, 0.55f, 0.35f);
+                    Sfx.Play(target.points >= 300 ? "bonus" : "hit");
+                    if (target.points >= 1000) ShowMessage($"GOLDEN FISH!!\n+{target.points}", 2f, popupColor);
+                    else if (target.points >= 500) ShowMessage($"BIG FISH!\n+{target.points}", 1.5f, popupColor);
+                    if (festivalStage != null) festivalStage.RegisterHit();
+                    break;
                 case TargetKind.GhostSpook:
                     popupColor = target.points >= 500 ? new Color(1f, 0.85f, 0.35f) : new Color(0.8f, 0.6f, 1f);
                     Sfx.Play(target.points >= 500 ? "bonus" : "hit");
@@ -744,7 +853,8 @@ namespace ShootingGallery
             float popupSize = 0.1f + 0.1f * Mathf.Clamp01(target.points / 500f); // 高得点ほど大きく
             if (Camera.main != null) // 遠く (UFO など) でも読めるように距離に応じて拡大
                 popupSize *= Mathf.Max(1f, Vector3.Distance(Camera.main.transform.position, point) / 3f);
-            ScorePopup.Spawn(font, point + Vector3.up * 0.1f, $"+{target.points}", popupColor, popupSize);
+            // 夏祭りの世界では、取った点数がそのままお金になったことが分かるように「+¥」で出す
+            ScorePopup.Spawn(font, point + Vector3.up * 0.1f, FestivalActive ? $"+¥{target.points}" : $"+{target.points}", popupColor, popupSize);
         }
 
         /// <summary>的以外から点数を入れる (スロットの出目など)。pos に点数を浮かべる</summary>

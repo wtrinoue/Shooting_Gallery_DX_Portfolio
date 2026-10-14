@@ -176,7 +176,7 @@ namespace ShootingGallery
         // ------------------------------------------------------------------
 
         /// <summary>
-        /// 列車 (+Z が前): 機関車 (黒いボイラー・煙突・運転室・排障器・前照灯・赤い動輪) → 炭水車 (石炭) → 同じ形の客車3両
+        /// 列車 (+Z が前): 機関車 (BuildSteamLocomotive) → 炭水車 (BuildTender: 山盛りの石炭) → 同じ形の客車3両
         /// (窓が光る緑の車体と赤い丸屋根)。プレイヤーは1両目の屋根の上の板の道に立つ。
         /// </summary>
         Transform BuildTrain(Transform parent, out List<Transform> wheels, out Transform stack)
@@ -219,53 +219,281 @@ namespace ShootingGallery
                 Bogies(train, wheels, new[] { cz - 2.4f, cz + 2.4f }, black, red);
             }
 
-            // 炭水車 (z = 4 〜 8)
-            Prim(PrimitiveType.Cube, "Tender", train, new Vector3(0f, 0.55f, 6f), new Vector3(W - 0.2f, 1.7f, 3.8f), black);
-            Prim(PrimitiveType.Cube, "TenderTrim", train, new Vector3(0f, 1.42f, 6f), new Vector3(W - 0.1f, 0.06f, 3.9f), brass, false);
-            var coal = Mat("Coal", new Color(0.05f, 0.05f, 0.06f), null, false, 0.6f);
-            for (int i = 0; i < 14; i++)
-                Prim(PrimitiveType.Sphere, "Coal", train, new Vector3(Random.Range(-1f, 1f), 1.45f, 6f + Random.Range(-1.6f, 1.6f)), Vector3.one * Random.Range(0.25f, 0.45f), coal, false);
-            Bogies(train, wheels, new[] { 5f, 7f }, black, red);
+            var steelDark = Mat("Loco_Steel", new Color(0.25f, 0.25f, 0.27f), null, false, 0.6f);
+            BuildTender(train, wheels, W, black, red, brass, plank, steelDark);
+            BuildSteamLocomotive(train, wheels, W, black, red, brass, window, steelDark, out stack);
+            return trainRoot;
+        }
 
-            // 機関車 (z = 8.5 〜 18)
-            Prim(PrimitiveType.Cube, "LocoFrame", train, new Vector3(0f, -0.2f, 13.2f), new Vector3(W - 0.4f, 0.5f, 9.4f), red, false);
-            var boiler = Prim(PrimitiveType.Cylinder, "Boiler", train, new Vector3(0f, 1.0f, 13.8f), new Vector3(1.6f, 3f, 1.6f), black);
-            boiler.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-            var smokebox = Prim(PrimitiveType.Cylinder, "SmokeBox", train, new Vector3(0f, 1.0f, 16.9f), new Vector3(1.7f, 0.25f, 1.7f), Mat("Loco_Steel", new Color(0.25f, 0.25f, 0.27f), null, false, 0.6f), false);
-            smokebox.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-            foreach (float z in new[] { 11.8f, 14.2f, 16.4f })
+        /// <summary>
+        /// 炭水車 (z = 4 〜 8): 黒い車体に金の線と「WILD WEST R.R.」の文字。後ろ寄り (プレイヤー側) に水槽のふた・道具箱・はしご、
+        /// 前寄りの少し外へ開いた囲いの中に、いびつな石炭の塊が山盛りに積もっている
+        /// </summary>
+        void BuildTender(Transform train, List<Transform> wheels, float W, Material black, Material red, Material brass, Material plank, Material steelDark)
+        {
+            Prim(PrimitiveType.Cube, "Tender", train, new Vector3(0f, 0.55f, 6f), new Vector3(W - 0.2f, 1.7f, 3.8f), black);
+            Prim(PrimitiveType.Cube, "TenderFrame", train, new Vector3(0f, -0.42f, 6f), new Vector3(W - 0.5f, 0.26f, 4f), red, false);
+            Prim(PrimitiveType.Cube, "TenderTrim", train, new Vector3(0f, 1.42f, 6f), new Vector3(W - 0.1f, 0.06f, 3.9f), brass, false);
+            var gold = new Color(1f, 0.8f, 0.35f);
+            foreach (float s in new[] { -1f, 1f })
             {
-                var band = Prim(PrimitiveType.Cylinder, "BoilerBand", train, new Vector3(0f, 1.0f, z), new Vector3(1.64f, 0.04f, 1.64f), brass, false);
-                band.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+                // 石炭の囲い (少し外へ開いた板) と、その上の金の縁
+                var board = Prim(PrimitiveType.Cube, "CoalBoard", train, new Vector3(s * (W / 2f - 0.13f), 1.62f, 6.35f), new Vector3(0.06f, 0.42f, 3.1f), black, false);
+                board.transform.localRotation = Quaternion.Euler(0f, 0f, -s * 12f);
+                Prim(PrimitiveType.Cube, "CoalBoardTrim", train, new Vector3(s * (W / 2f - 0.085f), 1.83f, 6.35f), new Vector3(0.05f, 0.04f, 3.1f), brass, false);
+                // 車体の横の金の線と文字
+                foreach (float y in new[] { 1.12f, -0.05f })
+                    Prim(PrimitiveType.Cube, "TenderStripe", train, new Vector3(s * (W / 2f - 0.094f), y, 6f), new Vector3(0.012f, 0.05f, 3.6f), brass, false);
+                MakeText(train, "TenderLetter", "WILD WEST R.R.", new Vector3(s * (W / 2f - 0.08f), 0.55f, 6f), 0.3f, gold)
+                    .transform.localRotation = Quaternion.Euler(0f, -90f * s, 0f);
+                // 後ろのはしご
+                Prim(PrimitiveType.Cube, "LadderRail", train, new Vector3(s * 0.35f, 0.75f, 4.07f), new Vector3(0.04f, 1.3f, 0.04f), steelDark, false);
             }
-            Prim(PrimitiveType.Cylinder, "Stack", train, new Vector3(0f, 2.4f, 16.2f), new Vector3(0.45f, 0.65f, 0.45f), black, false);
-            Prim(PrimitiveType.Cylinder, "StackTop", train, new Vector3(0f, 3.1f, 16.2f), new Vector3(0.85f, 0.15f, 0.85f), black, false);
+            for (int k = 0; k < 4; k++)
+                Prim(PrimitiveType.Cube, "LadderRung", train, new Vector3(0f, 0.3f + k * 0.3f, 4.07f), new Vector3(0.7f, 0.03f, 0.03f), steelDark, false);
+            Prim(PrimitiveType.Cube, "CoalBoardFront", train, new Vector3(0f, 1.6f, 7.85f), new Vector3(W - 0.35f, 0.38f, 0.06f), black, false);
+            Prim(PrimitiveType.Cube, "CoalBulkhead", train, new Vector3(0f, 1.62f, 4.82f), new Vector3(W - 0.35f, 0.42f, 0.06f), black, false);
+            Prim(PrimitiveType.Cube, "CoalBulkheadTrim", train, new Vector3(0f, 1.84f, 4.82f), new Vector3(W - 0.3f, 0.04f, 0.08f), brass, false);
+            // 水槽のふた (丸いふたと取っ手) と道具箱
+            Prim(PrimitiveType.Cylinder, "WaterHatch", train, new Vector3(0.35f, 1.46f, 4.45f), new Vector3(0.5f, 0.04f, 0.5f), steelDark, false);
+            Prim(PrimitiveType.Cylinder, "WaterHatchRim", train, new Vector3(0.35f, 1.44f, 4.45f), new Vector3(0.56f, 0.03f, 0.56f), brass, false);
+            Prim(PrimitiveType.Cube, "WaterHatchHandle", train, new Vector3(0.35f, 1.52f, 4.45f), new Vector3(0.25f, 0.04f, 0.04f), brass, false);
+            Prim(PrimitiveType.Cube, "ToolBox", train, new Vector3(-0.6f, 1.53f, 4.45f), new Vector3(0.7f, 0.22f, 0.4f), plank, false);
+            Prim(PrimitiveType.Cube, "ToolBoxLid", train, new Vector3(-0.6f, 1.65f, 4.45f), new Vector3(0.74f, 0.03f, 0.44f), steelDark, false);
+
+            // 石炭の山 (いびつな塊をたくさん積み上げた1つのメッシュ)
+            var coal = new GameObject("CoalPile");
+            coal.transform.SetParent(train, false);
+            coal.transform.localPosition = new Vector3(0f, 1.4f, 6.35f);
+            coal.AddComponent<MeshFilter>().sharedMesh = CoalPileMesh(1.12f, 1.35f, 0.6f);
+            var coalRend = coal.AddComponent<MeshRenderer>();
+            coalRend.sharedMaterial = Mat("Coal_Lump", new Color(0.07f, 0.07f, 0.08f), null, false, 0.45f);
+            coalRend.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+
+            Bogies(train, wheels, new[] { 5f, 7f }, black, red);
+        }
+
+        /// <summary>
+        /// 機関車 (z = 8.5 〜 18.8): 黒いボイラー (金の帯・手すり・配管)、ダイヤモンド形の煙突、蒸気ドーム・砂箱・鐘・汽笛、
+        /// 煙室の扉と箱形の前照灯、横のシリンダーと主連棒、スポークと釣り合いおもりの付いた赤い動輪、すのこ状の排障器。
+        /// 運転室は後ろが開いていて、プレイヤーの方から火室の扉の明かりと圧力計が見える
+        /// </summary>
+        void BuildSteamLocomotive(Transform train, List<Transform> wheels, float W, Material black, Material red, Material brass, Material window, Material steelDark, out Transform stack)
+        {
+            var glow = Mat("Firebox_Glow", new Color(1f, 0.55f, 0.2f), new Color(2.2f, 0.8f, 0.15f));
+            var gaugeFace = Mat("Gauge_Face", new Color(0.95f, 0.93f, 0.85f));
+            float wheelY = CarRailTop + 0.75f; // 動輪の中心の高さ
+
+            // ---- 台枠・歩み板 ----
+            Prim(PrimitiveType.Cube, "LocoFrame", train, new Vector3(0f, -0.1f, 13.6f), new Vector3(1.4f, 0.5f, 8.6f), red, false);
+            foreach (float z in new[] { 12.6f, 15.2f })
+                Prim(PrimitiveType.Cube, "BoilerSaddle", train, new Vector3(0f, 0.25f, z), new Vector3(1.0f, 0.3f, 0.5f), black, false);
+            Prim(PrimitiveType.Cube, "BufferBeam", train, new Vector3(0f, -0.15f, 17.75f), new Vector3(W - 0.3f, 0.36f, 0.2f), red, false);
+            Prim(PrimitiveType.Cube, "Coupler", train, new Vector3(0f, -0.2f, 17.95f), new Vector3(0.2f, 0.16f, 0.25f), steelDark, false);
+            foreach (float s in new[] { -1f, 1f })
+            {
+                Prim(PrimitiveType.Cube, "RunningBoard", train, new Vector3(s * 1.08f, 0.6f, 14.15f), new Vector3(0.76f, 0.05f, 6.3f), black, false);
+                Prim(PrimitiveType.Cube, "RunningBoardEdge", train, new Vector3(s * 1.46f, 0.6f, 14.15f), new Vector3(0.03f, 0.08f, 6.3f), brass, false);
+            }
+
+            // ---- ボイラー・火室・煙室 ----
+            ZCylinder("Boiler", train, new Vector3(0f, 1.0f, 13.9f), 1.6f, 5.4f, black, true);
+            foreach (float z in new[] { 11.5f, 12.7f, 13.9f, 15.1f, 16.3f })
+                ZCylinder("BoilerBand", train, new Vector3(0f, 1.0f, z), 1.64f, 0.06f, brass);
+            Prim(PrimitiveType.Cube, "Firebox", train, new Vector3(0f, 0.75f, 11.4f), new Vector3(1.7f, 1.3f, 0.8f), black);
+            ZCylinder("SmokeBox", train, new Vector3(0f, 1.0f, 17.0f), 1.7f, 0.8f, steelDark);
+            ZCylinder("SmokeBoxRing", train, new Vector3(0f, 1.0f, 17.42f), 1.55f, 0.05f, brass);
+            ZCylinder("SmokeBoxDoor", train, new Vector3(0f, 1.0f, 17.45f), 1.35f, 0.06f, black);
+            ZCylinder("SmokeBoxHub", train, new Vector3(0f, 1.0f, 17.5f), 0.18f, 0.06f, brass);
+            foreach (float y in new[] { 0.72f, 1.28f })
+                Prim(PrimitiveType.Cube, "DoorHinge", train, new Vector3(0.22f, y, 17.49f), new Vector3(0.9f, 0.05f, 0.03f), brass, false);
+            Prim(PrimitiveType.Cube, "NumberPlate", train, new Vector3(0f, 1.45f, 17.49f), new Vector3(0.4f, 0.2f, 0.02f), brass, false);
+
+            // ---- ダイヤモンド形の煙突 (細い首 → 菱形にふくらむ → 火の粉よけの網) ----
+            Prim(PrimitiveType.Cylinder, "StackBase", train, new Vector3(0f, 1.78f, 16.3f), new Vector3(0.55f, 0.12f, 0.55f), black, false);
+            Prim(PrimitiveType.Cylinder, "Stack", train, new Vector3(0f, 2.2f, 16.3f), new Vector3(0.36f, 0.4f, 0.36f), black, false);
+            float[] tierY = { 2.62f, 2.72f, 2.84f, 2.97f, 3.07f };
+            float[] tierD = { 0.55f, 0.8f, 0.96f, 0.85f, 0.6f };
+            for (int i = 0; i < tierY.Length; i++)
+                Prim(PrimitiveType.Cylinder, "StackFlare", train, new Vector3(0f, tierY[i], 16.3f), new Vector3(tierD[i], 0.06f, tierD[i]), black, false);
+            Prim(PrimitiveType.Cylinder, "StackRim", train, new Vector3(0f, 3.13f, 16.3f), new Vector3(0.64f, 0.02f, 0.64f), brass, false);
+            Prim(PrimitiveType.Cylinder, "SparkScreen", train, new Vector3(0f, 3.14f, 16.3f), new Vector3(0.56f, 0.01f, 0.56f), steelDark, false);
             stack = Group(train, "SmokePoint");
-            stack.localPosition = new Vector3(0f, 3.3f, 16.2f);
-            Prim(PrimitiveType.Sphere, "SteamDome", train, new Vector3(0f, 1.9f, 13.8f), new Vector3(0.6f, 0.5f, 0.6f), brass, false);
-            Prim(PrimitiveType.Sphere, "Bell", train, new Vector3(0f, 2.0f, 12.4f), new Vector3(0.3f, 0.35f, 0.3f), brass, false);
-            // 運転室
-            Prim(PrimitiveType.Cube, "Cab", train, new Vector3(0f, 1.3f, 9.6f), new Vector3(W - 0.1f, 2.6f, 2.2f), red);
-            Prim(PrimitiveType.Cube, "CabRoof", train, new Vector3(0f, 2.68f, 9.6f), new Vector3(W + 0.2f, 0.12f, 2.6f), black, false);
-            foreach (float s in new[] { -1f, 1f })
-                Prim(PrimitiveType.Cube, "CabWindow", train, new Vector3(s * (W / 2f - 0.04f), 1.8f, 9.6f), new Vector3(0.01f, 0.6f, 0.9f), window, false);
-            // 前: 前照灯・排障器
-            Prim(PrimitiveType.Cylinder, "Headlamp", train, new Vector3(0f, 1.95f, 17.1f), new Vector3(0.4f, 0.2f, 0.4f), Mat("Headlamp", new Color(1f, 0.95f, 0.7f), new Color(3f, 2.6f, 1.5f)), false)
-                .transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            stack.localPosition = new Vector3(0f, 3.3f, 16.3f);
+
+            // ---- ボイラーの上: 蒸気ドーム・砂箱・鐘・汽笛・安全弁 ----
+            Prim(PrimitiveType.Cylinder, "SteamDomeBase", train, new Vector3(0f, 1.85f, 13.6f), new Vector3(0.62f, 0.18f, 0.62f), brass, false);
+            Prim(PrimitiveType.Sphere, "SteamDome", train, new Vector3(0f, 2.02f, 13.6f), new Vector3(0.6f, 0.45f, 0.6f), brass, false);
+            Prim(PrimitiveType.Cylinder, "SteamDomeCap", train, new Vector3(0f, 2.25f, 13.6f), new Vector3(0.22f, 0.04f, 0.22f), black, false);
+            Prim(PrimitiveType.Cylinder, "SandDomeBase", train, new Vector3(0f, 1.85f, 15.1f), new Vector3(0.56f, 0.15f, 0.56f), black, false);
+            Prim(PrimitiveType.Sphere, "SandDome", train, new Vector3(0f, 1.98f, 15.1f), new Vector3(0.55f, 0.4f, 0.55f), black, false);
+            Prim(PrimitiveType.Cylinder, "SandDomeBand", train, new Vector3(0f, 1.98f, 15.1f), new Vector3(0.57f, 0.02f, 0.57f), brass, false);
             foreach (float s in new[] { -1f, 1f })
             {
-                var catcher = Prim(PrimitiveType.Cube, "Cowcatcher", train, new Vector3(s * 0.5f, -0.6f, 18.1f), new Vector3(1.2f, 0.7f, 0.1f), red, false);
-                catcher.transform.localRotation = Quaternion.Euler(-35f, s * 35f, 0f);
+                Prim(PrimitiveType.Cube, "BellYoke", train, new Vector3(s * 0.18f, 2.0f, 12.4f), new Vector3(0.04f, 0.4f, 0.04f), black, false);
+                Rod("SandPipe", train, new Vector3(s * 0.25f, 1.9f, 15.1f), new Vector3(s * 1.0f, 0.05f, 14.3f), 0.04f, steelDark);
             }
-            // 大きな動輪 (片側3つ) と前の小さな車輪
+            Prim(PrimitiveType.Cube, "BellBar", train, new Vector3(0f, 2.18f, 12.4f), new Vector3(0.42f, 0.04f, 0.05f), black, false);
+            Prim(PrimitiveType.Sphere, "Bell", train, new Vector3(0f, 2.0f, 12.4f), new Vector3(0.3f, 0.32f, 0.3f), brass, false);
+            Prim(PrimitiveType.Cylinder, "BellLip", train, new Vector3(0f, 1.88f, 12.4f), new Vector3(0.34f, 0.02f, 0.34f), brass, false);
+            Prim(PrimitiveType.Cylinder, "Whistle", train, new Vector3(0.25f, 2.0f, 11.5f), new Vector3(0.08f, 0.15f, 0.08f), brass, false);
+            Prim(PrimitiveType.Cylinder, "WhistleTop", train, new Vector3(0.25f, 2.17f, 11.5f), new Vector3(0.12f, 0.03f, 0.12f), brass, false);
+            Prim(PrimitiveType.Cylinder, "SafetyValve", train, new Vector3(-0.2f, 1.9f, 12.0f), new Vector3(0.12f, 0.1f, 0.12f), brass, false);
+
+            // ---- ボイラーの横: 手すり・配管・空気ポンプ ----
+            foreach (float s in new[] { -1f, 1f })
+            {
+                Rod("Handrail", train, new Vector3(s * 0.72f, 1.55f, 11.3f), new Vector3(s * 0.72f, 1.55f, 16.7f), 0.035f, brass);
+                foreach (float z in new[] { 11.6f, 13.0f, 14.4f, 15.8f, 16.6f })
+                    Rod("HandrailPost", train, new Vector3(s * 0.56f, 1.55f, z), new Vector3(s * 0.72f, 1.55f, z), 0.03f, brass);
+                Rod("BoilerPipe", train, new Vector3(s * 0.82f, 0.85f, 11.4f), new Vector3(s * 0.82f, 0.85f, 16.4f), 0.06f, steelDark);
+            }
+            Prim(PrimitiveType.Cylinder, "AirPump", train, new Vector3(1.05f, 0.97f, 12.6f), new Vector3(0.3f, 0.35f, 0.3f), steelDark, false);
+            foreach (float y in new[] { 0.64f, 1.3f })
+                Prim(PrimitiveType.Cylinder, "AirPumpCap", train, new Vector3(1.05f, y, 12.6f), new Vector3(0.33f, 0.03f, 0.33f), brass, false);
+            Rod("Injector", train, new Vector3(-0.82f, 0.95f, 11.6f), new Vector3(-1.0f, 0.62f, 12.4f), 0.07f, brass);
+
+            // ---- 前: 箱形の前照灯・排障器 (すのこ状の V 字) ----
+            Prim(PrimitiveType.Cube, "HeadlampBracket", train, new Vector3(0f, 1.85f, 17.1f), new Vector3(0.3f, 0.12f, 0.3f), black, false);
+            Prim(PrimitiveType.Cube, "HeadlampBox", train, new Vector3(0f, 2.15f, 17.1f), new Vector3(0.5f, 0.45f, 0.5f), black, false);
+            Prim(PrimitiveType.Cube, "HeadlampRoof", train, new Vector3(0f, 2.4f, 17.1f), new Vector3(0.56f, 0.06f, 0.56f), black, false);
+            Prim(PrimitiveType.Cylinder, "HeadlampChimney", train, new Vector3(0f, 2.5f, 17.05f), new Vector3(0.1f, 0.06f, 0.1f), black, false);
+            ZCylinder("HeadlampRim", train, new Vector3(0f, 2.15f, 17.35f), 0.42f, 0.02f, brass);
+            ZCylinder("Headlamp", train, new Vector3(0f, 2.15f, 17.36f), 0.36f, 0.03f, Mat("Headlamp", new Color(1f, 0.95f, 0.7f), new Color(3f, 2.6f, 1.5f)));
+            Rod("PilotSpine", train, new Vector3(0f, -0.9f, 18.75f), new Vector3(0f, -0.25f, 18.3f), 0.06f, red);
+            foreach (float s in new[] { -1f, 1f })
+            {
+                Rod("PilotTop", train, new Vector3(0f, -0.25f, 18.3f), new Vector3(s * 1.1f, -0.25f, 17.4f), 0.06f, black);
+                Rod("PilotBottom", train, new Vector3(0f, -0.9f, 18.75f), new Vector3(s * 1.15f, -0.9f, 17.9f), 0.06f, red);
+                for (int k = 1; k <= 5; k++)
+                {
+                    float t = k / 5f;
+                    Rod("PilotSlat", train, new Vector3(s * 1.15f * t, -0.9f, 18.75f - 0.85f * t), new Vector3(s * 1.1f * t, -0.25f, 18.3f - 0.9f * t), 0.05f, red);
+                }
+            }
+
+            // ---- 横のシリンダー・クロスヘッド・連棒 ----
+            foreach (float s in new[] { -1f, 1f })
+            {
+                ZCylinder("SteamCylinder", train, new Vector3(s * 1.2f, -0.2f, 15.8f), 0.6f, 1.0f, black);
+                foreach (float z in new[] { 15.3f, 16.3f })
+                    ZCylinder("CylinderCap", train, new Vector3(s * 1.2f, -0.2f, z), 0.64f, 0.04f, brass);
+                Prim(PrimitiveType.Cube, "ValveChest", train, new Vector3(s * 1.2f, 0.2f, 15.8f), new Vector3(0.45f, 0.3f, 1.0f), black, false);
+                Rod("SteamPipe", train, new Vector3(s * 0.55f, 1.0f, 16.7f), new Vector3(s * 1.15f, 0.3f, 16.1f), 0.12f, black);
+                foreach (float y in new[] { -0.08f, -0.32f })
+                    Rod("CrossheadGuide", train, new Vector3(s * 1.2f, y, 15.3f), new Vector3(s * 1.2f, y, 14.2f), 0.04f, steelDark);
+                Prim(PrimitiveType.Cube, "Crosshead", train, new Vector3(s * 1.2f, -0.2f, 14.6f), new Vector3(0.12f, 0.2f, 0.2f), steelDark, false);
+                Rod("MainRod", train, new Vector3(s * 1.27f, -0.2f, 14.6f), new Vector3(s * 1.27f, wheelY + 0.1f, 12.3f), 0.09f, steelDark);
+                Prim(PrimitiveType.Cube, "SideRod", train, new Vector3(s * 1.24f, wheelY, 12.3f), new Vector3(0.05f, 0.08f, 3.6f), steelDark, false);
+            }
+
+            // ---- 大きな動輪 (片側3つ) と前の小さな先輪 ----
             foreach (float s in new[] { -1f, 1f })
             {
                 foreach (float z in new[] { 10.6f, 12.3f, 14f })
-                    wheels.Add(TrainWheel(train, new Vector3(s * (W / 2f - 0.25f), CarRailTop + 0.75f, z), 0.75f, red, black));
-                wheels.Add(TrainWheel(train, new Vector3(s * (W / 2f - 0.3f), CarRailTop + 0.4f, 16.6f), 0.4f, red, black));
-                Prim(PrimitiveType.Cube, "SideRod", train, new Vector3(s * (W / 2f - 0.12f), CarRailTop + 0.75f, 12.3f), new Vector3(0.05f, 0.08f, 3.6f), Mat("Loco_Steel", new Color(0.25f, 0.25f, 0.27f), null, false, 0.6f), false);
+                    wheels.Add(TrainWheel(train, new Vector3(s * (W / 2f - 0.25f), wheelY, z), 0.75f, red, black, brass));
+                wheels.Add(TrainWheel(train, new Vector3(s * (W / 2f - 0.3f), CarRailTop + 0.4f, 16.9f), 0.4f, red, black));
             }
-            return trainRoot;
+            Prim(PrimitiveType.Cube, "PilotTruck", train, new Vector3(0f, CarRailTop + 0.45f, 16.9f), new Vector3(1.8f, 0.18f, 0.9f), black, false);
+
+            // ---- 運転室 (後ろが開いている) ----
+            Prim(PrimitiveType.Cube, "CabFloor", train, new Vector3(0f, 0.0f, 10.0f), new Vector3(W - 0.1f, 0.1f, 2.2f), black, false);
+            Prim(PrimitiveType.Cube, "FallPlate", train, new Vector3(0f, 0.05f, 8.45f), new Vector3(1.6f, 0.05f, 1.1f), steelDark, false);
+            foreach (float s in new[] { -1f, 1f })
+            {
+                float x = s * (W / 2f - 0.04f);
+                Prim(PrimitiveType.Cube, "CabSide", train, new Vector3(x, 0.65f, 10.0f), new Vector3(0.08f, 1.2f, 2.0f), red);
+                Prim(PrimitiveType.Cube, "CabHeader", train, new Vector3(x, 2.38f, 10.0f), new Vector3(0.08f, 0.25f, 2.0f), red, false);
+                foreach (float z in new[] { 9.06f, 10.0f, 10.94f })
+                    Prim(PrimitiveType.Cube, "CabPost", train, new Vector3(x, 1.86f, z), new Vector3(0.08f, 1.25f, 0.12f), red, false);
+                Prim(PrimitiveType.Cube, "CabSill", train, new Vector3(x, 1.27f, 10.0f), new Vector3(0.12f, 0.04f, 2.0f), brass, false);
+                foreach (float z in new[] { 9.53f, 10.47f })
+                    Prim(PrimitiveType.Cube, "CabWindow", train, new Vector3(x, 1.84f, z), new Vector3(0.02f, 0.85f, 0.8f), window, false);
+                // 横の番号の札
+                Prim(PrimitiveType.Cube, "CabNumberPlate", train, new Vector3(s * (W / 2f + 0.005f), 0.75f, 10.0f), new Vector3(0.02f, 0.32f, 0.55f), brass, false);
+                MakeText(train, "CabNumber", "7", new Vector3(s * (W / 2f + 0.02f), 0.75f, 10.0f), 0.26f, new Color(0.5f, 0.08f, 0.05f))
+                    .transform.localRotation = Quaternion.Euler(0f, -90f * s, 0f);
+                // 前の壁 (ボイラーの左右) と前の窓、後ろの握り棒、乗り降りのステップ
+                Prim(PrimitiveType.Cube, "CabFront", train, new Vector3(s * 1.1f, 1.3f, 10.96f), new Vector3(0.55f, 2.5f, 0.08f), red, false);
+                Prim(PrimitiveType.Cube, "CabFrontWindow", train, new Vector3(s * 1.05f, 2.0f, 10.91f), new Vector3(0.35f, 0.4f, 0.02f), window, false);
+                Prim(PrimitiveType.Cylinder, "GrabIron", train, new Vector3(s * (W / 2f + 0.03f), 1.15f, 8.98f), new Vector3(0.04f, 0.65f, 0.04f), brass, false);
+                Prim(PrimitiveType.Cube, "CabStep", train, new Vector3(s * (W / 2f - 0.1f), -0.35f, 9.2f), new Vector3(0.3f, 0.04f, 0.35f), black, false);
+            }
+            Prim(PrimitiveType.Cube, "CabFrontTop", train, new Vector3(0f, 2.2f, 10.96f), new Vector3(1.1f, 0.8f, 0.08f), red, false);
+            var cabRoof = Prim(PrimitiveType.Cylinder, "CabRoof", train, new Vector3(0f, 2.62f, 10.0f), new Vector3(W + 0.3f, 1.25f, 0.35f), black, false);
+            cabRoof.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            Prim(PrimitiveType.Cube, "CabRoofVent", train, new Vector3(0f, 2.83f, 10.0f), new Vector3(0.5f, 0.12f, 0.8f), black, false);
+            // 運転台 (火室の後ろの面): 明かりがもれる焚き口の扉・圧力計・水面計・加減弁のてこ・逆転てこ
+            Prim(PrimitiveType.Cube, "FireDoorFrame", train, new Vector3(0f, 0.65f, 10.985f), new Vector3(0.6f, 0.5f, 0.02f), brass, false);
+            Prim(PrimitiveType.Cube, "FireDoor", train, new Vector3(0f, 0.65f, 10.97f), new Vector3(0.5f, 0.4f, 0.02f), glow, false);
+            foreach (float s in new[] { -1f, 1f })
+            {
+                ZCylinder("Gauge", train, new Vector3(s * 0.3f, 1.45f, 10.97f), 0.18f, 0.03f, brass);
+                ZCylinder("GaugeFace", train, new Vector3(s * 0.3f, 1.45f, 10.955f), 0.14f, 0.01f, gaugeFace);
+            }
+            Prim(PrimitiveType.Cube, "WaterGlass", train, new Vector3(-0.55f, 1.2f, 10.95f), new Vector3(0.04f, 0.3f, 0.04f), brass, false);
+            Rod("Throttle", train, new Vector3(0f, 1.6f, 10.95f), new Vector3(0.45f, 1.3f, 10.6f), 0.04f, steelDark);
+            Rod("Reverser", train, new Vector3(0.9f, 0.05f, 10.4f), new Vector3(0.85f, 1.0f, 10.2f), 0.05f, steelDark);
+        }
+
+        // Z の向きに寝かせた円柱 (ボイラー・シリンダー・円盤など)。d = 直径, len = 長さ
+        GameObject ZCylinder(string name, Transform parent, Vector3 pos, float d, float len, Material mat, bool collider = false)
+        {
+            var g = Prim(PrimitiveType.Cylinder, name, parent, pos, new Vector3(d, len / 2f, d), mat, collider);
+            g.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            return g;
+        }
+
+        // 2点を結ぶ細い角棒 (手すり・配管・連棒・排障器の棒)
+        GameObject Rod(string name, Transform parent, Vector3 a, Vector3 b, float thickness, Material mat)
+        {
+            var g = Prim(PrimitiveType.Cube, name, parent, (a + b) * 0.5f, new Vector3(thickness, thickness, (b - a).magnitude), mat, false);
+            g.transform.localRotation = Quaternion.LookRotation(b - a);
+            return g;
+        }
+
+        /// <summary>
+        /// 炭水車に山盛りに積もった石炭 (1つのメッシュ)。発掘モードのごつごつした岩のメッシュを小さく、ばらばらにゆがめて、
+        /// 真ん中が高い山の形にたくさん積み重ねる (下の段は平たい大きな塊で隙間を埋める)。原点が山の底の真ん中
+        /// </summary>
+        Mesh CoalPileMesh(float halfX, float halfZ, float height)
+        {
+            const string name = "Shape_CoalPile";
+            if (meshes.TryGetValue(name, out var cached)) return cached;
+            var rng = new System.Random(4242);
+            float Rand(float a, float b) => a + (float)rng.NextDouble() * (b - a);
+            float Height(float x, float z)
+            {
+                float u = x / halfX, w = z / halfZ;
+                return height * Mathf.Clamp01(1f - u * u) * Mathf.Clamp01(1f - w * w * w * w);
+            }
+            var verts = new List<Vector3>();
+            var tris = new List<int>();
+            void Lump(Vector3 pos, Vector3 size, Quaternion rot)
+            {
+                var rock = RockMesh(rng.Next(RockVariants));
+                var v = rock.vertices;
+                foreach (int i in rock.triangles)
+                {
+                    tris.Add(verts.Count);
+                    verts.Add(pos + rot * Vector3.Scale(v[i], size));
+                }
+            }
+            // 下の段: 平たい大きな塊 (横にだけ回す)
+            for (int i = 0; i < 14; i++)
+            {
+                float x = Rand(-0.75f, 0.75f) * halfX, z = Rand(-0.8f, 0.8f) * halfZ;
+                Lump(new Vector3(x, Height(x, z) * 0.45f, z), new Vector3(Rand(0.6f, 0.9f), Rand(0.35f, 0.5f), Rand(0.6f, 0.9f)), Quaternion.Euler(0f, Rand(0f, 360f), 0f));
+            }
+            // 表面: 大きさも形もばらばらの塊を、山の形に沿ってたくさん
+            for (int i = 0; i < 150; i++)
+            {
+                float x = Rand(-0.95f, 0.95f) * halfX, z = Rand(-0.95f, 0.95f) * halfZ;
+                float s = i < 12 ? Rand(0.3f, 0.42f) : Rand(0.12f, 0.28f);
+                var size = new Vector3(s * Rand(0.7f, 1.3f), s * Rand(0.6f, 1.1f), s * Rand(0.7f, 1.3f));
+                Lump(new Vector3(x, Height(x, z) + Rand(-0.04f, 0.03f), z), size, Quaternion.Euler(Rand(0f, 360f), Rand(0f, 360f), Rand(0f, 360f)));
+            }
+            return FinishMesh(name, verts, tris);
         }
 
         // 台車: z の位置ごとに、左右2輪ずつ
@@ -280,14 +508,26 @@ namespace ShootingGallery
             }
         }
 
-        // 車輪 (ローカル X まわりに回るグループ。回っているのが分かるように、スポークを1本付ける)
-        Transform TrainWheel(Transform parent, Vector3 pos, float r, Material mat, Material spokeMat)
+        // 車輪 (ローカル X まわりに回るグループ。回っているのが分かるように、スポークを1本付ける)。
+        // hubMat を渡すと大きな動輪: 黒い輪金・10本のスポーク・金のハブとクランクピン・釣り合いおもり
+        Transform TrainWheel(Transform parent, Vector3 pos, float r, Material mat, Material spokeMat, Material hubMat = null)
         {
             var w = Group(parent, "Wheel");
             w.localPosition = pos;
+            float side = Mathf.Sign(pos.x);
             var disc = Prim(PrimitiveType.Cylinder, "Disc", w, Vector3.zero, new Vector3(r * 2f, 0.06f, r * 2f), mat, false);
             disc.transform.localRotation = Quaternion.Euler(0f, 0f, 90f);
-            Prim(PrimitiveType.Cube, "Spoke", w, new Vector3(Mathf.Sign(pos.x) * 0.07f, 0f, 0f), new Vector3(0.02f, r * 1.8f, 0.08f), spokeMat, false);
+            if (hubMat == null)
+            {
+                Prim(PrimitiveType.Cube, "Spoke", w, new Vector3(side * 0.07f, 0f, 0f), new Vector3(0.02f, r * 1.8f, 0.08f), spokeMat, false);
+                return w;
+            }
+            Prim(PrimitiveType.Cylinder, "Tire", w, Vector3.zero, new Vector3(r * 2f + 0.1f, 0.05f, r * 2f + 0.1f), spokeMat, false).transform.localRotation = Quaternion.Euler(0f, 0f, 90f);
+            for (int k = 0; k < 5; k++)
+                Prim(PrimitiveType.Cube, "Spoke", w, new Vector3(side * 0.035f, 0f, 0f), new Vector3(0.02f, r * 1.75f, 0.05f), spokeMat, false).transform.localRotation = Quaternion.Euler(k * 36f, 0f, 0f);
+            Prim(PrimitiveType.Cube, "Counterweight", w, new Vector3(side * 0.045f, -r * 0.55f, 0f), new Vector3(0.03f, r * 0.45f, r * 0.8f), spokeMat, false);
+            Prim(PrimitiveType.Cylinder, "Hub", w, new Vector3(side * 0.05f, 0f, 0f), new Vector3(0.26f, 0.04f, 0.26f), hubMat, false).transform.localRotation = Quaternion.Euler(0f, 0f, 90f);
+            Prim(PrimitiveType.Cylinder, "CrankPin", w, new Vector3(side * 0.08f, r * 0.45f, 0f), new Vector3(0.1f, 0.04f, 0.1f), hubMat, false).transform.localRotation = Quaternion.Euler(0f, 0f, 90f);
             return w;
         }
 

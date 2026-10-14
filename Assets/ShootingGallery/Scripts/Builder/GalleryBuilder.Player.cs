@@ -285,6 +285,59 @@ namespace ShootingGallery
             var pxMuzzle = Group(px, "Muzzle"); // マズルフラッシュは無し
             pxMuzzle.localPosition = new Vector3(0f, 0f, 0.22f);
 
+            // 13: 輪投げの輪 (夏祭りモード専用。手の先に縦に1本持っている。投げると消えて、少しして次の輪が出る)
+            var rt = Group(gunGo.transform, "Model_RingToss");
+            var ringMesh = TorusMesh();
+            var ringMats = new[]
+            {
+                Mat("Ring_Red", new Color(0.95f, 0.2f, 0.18f), null, false, 0.55f),
+                Mat("Ring_Blue", new Color(0.2f, 0.45f, 0.95f), null, false, 0.55f),
+                Mat("Ring_Yellow", new Color(1f, 0.82f, 0.15f), null, false, 0.55f),
+                Mat("Ring_Green", new Color(0.25f, 0.8f, 0.35f), null, false, 0.55f),
+            };
+            var heldRing = new GameObject("Ring");
+            heldRing.transform.SetParent(rt, false);
+            heldRing.transform.localPosition = new Vector3(0f, 0.02f, 0.13f);
+            heldRing.transform.localRotation = Quaternion.Euler(0f, 0f, 90f); // 縦に持つ
+            heldRing.transform.localScale = Vector3.one * 0.24f;
+            heldRing.AddComponent<MeshFilter>().sharedMesh = ringMesh;
+            var heldRingRenderer = heldRing.AddComponent<MeshRenderer>();
+            heldRingRenderer.sharedMaterial = ringMats[0];
+            heldRingRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            var rtMuzzle = Group(rt, "Muzzle"); // マズルフラッシュは無し
+            rtMuzzle.localPosition = new Vector3(0f, 0.02f, 0.13f);
+
+            // 14: コルク銃 (射的の屋台。木の銃身の長い銃。先にコルクが込めてあり、撃つと消えて、弾込めのゲージがたまると戻る)
+            var cg = Group(gunGo.transform, "Model_CorkGun");
+            var corkWood = Mat("CorkGun_Wood", new Color(0.62f, 0.4f, 0.2f), null, false, 0.35f);
+            var cork = Mat("Cork", new Color(0.78f, 0.6f, 0.4f));
+            GunPart(PrimitiveType.Cube, cg, new Vector3(0f, 0f, 0.06f), new Vector3(0.04f, 0.045f, 0.22f), corkWood);          // 本体
+            GunPart(PrimitiveType.Cylinder, cg, new Vector3(0f, 0.012f, 0.27f), new Vector3(0.024f, 0.11f, 0.024f), metal, 90f); // 銃身
+            GunPart(PrimitiveType.Cube, cg, new Vector3(0f, -0.02f, -0.12f), new Vector3(0.035f, 0.06f, 0.16f), corkWood);     // ストック
+            GunPart(PrimitiveType.Cube, cg, new Vector3(0f, -0.05f, 0.0f), new Vector3(0.028f, 0.07f, 0.035f), corkWood, 15f);  // 握り
+            GunPart(PrimitiveType.Cube, cg, new Vector3(0f, 0.035f, 0.02f), new Vector3(0.012f, 0.016f, 0.08f), metal);        // 引き金のレバー
+            var corkTip = Group(cg, "LoadedCork");
+            GunPart(PrimitiveType.Cylinder, corkTip, new Vector3(0f, 0.012f, 0.385f), new Vector3(0.03f, 0.016f, 0.03f), cork, 90f);
+            var cgMuzzle = Muzzle(cg, new Vector3(0f, 0.012f, 0.41f), flashMat);
+
+            // 15: ポイ (金魚すくい。ピンクの枠に白い紙。投げると消えて、次のポイが来るまでゲージがたまる)
+            var po = Group(gunGo.transform, "Model_Poi");
+            var poiFrame = Mat("Poi_Frame", new Color(0.95f, 0.4f, 0.6f), null, false, 0.5f);
+            var poiPaper = Mat("Poi_Paper", new Color(0.97f, 0.97f, 0.94f));
+            GunPart(PrimitiveType.Cube, po, new Vector3(0f, 0f, 0.03f), new Vector3(0.018f, 0.008f, 0.12f), poiFrame);         // 持ち手
+            GunPart(PrimitiveType.Cylinder, po, new Vector3(0f, 0f, 0.14f), new Vector3(0.11f, 0.004f, 0.11f), poiFrame);       // 丸い枠
+            GunPart(PrimitiveType.Cylinder, po, new Vector3(0f, 0.003f, 0.14f), new Vector3(0.1f, 0.002f, 0.1f), poiPaper);    // 紙
+            var poMuzzle = Group(po, "Muzzle");
+            poMuzzle.localPosition = new Vector3(0f, 0.01f, 0.14f);
+
+            // 16: お金 (食べ物の屋台。指先に金色の硬貨と銀色の硬貨。投げると消えて、すぐ次が出る)
+            var cn = Group(gunGo.transform, "Model_Coin");
+            var coinGold = Mat("Coin_Gold", new Color(1f, 0.8f, 0.3f), new Color(0.25f, 0.18f, 0.02f), false, 0.85f);
+            GunPart(PrimitiveType.Cylinder, cn, new Vector3(0f, 0.015f, 0.07f), new Vector3(0.045f, 0.003f, 0.045f), coinGold, 90f);
+            GunPart(PrimitiveType.Cylinder, cn, new Vector3(0.012f, 0.004f, 0.06f), new Vector3(0.04f, 0.003f, 0.04f), Mat("Coin_Silver", new Color(0.82f, 0.83f, 0.86f), null, false, 0.85f), 75f);
+            var cnMuzzle = Group(cn, "Muzzle");
+            cnMuzzle.localPosition = new Vector3(0f, 0.015f, 0.1f);
+
             var laserMat = Mat("Laser", new Color(1f, 0.1f, 0.1f), null, true);
             var laserGo = new GameObject("Laser");
             laserGo.transform.SetParent(gunGo.transform, false);
@@ -309,8 +362,16 @@ namespace ShootingGallery
 
             gun.bombMaterial = Mat("Bomb", new Color(0.12f, 0.12f, 0.14f), new Color(0.5f, 0.15f, 0f));
             gun.explosionMaterial = TransparentMat("Explosion", new Color(1f, 0.55f, 0.15f, 0.8f));
-            gun.models = new[] { hg.gameObject, mg.gameObject, sg.gameObject, bm.gameObject, sr.gameObject, bz.gameObject, sk.gameObject, kj.gameObject, dt.gameObject, rv.gameObject, ms.gameObject, fl.gameObject, px.gameObject };
-            gun.muzzles = new[] { hgMuzzle, mgMuzzle, sgMuzzle, bmMuzzle, srMuzzle, bzMuzzle, skMuzzle, kjMuzzle, dtMuzzle, rvMuzzle, msMuzzle, flMuzzle, pxMuzzle };
+            gun.models = new[] { hg.gameObject, mg.gameObject, sg.gameObject, bm.gameObject, sr.gameObject, bz.gameObject, sk.gameObject, kj.gameObject, dt.gameObject, rv.gameObject, ms.gameObject, fl.gameObject, px.gameObject,
+                                 rt.gameObject, cg.gameObject, po.gameObject, cn.gameObject };
+            gun.muzzles = new[] { hgMuzzle, mgMuzzle, sgMuzzle, bmMuzzle, srMuzzle, bzMuzzle, skMuzzle, kjMuzzle, dtMuzzle, rvMuzzle, msMuzzle, flMuzzle, pxMuzzle, rtMuzzle, cgMuzzle, poMuzzle, cnMuzzle };
+            gun.ringMesh = ringMesh;
+            gun.ringMaterials = ringMats;
+            gun.corkMaterial = cork;
+            gun.corkLoaded = corkTip.gameObject;
+            gun.poiFrameMaterial = poiFrame;
+            gun.poiPaperMaterial = poiPaper;
+            gun.coinMaterial = coinGold;
             gun.fireballMaterial = Mat("Fireball", new Color(1f, 0.55f, 0.1f), new Color(3f, 1.2f, 0.2f));
             gun.fireballExplosionMaterial = TransparentMat("Fire_Explosion", new Color(1f, 0.45f, 0.08f, 0.85f));
             gun.dartShaftMaterial = dartShaft;

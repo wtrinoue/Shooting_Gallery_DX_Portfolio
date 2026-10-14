@@ -42,8 +42,6 @@ namespace ShootingGallery
         public float ascendTime = 13f;
         [Tooltip("洞窟の天井からやぐらの上までの高さ (m)。縦穴はその上 (depth - これ)")]
         public float caveRoomHeight = 10f;
-        [Tooltip("この深さ (m) より下にいる間は、地上の屋台がプレイヤーから見えない (屋台を止める / 動かしておく境目)")]
-        public float hiddenDepth = 4f;
 
         [Header("的")]
         [Tooltip("ぐるぐる回る線路のトロッコ (線路は各トロッコに設定済み)")]
@@ -77,11 +75,11 @@ namespace ShootingGallery
         /// <summary>上がって穴が埋まるまでの秒数</summary>
         public float CloseTime => ascendTime + fillTime + 0.1f;
 
-        /// <summary>降りていって、地上の屋台が見えなくなった時 (GameManager が屋台を止める)</summary>
+        /// <summary>降りていって縦穴を抜け、縦穴の口からも地上の屋台が見えなくなった時 (GameManager が屋台をその場で隠す)</summary>
         public event System.Action WentDeep;
         /// <summary>縦穴を抜けて洞窟に入った時 / 上がり始めた時 (GameManager が明るさを変える)</summary>
         public event System.Action EnteredCave, Rising;
-        /// <summary>上がってきて、地上の屋台が見えるくらいまで来た時 (GameManager がもう屋台を動かしておく)</summary>
+        /// <summary>上がってきて縦穴に入った時。まだ屋台は見えないので、GameManager がここで屋台を並べておく</summary>
         public event System.Action NearSurface;
         /// <summary>上がりきって穴が土で埋まった時 (GameManager がハッチを戻す)</summary>
         public event System.Action Closed;
@@ -205,7 +203,7 @@ namespace ShootingGallery
                 float e = t * t * (3f - 2f * t);
                 float d = depth * e;
                 SetPlayerY(playerStartY - d);
-                if (!deep && d > hiddenDepth) { deep = true; WentDeep?.Invoke(); }
+                if (!deep && d > caveTop) { deep = true; WentDeep?.Invoke(); } // 縦穴の口からも地上の屋台が見えない深さ (洞窟に入った所)
                 if (!inCave && d > caveTop) { inCave = true; EnteredCave?.Invoke(); }
                 yield return null;
             }
@@ -220,7 +218,7 @@ namespace ShootingGallery
             Rising?.Invoke();
             CancelInvoke(nameof(ShowRandomGem));
             Sfx.Play("door");
-            // 3. ゆっくり上がる。屋台が見えるくらいまで来たら、もう屋台が動いている (GameManager)
+            // 3. ゆっくり上がる。縦穴に入ったら (まだ屋台は見えない)、もう屋台が並んで動いている (GameManager)
             float from = player != null ? playerStartY - player.localPosition.y : 0f;
             bool near = false, stopped = false;
             for (float t = 0f; t < 1f; t += Time.deltaTime / ascendTime)
@@ -229,7 +227,7 @@ namespace ShootingGallery
                 float d = Mathf.Lerp(from, 0f, e);
                 SetPlayerY(playerStartY - d);
                 if (!stopped && d < depth - caveRoomHeight) { stopped = true; StopTargets(); } // 縦穴に入って洞窟が見えなくなったら、トロッコと宝石を片付ける
-                if (!near && d < hiddenDepth) { near = true; NearSurface?.Invoke(); }
+                if (!near && d < depth - caveRoomHeight) { near = true; NearSurface?.Invoke(); } // まだ縦穴の口から屋台が見えない深さのうちに並べておく
                 yield return null;
             }
             SetPlayerY(playerStartY);

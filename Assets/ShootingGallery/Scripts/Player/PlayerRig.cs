@@ -159,14 +159,27 @@ namespace ShootingGallery
                 if (weaponTimeLeft <= 0f) ResetWeapon();
             }
             var def = Weapons.Get(weapon);
-            rightGun.SetInfo(rightGun.IsCharging ? "CHARGING..." : rightGun.IsReloading ? "RELOADING..." : def.displayName); // 残りの弾は銃の上の弾の列で見せる
+            rightGun.SetInfo(rightGun.IsCharging ? "CHARGING..." : rightGun.IsReloading ? (weapon == WeaponType.Poi ? "NEXT POI..." : "RELOADING...") : def.displayName); // 残りの弾は銃の上の弾の列で見せる
             if (leftGun != null) leftGun.SetInfo("");
 
+            // 弾込めのゲージで見せる武器 (コルク銃・ポイ): 撃つと空になり、たまっていく。満タンになったら撃てる (武器の色に変わる)
+            if (def.reloadGauge)
+            {
+                SetReloadGauge(rightGun);
+                if (leftGun != null) SetReloadGauge(leftGun);
+                return;
+            }
             // 残り時間はゲージで表示 (ハンドガンの時は非表示)
             float ratio = weapon == WeaponType.Handgun || weaponDuration <= 0f ? 0f : weaponTimeLeft / weaponDuration;
             Color gaugeColor = ratio < 0.3f ? new Color(1f, 0.25f, 0.2f) : GaugeColor(weapon);
             rightGun.SetGauge(ratio, gaugeColor);
             if (leftGun != null) leftGun.SetGauge(ratio, gaugeColor);
+        }
+
+        void SetReloadGauge(GunController gun)
+        {
+            float k = gun.ReloadProgress;
+            gun.SetGauge(Mathf.Max(0.02f, k), k >= 1f ? GaugeColor(weapon) : new Color(0.55f, 0.55f, 0.6f));
         }
 
         static Color GaugeColor(WeaponType type) => type switch
@@ -183,6 +196,10 @@ namespace ShootingGallery
             WeaponType.Flashlight => new Color(1f, 0.92f, 0.55f),
             WeaponType.Pickaxe => new Color(0.85f, 0.65f, 0.4f),
             WeaponType.Missile => new Color(0.55f, 0.75f, 1f),
+            WeaponType.RingToss => new Color(1f, 0.45f, 0.35f),
+            WeaponType.CorkGun => new Color(1f, 0.8f, 0.3f),
+            WeaponType.Poi => new Color(0.4f, 0.8f, 1f),
+            WeaponType.Coin => new Color(1f, 0.85f, 0.25f),
             _ => Color.white
         };
 

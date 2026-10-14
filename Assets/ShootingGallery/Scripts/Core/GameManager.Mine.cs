@@ -21,7 +21,9 @@ namespace ShootingGallery
 
         /// <summary>
         /// つるはしの的を撃った: 足元の土の床に穴が掘られ (ハッチは隠れる)、プレイヤーがゆっくり真下へ降りていく。
-        /// 屋台はそのまま動いている (降りていく演出のため)。十分に降りて見えなくなったら止めて沈める (OnMineDeep)
+        /// 屋台はそのまま動いている (降りていく演出のため)。縦穴を抜けて見えなくなったら、その場で地下へ隠す (OnMineDeep)。
+        /// 屋台の的は始まった時点でしまう (降りていく途中で機能付きの的を撃って、演出が途中で切られないように)。
+        /// 上がりきって穴が埋まったら出し直す (OnMineClosed)
         /// </summary>
         void StartMine()
         {
@@ -29,6 +31,7 @@ namespace ShootingGallery
             if (mineCave == null || ChallengeActive || DeluxeActive || (bonusStage != null && bonusStage.IsBusy)) return;
             mineStallsAway = false;
             stageStalls.Clear();
+            SetShownStallTargets(false);
             mineCave.Begin(player.transform);
             player.GiveWeapon(WeaponType.Pickaxe, mineCave.duration); // つるはしを回しながら投げる
             // 縦穴を降りる間に、だんだん暗くなる
@@ -38,12 +41,14 @@ namespace ShootingGallery
             ShowMessage("MINING MODE!!", 2f, new Color(1f, 0.75f, 0.35f));
         }
 
-        // 降りていって地上の屋台が見えなくなった: 屋台を止めて沈めておく
+        // 降りていって縦穴の口からも地上の屋台が見えなくなった: 屋台をその場で地下へ隠す
+        // (沈めると、縦穴の口から看板が地面へしまわれていくのが見えてしまう)
         void OnMineDeep()
         {
             if (!MineActive || mineStallsAway) return;
             mineStallsAway = true;
-            PutAwayStalls(false);
+            PutAwayStalls(true); // 集めるだけ
+            foreach (var s in stageStalls) s.HideImmediate();
         }
 
         // 縦穴を抜けて洞窟に入った: 洞窟の明るさと霧 (遠くの壁が暗がりに溶ける)
@@ -65,6 +70,7 @@ namespace ShootingGallery
         }
 
         // 上がってきて屋台が見えるくらいまで来た: 屋台はもう動いている (沈めておいた屋台をその場に並べる)。
+        // 的はまだ出さない (上がりきって穴が埋まってから OnMineClosed で出す)。
         // 待っている間にフィーバーが終わったフィーバー屋台は出さない
         void OnMineNearSurface()
         {
@@ -73,7 +79,7 @@ namespace ShootingGallery
             foreach (var s in stageStalls)
             {
                 bool show = s == mainStall || (IsFever && activeFeverStalls.Contains(s));
-                if (show) s.ShowImmediate(State == GameState.Playing);
+                if (show) s.ShowImmediate(false);
             }
             stageStalls.Clear();
         }
@@ -101,8 +107,20 @@ namespace ShootingGallery
             }
         }
 
-        // 上がりきって穴が土で埋まり、土の床が消えた: ハッチを戻す
-        void OnMineClosed() => ShowHatch();
+        // 上がりきって穴が土で埋まり、土の床が消えた: ハッチを戻し、しまっておいた屋台の的を出す
+        void OnMineClosed()
+        {
+            ShowHatch();
+            if (State == GameState.Playing && !ChallengeActive) SetShownStallTargets(true);
+        }
+
+        // 出ている屋台 (メイン + フィーバー中の屋台) の的を出す / しまう
+        void SetShownStallTargets(bool value)
+        {
+            mainStall.SetTargetsAvailable(value);
+            if (!IsFever) return;
+            foreach (var s in activeFeverStalls) s.SetTargetsAvailable(value);
+        }
 
         // 宝石を割った (点数はもう入っている): 高い宝石の時は名前を大きく出す
         void OnGemBroken(MineGem g)

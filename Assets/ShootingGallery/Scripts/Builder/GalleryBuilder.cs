@@ -216,6 +216,7 @@ namespace ShootingGallery
             var spaceStage = BuildSpace(bonusStage);
             var ghostManor = BuildGhost();
             var mineCave = BuildMine();
+            var festivalStage = BuildFestival();
             LogStep("武器の的 / UFO", step);
 
             // ---- 5. ゲーム開始 ----
@@ -238,6 +239,8 @@ namespace ShootingGallery
             gm.spaceStage = spaceStage;
             gm.ghostManor = ghostManor;
             gm.mineCave = mineCave;
+            gm.festivalStage = festivalStage;
+            BuildMoneyPanel(hudText.transform.parent, gm); // 夏祭りモードのお金と残り時間の表示 (HUD の上の方)
             gm.deluxeMainStall = deluxeMain;
             gm.deluxeFeverStalls = deluxeFever;
             gm.fireworkMaterials = FireworkMaterials();

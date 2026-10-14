@@ -2,7 +2,7 @@ using UnityEngine;
 
 namespace ShootingGallery
 {
-    public enum WeaponType { Handgun = 0, MachineGun = 1, Shotgun = 2, Bomb = 3, Sniper = 4, Bazooka = 5, Shuriken = 6, FireBall = 7, Dart = 8, Revolver = 9, Missile = 10, Flashlight = 11, Pickaxe = 12 }
+    public enum WeaponType { Handgun = 0, MachineGun = 1, Shotgun = 2, Bomb = 3, Sniper = 4, Bazooka = 5, Shuriken = 6, FireBall = 7, Dart = 8, Revolver = 9, Missile = 10, Flashlight = 11, Pickaxe = 12, RingToss = 13, CorkGun = 14, Poi = 15, Coin = 16 }
 
     public struct WeaponDef
     {
@@ -20,6 +20,7 @@ namespace ShootingGallery
 
         public int magazine;         // 続けて撃てる弾の数 (0 なら弾切れなし)。撃ちきると reloadTime 秒の弾込め
         public float reloadTime;
+        public bool reloadGauge;     // true なら銃の上のゲージで弾込めの進み具合を見せる (撃つと空になり、満たされたらまた撃てる)
     }
 
     public static class Weapons
@@ -50,6 +51,14 @@ namespace ShootingGallery
                     return new WeaponDef { displayName = "MISSILE", fireInterval = 0.4f, automatic = false, pellets = 1, projectile = true, projectileSpeed = 26f, blastRadius = 1.5f, projectileGravity = 0f };
                 case WeaponType.Pickaxe: // 発掘モード専用。つるはしを縦にくるくる回しながら投げる。押しっぱなしで次々に投げられる (マシンガンほど速くない。手裏剣と同じく、当たった所に刺さる)。白いレーザーで狙う
                     return new WeaponDef { displayName = "PICKAXE", fireInterval = 0.15f, automatic = true, pellets = 1, range = 35f, projectileSpeed = 19f };
+                case WeaponType.RingToss: // 夏祭りモード (輪投げの屋台)。銃を向けた所へ、いつも同じ形の丸い放物線で輪が飛ぶ (GunController.ArcVelocity。projectileSpeed は使わない)
+                    return new WeaponDef { displayName = "RING TOSS", fireInterval = 0.45f, automatic = false, pellets = 1, range = 25f, projectile = true, projectileSpeed = 7.5f, projectileGravity = 6f };
+                case WeaponType.CorkGun: // 夏祭りモード (射的の屋台)。コルクの弾がほぼまっすぐ飛ぶ。1発ごとに弾込め (ゲージがたまるまで撃てない)
+                    return new WeaponDef { displayName = "CORK GUN", fireInterval = 0.2f, automatic = false, pellets = 1, range = 30f, projectile = true, projectileSpeed = 24f, projectileGravity = 1.5f, magazine = 1, reloadTime = 0.8f, reloadGauge = true };
+                case WeaponType.Poi: // 夏祭りモード (金魚すくい)。ポイを向けた所へ輪投げと同じ放物線で投げ入れる。確率ですくえたり破れたりする。投げたら次のポイが来るまで待つ (ゲージ)
+                    return new WeaponDef { displayName = "POI", fireInterval = 0.2f, automatic = false, pellets = 1, range = 20f, projectile = true, projectileSpeed = 6.5f, projectileGravity = 6f, magazine = 1, reloadTime = 1.4f, reloadGauge = true };
+                case WeaponType.Coin: // 夏祭りモード (食べ物の屋台)。お金をまっすぐ投げて、当たったメニューの板の料理を買う (スコアがお金)。白いレーザーで狙う
+                    return new WeaponDef { displayName = "COIN", fireInterval = 0.35f, automatic = false, pellets = 1, range = 25f, projectile = true, projectileSpeed = 16f, projectileGravity = 0f };
                 case WeaponType.Flashlight: // 幽霊モード専用。トリガーを引いている間だけ光り、照らした的を倒す。電池が減り、使わないと回復する (GunController)
                     return new WeaponDef { displayName = "FLASHLIGHT", fireInterval = 0.1f, automatic = true, pellets = 1, range = 25f };
                 default:

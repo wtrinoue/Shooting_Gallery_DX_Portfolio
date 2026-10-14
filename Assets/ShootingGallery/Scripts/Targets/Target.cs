@@ -2,7 +2,7 @@ using UnityEngine;
 
 namespace ShootingGallery
 {
-    public enum TargetKind { Normal, MachineGun, Shotgun, Bomb, Fever, Start, Ufo, Explosive, BlueOrb, BigBonus, Sniper, SniperBig, MachineGunChallenge, MachineGunChallengeTarget, Deluxe, Naval, Sky, Aerial, Ninja, NinjaPanel, Kaiju, KaijuBuilding, Casino, SlotMachine, Roulette, Western, Rider, Space, SpaceObject, Ghost, GhostSpook, Mine, MineObject }
+    public enum TargetKind { Normal, MachineGun, Shotgun, Bomb, Fever, Start, Ufo, Explosive, BlueOrb, BigBonus, Sniper, SniperBig, MachineGunChallenge, MachineGunChallengeTarget, Deluxe, Naval, Sky, Aerial, Ninja, NinjaPanel, Kaiju, KaijuBuilding, Casino, SlotMachine, Roulette, Western, Rider, Space, SpaceObject, Ghost, GhostSpook, Mine, MineObject, Festival, FestivalPrize, FestivalRing, FestivalFish, FestivalFood }
 
     /// <summary>
     /// 的。撃たれると後ろに倒れて消え、一定時間後に起き上がる。
@@ -234,6 +234,17 @@ namespace ShootingGallery
                 pendingRespawn = true;
                 respawnTimer = respawnDelay;
             }
+        }
+
+        /// <summary>当たったけれど倒れなかった: 後ろへ deg 度ぐらっと揺れて戻る (点数は入らない。射的の景品用)</summary>
+        public void Wobble(float deg)
+        {
+            if (!IsUp || shrinkOnHit) return;
+            Wake();
+            angle = deg;
+            targetAngle = 0f;
+            animSpeed = deg / 0.25f;
+            SetPose(true, angle);
         }
 
         /// <summary>眠っていたら起こす (的の動き・タイマーが必要になった時)</summary>

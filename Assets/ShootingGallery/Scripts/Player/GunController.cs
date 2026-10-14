@@ -7,10 +7,19 @@ namespace ShootingGallery
     /// <summary>1丁の銃。見た目の切り替えと発射(レイキャスト)を担当する。</summary>
     public class GunController : MonoBehaviour
     {
-        [Tooltip("WeaponType の順 (Handgun, MachineGun, Shotgun, Bomb, Sniper, Bazooka, Shuriken, FireBall, Dart, Revolver, Missile, Flashlight, Pickaxe) に並べた見た目")]
-        public GameObject[] models = new GameObject[13];
+        [Tooltip("WeaponType の順 (Handgun, MachineGun, Shotgun, Bomb, Sniper, Bazooka, Shuriken, FireBall, Dart, Revolver, Missile, Flashlight, Pickaxe, RingToss, CorkGun, Poi, Coin) に並べた見た目")]
+        public GameObject[] models = new GameObject[17];
         [Tooltip("各見た目の銃口。最初の子をマズルフラッシュとして使う")]
-        public Transform[] muzzles = new Transform[13];
+        public Transform[] muzzles = new Transform[17];
+        [Header("夏祭り (輪投げの輪 / コルク / ポイ / お金)")]
+        [Tooltip("輪の形 (ドーナツ形のメッシュ) と、投げるたびに選ぶ輪の色")]
+        public Mesh ringMesh;
+        public Material[] ringMaterials;
+        public Material corkMaterial;
+        public Material poiFrameMaterial, poiPaperMaterial;
+        public Material coinMaterial;
+        [Tooltip("コルク銃の先に込めてあるコルク (撃つと消え、弾込めが終わると戻る)")]
+        public GameObject corkLoaded;
         [Header("怪獣 / カジノ / 西部劇")]
         [Tooltip("怪獣の口から吐く炎の玉と、燃え上がる爆発")]
         public Material fireballMaterial;
@@ -139,21 +148,41 @@ namespace ShootingGallery
             for (int i = 0; i < models.Length; i++)
                 if (models[i] != null) models[i].SetActive(i == (int)type);
             if (missileLoaded != null) missileLoaded.SetActive(true); // 込める途中で止まっていても、持ち替えたら込めてある
-            // スナイパーは赤、手裏剣とダーツは白のレーザー
-            bool white = type == WeaponType.Shuriken || type == WeaponType.Dart || type == WeaponType.Pickaxe;
+            // スナイパーは赤、手裏剣とダーツ (と夏祭りの武器) は白のレーザー
+            bool white = type == WeaponType.Shuriken || type == WeaponType.Dart || type == WeaponType.Pickaxe || IsFestival(type);
             if (laser != null && whiteLaserMaterial != null) laser.sharedMaterial = white ? whiteLaserMaterial : redLaserMaterial;
             if (laserDotRenderer != null && whiteDotMaterial != null) laserDotRenderer.sharedMaterial = white ? whiteDotMaterial : redDotMaterial;
             ShowLaser(HasLaser(type));
-            // 弾数のある武器は弾を満タンにして持つ
+            // 弾数のある武器は弾を満タンにして持つ。ただし弾込めの途中で持ち替えた武器は、その続きから
+            // (夏祭りモードは見た屋台で武器が変わるので、よそ見をして戻すだけで弾込めが終わらないように)
             ammo = Weapons.Get(type).magazine;
-            reloadUntil = 0f;
+            reloadUntil = readyAt.TryGetValue(type, out var ready) && ready > Time.time ? ready : 0f;
+            if (corkLoaded != null) corkLoaded.SetActive(Time.time >= reloadUntil);
             // 懐中電灯は電池を満タンにして持つ
             battery = 1f;
             batteryDepleted = false;
             SetBeam(false);
         }
 
-        static bool HasLaser(WeaponType type) => type == WeaponType.Sniper || type == WeaponType.Shuriken || type == WeaponType.Dart || type == WeaponType.Pickaxe;
+        static bool HasLaser(WeaponType type) => type == WeaponType.Sniper || type == WeaponType.Shuriken || type == WeaponType.Dart || type == WeaponType.Pickaxe || type == WeaponType.CorkGun || type == WeaponType.Coin || IsArc(type);
+
+        /// <summary>放物線で投げる武器 (夏祭りの輪・ポイ)。白いレーザーの代わりに、落ちる所までの放物線を見せる (お金はまっすぐ飛ぶので白いレーザー)</summary>
+        static bool IsArc(WeaponType type) => type == WeaponType.RingToss || type == WeaponType.Poi;
+        static bool IsFestival(WeaponType type) => IsArc(type) || type == WeaponType.CorkGun || type == WeaponType.Coin;
+
+        /// <summary>弾込めの進み具合 (0 = 撃った直後 〜 1 = 撃てる)。弾込めのない武器はいつも 1</summary>
+        public float ReloadProgress
+        {
+            get
+            {
+                float t = Weapons.Get(current).reloadTime;
+                if (t <= 0f || Time.time >= reloadUntil) return 1f;
+                return Mathf.Clamp01(1f - (reloadUntil - Time.time) / t);
+            }
+        }
+
+        readonly System.Collections.Generic.Dictionary<WeaponType, float> readyAt = new System.Collections.Generic.Dictionary<WeaponType, float>(); // 武器ごとの、弾込めが終わる時刻
+        static readonly Vector3[] arcPoints = new Vector3[200]; // 放物線の点 (使い回し。0.02秒ごと、4秒分まで)
 
         void ShowLaser(bool show)
         {
@@ -169,6 +198,11 @@ namespace ShootingGallery
             if (IsReloading) return;
             var muzzle = MuzzleOf(current);
             Vector3 from = muzzle.position, dir = muzzle.forward;
+            if (IsArc(current))
+            {
+                UpdateArc(from, dir);
+                return;
+            }
             bool hitSomething = Physics.Raycast(from, dir, out var hit, laserRange, hitMask, QueryTriggerInteraction.Ignore);
             Vector3 to = hitSomething ? hit.point : from + dir * laserRange;
             laser.useWorldSpace = true;
@@ -186,6 +220,65 @@ namespace ShootingGallery
                     laserDot.localScale = Vector3.one * size / Mathf.Max(0.0001f, laserDot.parent != null ? laserDot.parent.lossyScale.x : 1f);
                 }
             }
+        }
+
+        const float ArcAimRange = 30f;    // 狙う所を探す距離 (m)
+        const float ArcMissDistance = 10f; // 何も狙っていない (空など) 時に向かう距離 (m)
+
+        const float ArcBulge = 0.07f;  // 弧のふくらみ (始まりと着く所を結ぶまっすぐな線から、真ん中でどれだけ上か。距離に対する割合)
+        const float ArcSpeed = 9f;     // 飛ぶ速さ (m/秒。まっすぐな線の長さをこの速さで進む時間で着く)
+
+        /// <summary>
+        /// 放物線で投げる武器の初速と重力。銃を向けた先で最初に当たる所へ、いつも同じ形の低い弧で落ちるようにする
+        /// (どこへ向けても、その所へ届く)。弧は、始まりと着く所を結ぶまっすぐな線を、真ん中で少しだけ上へふくらませた形
+        /// (距離 × ArcBulge、0.06〜0.5m)。そのぶんだけの重力をかけるので、手元より低い所へ投げても急に落ちない
+        /// </summary>
+        Vector3 ArcVelocity(Vector3 from, Vector3 dir, out float gravity)
+        {
+            Vector3 to = Physics.Raycast(from, dir, out var aim, ArcAimRange, hitMask, QueryTriggerInteraction.Ignore) ? aim.point : from + dir * ArcMissDistance;
+            Vector3 line = to - from;
+            float dist = line.magnitude;
+            float time = Mathf.Max(0.25f, dist / ArcSpeed);
+            float bulge = Mathf.Clamp(dist * ArcBulge, 0.06f, 0.5f);
+            // 位置 = まっすぐな線 + 上へ 4 × bulge × t(1-t) (t = 0〜1) になる初速と重力
+            gravity = 8f * bulge / (time * time);
+            return line / time + Vector3.up * (4f * bulge / time);
+        }
+
+        // 放物線で投げる武器: 投げた物が飛ぶ道すじを、何かに当たる所まで線で描き、落ちる所に点を置く
+        void UpdateArc(Vector3 from, Vector3 dir)
+        {
+            const float Dt = 0.02f;
+            Vector3 p = from, v = ArcVelocity(from, dir, out float gravity);
+            Vector3 gStep = Vector3.down * (0.5f * gravity * Dt * Dt);
+            int count = 0;
+            arcPoints[count++] = p;
+            bool landed = false;
+            Vector3 landing = p, normal = Vector3.up;
+            while (count < arcPoints.Length)
+            {
+                Vector3 next = p + v * Dt + gStep; // 投げた物と同じ計算 (FestivalThrow)
+                v += Vector3.down * (gravity * Dt);
+                if (Physics.Linecast(p, next, out var hit, hitMask, QueryTriggerInteraction.Ignore))
+                {
+                    arcPoints[count++] = hit.point;
+                    landed = true;
+                    landing = hit.point;
+                    normal = hit.normal;
+                    break;
+                }
+                arcPoints[count++] = next;
+                p = next;
+            }
+            laser.useWorldSpace = true;
+            laser.positionCount = count;
+            laser.SetPositions(arcPoints);
+            if (laserDot == null) return;
+            laserDot.gameObject.SetActive(landed);
+            if (!landed) return;
+            laserDot.position = landing + normal * 0.01f;
+            float size = 0.06f;
+            laserDot.localScale = Vector3.one * size / Mathf.Max(0.0001f, laserDot.parent != null ? laserDot.parent.lossyScale.x : 1f);
         }
 
         Transform MuzzleOf(WeaponType type)
@@ -248,6 +341,11 @@ namespace ShootingGallery
             // 弾込め中はリボルバーの弾倉がくるくる回る
             if (revolverCylinder != null && current == WeaponType.Revolver && Time.time < reloadUntil)
                 revolverCylinder.Rotate(0f, 720f * Time.deltaTime, 0f, Space.Self);
+            // コルク銃の先のコルクと、手に持ったポイは、弾込め (次のポイが来る) まで出さない
+            bool ready = Time.time >= reloadUntil;
+            if (corkLoaded != null && current == WeaponType.CorkGun && corkLoaded.activeSelf != ready) corkLoaded.SetActive(ready);
+            var poi = (int)WeaponType.Poi < models.Length ? models[(int)WeaponType.Poi] : null;
+            if (poi != null && current == WeaponType.Poi && poi.activeSelf != ready) poi.SetActive(ready);
             // 情報テキストとゲージを常にカメラへ向ける
             if (Camera.main == null) return;
             FaceCamera(infoText != null ? infoText.transform : null);
@@ -346,7 +444,7 @@ namespace ShootingGallery
         {
             if (ammoRoot == null || ammoBullets == null) return;
             var def = Weapons.Get(current);
-            bool show = def.magazine > 0;
+            bool show = def.magazine > 1; // 1発ずつ込める武器 (コルク銃・ポイ) はゲージで見せる
             if (ammoRoot.gameObject.activeSelf != show) ammoRoot.gameObject.SetActive(show);
             if (!show) return;
             int full = ammo;
@@ -374,7 +472,21 @@ namespace ShootingGallery
             var muzzle = MuzzleOf(current);
             Vector3 origin = muzzle.position;
 
-            if (current == WeaponType.Shuriken || current == WeaponType.Dart || current == WeaponType.Pickaxe)
+            if (IsFestival(current))
+            {
+                var kind = current == WeaponType.RingToss ? FestivalThrow.Kind.Ring : current == WeaponType.CorkGun ? FestivalThrow.Kind.Cork
+                         : current == WeaponType.Poi ? FestivalThrow.Kind.Poi : FestivalThrow.Kind.Coin;
+                float gravity = def.projectileGravity;
+                Vector3 velocity = IsArc(current) ? ArcVelocity(origin, muzzle.forward, out gravity) : muzzle.forward * def.projectileSpeed;
+                FestivalThrow.Spawn(kind, origin, velocity, gravity, this, hitMask);
+                // 手に持った輪・お金は投げたら消え、少しして次が出る (ポイとコルクは弾込めが終わるまで出ない: LateUpdate)
+                if (current == WeaponType.RingToss || current == WeaponType.Coin)
+                {
+                    if (reloadRoutine != null) StopCoroutine(reloadRoutine);
+                    reloadRoutine = isActiveAndEnabled ? StartCoroutine(Reload(def.fireInterval * 0.8f)) : null;
+                }
+            }
+            else if (current == WeaponType.Shuriken || current == WeaponType.Dart || current == WeaponType.Pickaxe)
             {
                 if (current == WeaponType.Shuriken)
                     Shuriken.Spawn(origin, muzzle.forward, def.projectileSpeed, def.range, shurikenMaterial, shurikenCenterMaterial, hitMask);
@@ -411,14 +523,15 @@ namespace ShootingGallery
             {
                 ammo = def.magazine;
                 reloadUntil = Time.time + def.reloadTime;
-                Sfx.Play("reload");
+                readyAt[current] = reloadUntil;
+                if (current != WeaponType.Poi) Sfx.Play("reload"); // ポイは次のポイが来るのを待つだけ (音なし)
             }
 
             if (flashRoutine != null) StopCoroutine(flashRoutine);
             // 自分の弾でスナイパーの的を取ると左手の銃はその場で非表示になるので、その時はフラッシュを出さない
             flashRoutine = isActiveAndEnabled ? StartCoroutine(Flash(muzzle)) : null;
             Sfx.PlayShot(current);
-            bool heavy = current == WeaponType.Shotgun || current == WeaponType.Bomb || current == WeaponType.Sniper || current == WeaponType.Bazooka;
+            bool heavy = current == WeaponType.Shotgun || current == WeaponType.Bomb || current == WeaponType.Sniper || current == WeaponType.Bazooka || current == WeaponType.CorkGun;
             InputDevices.GetDeviceAtXRNode(hapticNode).SendHapticImpulse(0, heavy ? 0.9f : 0.5f, heavy ? 0.12f : 0.06f);
         }
 

@@ -36,6 +36,8 @@ namespace ShootingGallery
         public AudioClip click, powerDown;
         [Header("発掘モード (ザクッザクッと穴を掘る音)")]
         public AudioClip dig;
+        [Header("夏祭りモード (コルク銃のポン / 水のちゃぽん / ポイが破れるビリッ / 祭り太鼓。花火は音なし)")]
+        public AudioClip corkPop, splash, rip, taiko;
         [Header("同時に鳴る音の抑え方")]
         [Tooltip("同じ種類の音がこの秒数以内に続いたら、2回目以降は鳴らさない (複数の的を同時に倒した時など)")]
         public float sameSoundGap = 0.07f;
@@ -104,6 +106,11 @@ namespace ShootingGallery
                 () => { if (ghostWail == null) ghostWail = GhostWail(); }, // ひゅ～どろどろ…
                 () => { if (ghostPop == null) ghostPop = GhostPop(); }, // ぽわん
                 () => { if (dig == null) dig = Dig(); }, // ザクッ ザクッ ザクッ
+                () => { if (corkPop == null) corkPop = CorkPop(); }, // ポン
+                () => { if (splash == null) splash = Splash(); }, // ちゃぽん
+                () => { if (rip == null) rip = Noise("Rip", 0.18f, 18f, 1.1f, 0.85f); }, // ビリッ
+                () => { if (taiko == null) taiko = Taiko(); }, // ドン ドン ドドン
+
                 () => { if (blackout == null) blackout = Blackout(); }, // バツン
                 () => { if (drumroll == null) drumroll = Drumroll(3.6f); }, // ドロロロロ…
                 () => { if (crash == null) crash = Noise("Crash", 2f, 2.2f, 1.6f, 0.9f); }, // ジャーン (シンバル)
@@ -150,9 +157,12 @@ namespace ShootingGallery
                      : type == WeaponType.Missile ? instance.missile
                      : type == WeaponType.Sniper ? instance.sniperShot
                      : type == WeaponType.Shuriken || type == WeaponType.Dart || type == WeaponType.Pickaxe ? instance.shurikenThrow
+                     : type == WeaponType.CorkGun ? instance.corkPop
+                     : type == WeaponType.RingToss || type == WeaponType.Poi || type == WeaponType.Coin ? instance.fusuma // ふわっと投げる音
                      : instance.handgunShot;
             // 二丁拳銃で左右同時に撃っても1発分の音。つるはしは押しっぱなしで次々に投げるので、続けて聞いても気にならない小ささに
-            instance.PlayLimited("shot", clip, type == WeaponType.Pickaxe ? 0.16f : 0.5f, fade: false);
+            bool soft = type == WeaponType.Pickaxe || type == WeaponType.RingToss || type == WeaponType.Poi || type == WeaponType.Coin;
+            instance.PlayLimited("shot", clip, soft ? 0.25f : 0.5f, fade: false);
         }
 
         // 音の種類ごとの、最後に鳴らした時刻と、続けて鳴った回数
@@ -193,7 +203,7 @@ namespace ShootingGallery
             }
             // 的に当たった音 (hit / bonus) は同じ種類として扱い、同時に倒しても1回だけ鳴らす
             string group = name == "bonus" ? "hit" : name;
-            bool limited = name == "hit" || name == "bonus" || name == "explosion" || name == "pickup" || name == "ufo" || name == "thunk" || name == "fusuma" || name == "coin" || name == "reelstop" || name == "ghostpop";
+            bool limited = name == "hit" || name == "bonus" || name == "explosion" || name == "pickup" || name == "ufo" || name == "thunk" || name == "fusuma" || name == "coin" || name == "reelstop" || name == "ghostpop" || name == "splash" || name == "rip";
             AudioClip clip = name switch
             {
                 "stageup" => instance.stageUp,
@@ -230,6 +240,9 @@ namespace ShootingGallery
                 "click" => instance.click,
                 "powerdown" => instance.powerDown,
                 "dig" => instance.dig,
+                "splash" => instance.splash,
+                "rip" => instance.rip,
+                "taiko" => instance.taiko,
                 "warpin" => instance.warpIn,
                 "warpout" => instance.warpOut,
                 _ => null
@@ -529,6 +542,77 @@ namespace ShootingGallery
                 data[i] = Mathf.Clamp(sum, -1f, 1f);
             }
             var clip = AudioClip.Create("Dig", n, 1, Rate, false);
+            clip.SetData(data, 0);
+            return clip;
+        }
+
+        /// <summary>コルク銃: 「ポン」と抜ける短い音 (下がる音程 + 空気の抜けるノイズ)</summary>
+        static AudioClip CorkPop()
+        {
+            const float Length = 0.18f;
+            int n = (int)(Rate * Length);
+            var data = new float[n];
+            var rng = new System.Random(5);
+            float phase = 0f, air = 0f;
+            for (int i = 0; i < n; i++)
+            {
+                float t = i / (float)Rate;
+                float f = 700f * Mathf.Exp(-t * 18f) + 220f;
+                phase += 2f * Mathf.PI * f / Rate;
+                air = Mathf.Lerp(air, (float)rng.NextDouble() * 2f - 1f, 0.5f);
+                data[i] = Mathf.Clamp(Mathf.Sin(phase) * Mathf.Exp(-t * 30f) * 0.7f + air * Mathf.Exp(-t * 45f) * 0.5f, -1f, 1f);
+            }
+            var clip = AudioClip.Create("CorkPop", n, 1, Rate, false);
+            clip.SetData(data, 0);
+            return clip;
+        }
+
+        /// <summary>水に入る音: 「ちゃぽん」(はねる水のノイズ + 上がる泡の音)</summary>
+        static AudioClip Splash()
+        {
+            const float Length = 0.4f;
+            int n = (int)(Rate * Length);
+            var data = new float[n];
+            var rng = new System.Random(9);
+            float phase = 0f, wet = 0f;
+            for (int i = 0; i < n; i++)
+            {
+                float t = i / (float)Rate;
+                wet = Mathf.Lerp(wet, (float)rng.NextDouble() * 2f - 1f, 0.45f);
+                float f = 500f + 900f * Mathf.Clamp01((t - 0.03f) * 8f);
+                phase += 2f * Mathf.PI * f / Rate;
+                float bubble = t > 0.03f ? Mathf.Sin(phase) * Mathf.Exp(-(t - 0.03f) * 14f) * 0.35f : 0f;
+                data[i] = Mathf.Clamp(wet * Mathf.Exp(-t * 16f) * 0.8f + bubble, -1f, 1f);
+            }
+            var clip = AudioClip.Create("Splash", n, 1, Rate, false);
+            clip.SetData(data, 0);
+            return clip;
+        }
+
+        /// <summary>祭り太鼓: 「ドン ドン ドドン」(低い太鼓の音を4つ)</summary>
+        static AudioClip Taiko()
+        {
+            float[] hits = { 0f, 0.42f, 0.84f, 1.05f };
+            const float Length = 1.8f;
+            int n = (int)(Rate * Length);
+            var data = new float[n];
+            var rng = new System.Random(3);
+            foreach (float at in hits)
+            {
+                int start = (int)(at * Rate);
+                float phase = 0f, skin = 0f;
+                for (int i = start; i < n; i++)
+                {
+                    float t = (i - start) / (float)Rate;
+                    if (t > 0.7f) break;
+                    float f = 95f + 60f * Mathf.Exp(-t * 20f);
+                    phase += 2f * Mathf.PI * f / Rate;
+                    skin = Mathf.Lerp(skin, (float)rng.NextDouble() * 2f - 1f, 0.2f);
+                    data[i] += Mathf.Sin(phase) * Mathf.Exp(-t * 6f) * 0.8f + skin * Mathf.Exp(-t * 40f) * 0.4f;
+                }
+            }
+            for (int i = 0; i < n; i++) data[i] = Mathf.Clamp(data[i], -1f, 1f);
+            var clip = AudioClip.Create("Taiko", n, 1, Rate, false);
             clip.SetData(data, 0);
             return clip;
         }

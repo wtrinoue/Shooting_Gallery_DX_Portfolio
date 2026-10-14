@@ -70,7 +70,7 @@ namespace ShootingGallery
             SetTargetsAvailable(enableTargets);
         }
 
-        /// <summary>地面の下へ瞬時に隠す (起動時用)</summary>
+        /// <summary>地面の下へ瞬時に隠す (起動時用 / 発掘モードで、プレイヤーから見えなくなった屋台を隠す時)</summary>
         public void HideImmediate()
         {
             CaptureRestPos();
