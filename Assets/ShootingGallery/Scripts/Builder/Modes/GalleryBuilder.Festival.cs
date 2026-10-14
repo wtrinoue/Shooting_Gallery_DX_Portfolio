@@ -960,15 +960,15 @@ namespace ShootingGallery
             var barPivot = Group(timeRow, "TimeBar"); // 左はしが原点 (X の大きさで長さを変える)
             barPivot.localPosition = new Vector3(-0.27f, 0f, -0.003f);
             Prim(PrimitiveType.Cube, "TimeBarFill", barPivot, new Vector3(0.21f, 0f, 0f), new Vector3(0.42f, 0.022f, 0.002f), Mat("Festival_TimeBar", Color.white, null, true), false);
-            var timeText = MakeText(timeRow, "TimeText", "40s", new Vector3(0.24f, 0f, -0.006f), 0.05f, Color.white);
+            var timeText = MakeText(timeRow, "TimeText", "40s", new Vector3(0.24f, 0f, -0.006f), 0.05f, Color.white, overlay: true);
             var gold = Mat("Coin_Gold", new Color(1f, 0.8f, 0.3f), new Color(0.25f, 0.18f, 0.02f), false, 0.85f);
             Prim(PrimitiveType.Cube, "Frame", panel, new Vector3(0f, 0f, 0.006f), new Vector3(W + 0.02f, H + 0.02f, 0.004f), Mat("Money_Frame", new Color(1f, 0.8f, 0.3f), null, true), false);
             Prim(PrimitiveType.Cube, "Board", panel, Vector3.zero, new Vector3(W, H, 0.004f), TransparentMat("Money_Board", new Color(0.03f, 0.04f, 0.15f, 0.85f)), false);
             foreach (float s in new[] { -1f, 1f })
                 Prim(PrimitiveType.Cylinder, "Coin", panel, new Vector3(s * (W / 2f - 0.07f), 0f, -0.006f), new Vector3(0.08f, 0.004f, 0.08f), gold, false)
                     .transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-            MakeText(panel, "Label", "MONEY", new Vector3(0f, 0.065f, -0.006f), 0.035f, new Color(0.85f, 0.9f, 1f));
-            var text = MakeText(panel, "Amount", "¥0", new Vector3(0f, -0.02f, -0.006f), 0.1f, new Color(1f, 0.85f, 0.3f));
+            MakeText(panel, "Label", "MONEY", new Vector3(0f, 0.065f, -0.006f), 0.035f, new Color(0.85f, 0.9f, 1f), overlay: true);
+            var text = MakeText(panel, "Amount", "¥0", new Vector3(0f, -0.02f, -0.006f), 0.1f, new Color(1f, 0.85f, 0.3f), overlay: true);
             panel.gameObject.SetActive(false);
             gm.moneyPanel = panel.gameObject;
             gm.moneyText = text;

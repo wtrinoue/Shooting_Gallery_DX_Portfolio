@@ -28,6 +28,7 @@ namespace ShootingGallery
     {
         public const string WorldName = "ShootingGallery";
         const string GeneratedMaterialDir = "Assets/ShootingGallery/Generated/Materials";
+        const string TextFontPath = "Fonts/MPLUS1p-Medium";
 
         [Header("Layout")]
         [Tooltip("プレイヤー(中心)から屋台までの距離")]
@@ -65,7 +66,10 @@ namespace ShootingGallery
         {
             if (litShader == null) litShader = Shader.Find("Universal Render Pipeline/Lit");
             if (unlitShader == null) unlitShader = Shader.Find("Universal Render Pipeline/Unlit");
-            font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            // 日本語の入ったフォント (Resources/Fonts/MPLUS1p-Medium.ttf, SIL OFL)。Unity 標準の LegacyRuntime は英数字だけで、
+            // PC・Quest では日本語を端末のフォントから借りて描けるが、WebGL (ブラウザ) では借りられず日本語が消えてしまうため
+            font = Resources.Load<Font>(TextFontPath);
+            if (font == null) font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             mats.Clear();
             meshes.Clear();
         }
@@ -153,7 +157,7 @@ namespace ShootingGallery
                 new Color(0.85f, 0.45f, 0.1f), new Color(0.1f, 0.55f, 0.6f), new Color(0.75f, 0.15f, 0.45f),
                 new Color(0.2f, 0.45f, 0.85f), new Color(0.15f, 0.15f, 0.2f), new Color(0.6f, 0.5f, 0.1f)
             };
-            int stepsTotal = 3 + feverGimmicks.Length + DeluxeFeverGimmicks.Length;
+            int stepsTotal = 4 + feverGimmicks.Length + DeluxeFeverGimmicks.Length;
             int stepsDone = 1;
             msgText.text = LoadingText(stepsDone, stepsTotal);
             LogStep("準備中の表示", step);
@@ -184,6 +188,18 @@ namespace ShootingGallery
                 LogStep($"フィーバー屋台 {gimmick}", step);
                 yield return null;
             }
+
+            // ---- 3a. デバッグモードの屋台 (メイン屋台と同じギミックなしの屋台を5軒。デバッグモードの輪にだけ並ぶ。隠した状態で作る) ----
+            var debugStalls = new Stall[5];
+            for (int i = 0; i < debugStalls.Length; i++)
+            {
+                float angle = 360f / (debugStalls.Length + 1) * (i + 1);
+                var shell = BuildStallShell($"Stall_Debug{i + 1}", angle, Gimmick.Classic, mainCloth, false);
+                debugStalls[i] = BuildStallContent(shell, Gimmick.Classic, mainCloth);
+            }
+            msgText.text = LoadingText(++stepsDone, stepsTotal);
+            LogStep("デバッグモードの屋台", step);
+            yield return null;
 
             // ---- 3b. 豪華屋台 (DELUXE の的を撃つと、出ている屋台がこれに入れ替わる。隠した状態で作る) ----
             var deluxeMain = BuildDeluxeStall("Stall_Deluxe_Grand", DeluxeGimmick.Grand, 0, 0f);
@@ -216,6 +232,8 @@ namespace ShootingGallery
             var spaceStage = BuildSpace(bonusStage);
             var ghostManor = BuildGhost();
             var mineCave = BuildMine();
+            var submarineDive = BuildSubmarine();
+            var concertHall = BuildConcertHall();
             var festivalStage = BuildFestival();
             LogStep("武器の的 / UFO", step);
 
@@ -227,6 +245,7 @@ namespace ShootingGallery
             gm.player = player;
             gm.mainStall = mainStall;
             gm.feverStalls = feverStalls;
+            gm.debugStalls = debugStalls;
             gm.bonusStage = bonusStage;
             gm.sniper = sniper;
             gm.machineGunChallenge = machineGunChallenge;
@@ -239,6 +258,8 @@ namespace ShootingGallery
             gm.spaceStage = spaceStage;
             gm.ghostManor = ghostManor;
             gm.mineCave = mineCave;
+            gm.submarineDive = submarineDive;
+            gm.concertHall = concertHall;
             gm.festivalStage = festivalStage;
             BuildMoneyPanel(hudText.transform.parent, gm); // 夏祭りモードのお金と残り時間の表示 (HUD の上の方)
             gm.deluxeMainStall = deluxeMain;
@@ -286,8 +307,8 @@ namespace ShootingGallery
             hud.transform.localPosition = new Vector3(0f, 2.05f, 2.2f);
             var follow = hud.AddComponent<HudFollow>();
             follow.head = player.head.transform;
-            var hudText = MakeText(hud.transform, "HudText", "", new Vector3(0f, 0.12f, 0f), 0.11f, Color.white);
-            var msgText = MakeText(hud.transform, "MessageText", "", new Vector3(0f, -0.35f, 0f), 0.16f, Color.white);
+            var hudText = MakeText(hud.transform, "HudText", "", new Vector3(0f, 0.12f, 0f), 0.11f, Color.white, overlay: true);
+            var msgText = MakeText(hud.transform, "MessageText", "", new Vector3(0f, -0.35f, 0f), 0.16f, Color.white, overlay: true);
             return (hudText, msgText);
         }
 

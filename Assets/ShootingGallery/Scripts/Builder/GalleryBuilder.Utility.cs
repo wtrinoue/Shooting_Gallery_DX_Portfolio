@@ -59,7 +59,11 @@ namespace ShootingGallery
             return go;
         }
 
-        protected TextMesh MakeText(Transform parent, string name, string text, Vector3 localPos, float height, Color color)
+        /// <summary>
+        /// 3D の文字を作る。ふつうは手前の物に隠れる文字 (Shaders/Text3DDepth.shader)。
+        /// overlay = true なら Unity 標準の文字のまま、何があっても透けて見える (HUD・銃の上の文字など、いつも見えてほしい文字)
+        /// </summary>
+        protected TextMesh MakeText(Transform parent, string name, string text, Vector3 localPos, float height, Color color, bool overlay = false)
         {
             var go = new GameObject(name);
             go.transform.SetParent(parent, false);
@@ -72,9 +76,24 @@ namespace ShootingGallery
             tm.anchor = TextAnchor.MiddleCenter;
             tm.alignment = TextAlignment.Center;
             tm.color = color;
-            go.GetComponent<MeshRenderer>().sharedMaterial = font.material;
+            var depthMat = overlay ? null : DepthTextMat();
+            go.GetComponent<MeshRenderer>().sharedMaterial = depthMat != null ? depthMat : font.material;
             go.GetComponent<MeshRenderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off; // 文字は影を落とさない
             return tm;
+        }
+
+        /// <summary>手前の物に隠れる文字のマテリアル (全部の文字で1つ。文字の画像は実行中に DepthText が付け直す)。シェーダーが見つからなければ null</summary>
+        Material DepthTextMat()
+        {
+            const string Name = "Text_DepthTested";
+            if (mats.TryGetValue(Name, out var cached)) return cached;
+            var shader = Shader.Find(DepthText.ShaderName);
+            if (shader == null) return null;
+            var mat = new Material(shader) { name = Name };
+            mat.mainTexture = font.material.mainTexture;
+            mat = SaveAsAssetIfEditing(mat, Name);
+            mats[Name] = mat;
+            return mat;
         }
 
         Material LanternMat() => Mat("Lantern", new Color(1f, 0.55f, 0.2f), new Color(1.6f, 0.6f, 0.15f));

@@ -38,6 +38,8 @@ namespace ShootingGallery
         public AudioClip dig;
         [Header("夏祭りモード (コルク銃のポン / 水のちゃぽん / ポイが破れるビリッ / 祭り太鼓。花火は音なし)")]
         public AudioClip corkPop, splash, rip, taiko;
+        [Header("潜水艦モード (魚雷を撃つボシュッという音 / ゴボゴボと水に沈む泡の音 / 潜水艦が閉じるガチャン)")]
+        public AudioClip torpedo, bubbles, hatchClose;
         [Header("同時に鳴る音の抑え方")]
         [Tooltip("同じ種類の音がこの秒数以内に続いたら、2回目以降は鳴らさない (複数の的を同時に倒した時など)")]
         public float sameSoundGap = 0.07f;
@@ -110,6 +112,9 @@ namespace ShootingGallery
                 () => { if (splash == null) splash = Splash(); }, // ちゃぽん
                 () => { if (rip == null) rip = Noise("Rip", 0.18f, 18f, 1.1f, 0.85f); }, // ビリッ
                 () => { if (taiko == null) taiko = Taiko(); }, // ドン ドン ドドン
+                () => { if (torpedo == null) torpedo = TorpedoLaunch(); }, // ボシュッ…ぶくぶく
+                () => { if (bubbles == null) bubbles = Bubbles("Bubbles", 2.2f, 38f, 11); }, // ゴボゴボゴボ…
+                () => { if (hatchClose == null) hatchClose = HatchClose(); }, // ガチャン (金属のふたが閉まる)
 
                 () => { if (blackout == null) blackout = Blackout(); }, // バツン
                 () => { if (drumroll == null) drumroll = Drumroll(3.6f); }, // ドロロロロ…
@@ -151,10 +156,13 @@ namespace ShootingGallery
         public static void PlayShot(WeaponType type)
         {
             if (instance == null) return;
+            // トランペット: 音楽モードの曲の今の和音に合う高さで、パッと鳴らす
+            if (type == WeaponType.Trumpet) { ConcertHall.PlayTrumpetShot(Camera.main != null ? Camera.main.transform.position : Vector3.zero); return; }
             var clip = type == WeaponType.MachineGun ? instance.machineGunShot
                      : type == WeaponType.Shotgun ? instance.shotgunShot
                      : type == WeaponType.Bomb || type == WeaponType.Bazooka || type == WeaponType.FireBall ? instance.bombShot
                      : type == WeaponType.Missile ? instance.missile
+                     : type == WeaponType.Torpedo ? instance.torpedo
                      : type == WeaponType.Sniper ? instance.sniperShot
                      : type == WeaponType.Shuriken || type == WeaponType.Dart || type == WeaponType.Pickaxe ? instance.shurikenThrow
                      : type == WeaponType.CorkGun ? instance.corkPop
@@ -243,6 +251,9 @@ namespace ShootingGallery
                 "splash" => instance.splash,
                 "rip" => instance.rip,
                 "taiko" => instance.taiko,
+                "torpedo" => instance.torpedo,
+                "bubbles" => instance.bubbles,
+                "hatchclose" => instance.hatchClose,
                 "warpin" => instance.warpIn,
                 "warpout" => instance.warpOut,
                 _ => null
@@ -585,6 +596,88 @@ namespace ShootingGallery
                 data[i] = Mathf.Clamp(wet * Mathf.Exp(-t * 16f) * 0.8f + bubble, -1f, 1f);
             }
             var clip = AudioClip.Create("Splash", n, 1, Rate, false);
+            clip.SetData(data, 0);
+            return clip;
+        }
+
+        /// <summary>
+        /// 泡の音: 「ゴボゴボ…」。音の高さが上がっていく短い「ポコッ」をばらばらにたくさん鳴らし、低い水のざわめきを重ねる。
+        /// perSecond = 1秒あたりの泡の数
+        /// </summary>
+        static AudioClip Bubbles(string name, float length, float perSecond, int seed)
+        {
+            int n = (int)(Rate * length);
+            var data = new float[n];
+            var rng = new System.Random(seed);
+            int count = Mathf.RoundToInt(length * perSecond);
+            for (int b = 0; b < count; b++)
+            {
+                int start = rng.Next(0, Mathf.Max(1, n - Rate / 10));
+                float f0 = 280f + (float)rng.NextDouble() * 800f;
+                float amp = 0.15f + (float)rng.NextDouble() * 0.25f;
+                float phase = 0f;
+                int len = Rate / 18;
+                for (int i = 0; i < len && start + i < n; i++)
+                {
+                    float t = i / (float)Rate;
+                    phase += 2f * Mathf.PI * f0 * (1f + t * 25f) / Rate; // ポコッと高さが上がる
+                    data[start + i] += Mathf.Sin(phase) * Mathf.Exp(-t * 55f) * amp;
+                }
+            }
+            float lp = 0f;
+            for (int i = 0; i < n; i++)
+            {
+                float t = i / (float)Rate;
+                lp = Mathf.Lerp(lp, (float)rng.NextDouble() * 2f - 1f, 0.03f); // 低い水のざわめき
+                float env = Mathf.Clamp01(t * 8f) * Mathf.Clamp01((length - t) * 3f);
+                data[i] = Mathf.Clamp((data[i] + lp * 0.9f) * env, -1f, 1f);
+            }
+            var clip = AudioClip.Create(name, n, 1, Rate, false);
+            clip.SetData(data, 0);
+            return clip;
+        }
+
+        /// <summary>魚雷の発射音: 「ボシュッ」と低く押し出す音のあとに、ぶくぶく泡の音</summary>
+        static AudioClip TorpedoLaunch()
+        {
+            var bubbles = Bubbles("TorpedoBubbles", 0.8f, 45f, 5);
+            const float Length = 0.8f;
+            int n = (int)(Rate * Length);
+            var data = new float[n];
+            bubbles.GetData(data, 0);
+            float lp = 0f;
+            var rng = new System.Random(17);
+            for (int i = 0; i < n; i++)
+            {
+                float t = i / (float)Rate;
+                lp = Mathf.Lerp(lp, (float)rng.NextDouble() * 2f - 1f, 0.12f);
+                float thump = lp * 2.4f * Mathf.Exp(-t * 14f) + Mathf.Sin(2f * Mathf.PI * 70f * t) * Mathf.Exp(-t * 18f) * 0.5f;
+                data[i] = Mathf.Clamp(data[i] * 0.7f + thump, -1f, 1f);
+            }
+            var clip = AudioClip.Create("Torpedo", n, 1, Rate, false);
+            clip.SetData(data, 0);
+            return clip;
+        }
+
+        /// <summary>潜水艦が閉じる音: 「ガチャン」(金属の短い衝撃音と、少し響く低い金属の鳴り)</summary>
+        static AudioClip HatchClose()
+        {
+            const float Length = 0.9f;
+            int n = (int)(Rate * Length);
+            var data = new float[n];
+            var rng = new System.Random(23);
+            float lp = 0f;
+            float[] ring = { 140f, 323f, 587f, 911f };
+            for (int i = 0; i < n; i++)
+            {
+                float t = i / (float)Rate;
+                lp = Mathf.Lerp(lp, (float)rng.NextDouble() * 2f - 1f, 0.5f);
+                float clank = lp * Mathf.Exp(-t * 45f) * 1.1f;
+                float tone = 0f;
+                for (int k = 0; k < ring.Length; k++) tone += Mathf.Sin(2f * Mathf.PI * ring[k] * t) * Mathf.Exp(-t * (5f + k * 4f)) / (k + 1.5f);
+                data[i] = Mathf.Clamp(clank + tone * 0.7f, -1f, 1f);
+            }
+            var clip = AudioClip.Create("HatchClose", n, 1, Rate, false);
             clip.SetData(data, 0);
             return clip;
         }

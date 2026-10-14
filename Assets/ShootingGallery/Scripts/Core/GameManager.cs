@@ -21,6 +21,8 @@ namespace ShootingGallery
         public Stall mainStall;
         [Tooltip("フィーバー用の屋台 (全ギミック分)。フィーバーのたびにこの中からランダムに選んで出す")]
         public Stall[] feverStalls;
+        [Tooltip("デバッグモードの輪に並べる屋台 (メイン屋台と同じギミックなしの屋台 5軒)。デバッグモードの間はフィーバー屋台の代わりにこれを使う")]
+        public Stall[] debugStalls;
         [Tooltip("プレイヤー(中心)からメイン屋台までの距離。最初のステージの輪の半径")]
         public float stallRadius = 3.5f;
         public Target startTarget;
@@ -108,6 +110,21 @@ namespace ShootingGallery
         public Color mineFogColor = new Color(0.04f, 0.03f, 0.025f);
         public Color mineAmbient = new Color(0.24f, 0.2f, 0.18f); // 暗め (ランプと結晶の明かりで照らされた所が浮かび上がるように)
 
+        [Header("Submarine (潜水艦モード: 潜水艦の的を撃つと、床が砂になって屋台が斜めに埋もれ、あたりが海に。丸い潜水艦に包まれて海の底へ沈み、魚雷で撃つ)")]
+        public SubmarineDive submarineDive;
+        [Tooltip("水の中の背景の色 / 霧の色 (遠くが青くかすむ) / 環境光")]
+        public Color subSkyColor = new Color(0.03f, 0.2f, 0.32f);
+        public Color subFogColor = new Color(0.04f, 0.27f, 0.4f);
+        public Color subAmbient = new Color(0.42f, 0.6f, 0.7f);
+
+        [Header("Music (音楽モード: 四分音符の的を撃つと、赤いカーテンに囲まれてコンサートホールへ。ソロの楽器と、五線譜を流れる音符を撃つ)")]
+        public ConcertHall concertHall;
+        [Tooltip("ホールの背景の色 / 霧の色 / 環境光 (演奏前の薄暗い時 / 演奏中)")]
+        public Color concertSkyColor = new Color(0.01f, 0.008f, 0.01f);
+        public Color concertFogColor = new Color(0.03f, 0.02f, 0.02f);
+        public Color concertAmbientDim = new Color(0.1f, 0.08f, 0.09f);
+        public Color concertAmbient = new Color(0.3f, 0.25f, 0.23f);
+
         [Header("Festival (夏祭りモード: 提灯の的を撃つと、屋台が射的・輪投げ・金魚すくい・食べ物の4軒に入れ替わる。見ている屋台で武器が変わり、スコアがお金になる)")]
         public FestivalStage festivalStage;
         [Tooltip("夏祭りモードの間だけ HUD に出す、お金 (= スコア) の大きな表示 (スコアなどの文字とは別)")]
@@ -151,7 +168,7 @@ namespace ShootingGallery
         float stallsReturnUntil; // 屋台が元の場所に戻りきる時刻
         /// <summary>屋台が戻りきるまで (今から seconds 秒) 屋台の拡張・入れ替えを待たせる</summary>
         void HoldStallsFor(float seconds) => stallsReturnUntil = Mathf.Max(stallsReturnUntil, Time.time + seconds);
-        public bool ChallengeActive => SniperActive || MachineGunChallengeActive || NavalActive || SkyActive || NinjaActive || KaijuActive || CasinoActive || WesternActive || SpaceActive || GhostActive || MineActive || FestivalActive;
+        public bool ChallengeActive => SniperActive || MachineGunChallengeActive || NavalActive || SkyActive || NinjaActive || KaijuActive || CasinoActive || WesternActive || SpaceActive || GhostActive || MineActive || FestivalActive || SubmarineActive || MusicActive;
         /// <summary>海戦モード中か (チャレンジの1つとして扱う: この間はフィーバーの残り時間と屋台の拡張を止め、他のチャレンジや豪華屋台チェンジは出さない)</summary>
         public bool NavalActive => navalBattle != null && navalBattle.IsActive;
         readonly List<Stall> navalStalls = new List<Stall>(); // 海戦モードのために沈めた屋台
@@ -168,6 +185,8 @@ namespace ShootingGallery
         public bool SpaceActive => spaceStage != null && spaceStage.IsActive;
         public bool GhostActive => ghostManor != null && ghostManor.IsActive;
         public bool MineActive => mineCave != null && mineCave.IsActive;
+        public bool SubmarineActive => submarineDive != null && submarineDive.IsActive;
+        public bool MusicActive => concertHall != null && concertHall.IsActive;
         public bool FestivalActive => festivalStage != null && festivalStage.IsActive;
         readonly List<Stall> stageStalls = new List<Stall>(); // 怪獣 / カジノ / 西部劇モードのために縮めた・沈めた屋台 (同時には1つしか動かない)
 
@@ -181,15 +200,19 @@ namespace ShootingGallery
         /// </summary>
         public bool DebugMode { get; private set; }
 
-        // デバッグモードで輪の i 軒目 (0 = メイン屋台) に並べる特殊な的の種類
+        // デバッグモードで輪の i 軒目 (0 = 正面のメイン屋台。60 度ずつ右回り) に並べる特殊な的の種類。空の屋台は普通の的だけ
         static readonly TargetKind[][] DebugKindsByStall =
         {
-            new[] { TargetKind.MachineGun, TargetKind.Shotgun, TargetKind.Bomb },
-            new[] { TargetKind.Sniper, TargetKind.MachineGunChallenge, TargetKind.Festival },
-            new[] { TargetKind.Explosive, TargetKind.BlueOrb, TargetKind.Mine },
-            new[] { TargetKind.Deluxe, TargetKind.Kaiju, TargetKind.Space },
-            new[] { TargetKind.Naval, TargetKind.Sky, TargetKind.Western },
-            new[] { TargetKind.Ninja, TargetKind.Casino, TargetKind.Ghost },
+            new[] { TargetKind.MachineGun, TargetKind.Shotgun, TargetKind.Bomb },                // 正面: 武器
+            new[] { TargetKind.Explosive, TargetKind.BlueOrb, TargetKind.Deluxe },                // 60 度: 爆弾の的・青い玉・豪華タイム
+            new[] { TargetKind.Sniper, TargetKind.MachineGunChallenge },                          // 120 度: チャレンジ
+            new[]                                                                                 // 180 度 (背中側): 別の世界へ行くモード全部
+            {
+                TargetKind.Naval, TargetKind.Sky, TargetKind.Ninja, TargetKind.Kaiju, TargetKind.Casino, TargetKind.Western,
+                TargetKind.Space, TargetKind.Ghost, TargetKind.Mine, TargetKind.Festival, TargetKind.Submarine, TargetKind.Music,
+            },
+            new TargetKind[0],                                                                    // 240 度: 普通の的だけ
+            new TargetKind[0],                                                                    // 300 度: 普通の的だけ
         };
 
         /// <summary>デバッグモードで、この屋台に並べる特殊な的の種類 (デバッグモードでない / 輪にない屋台なら null)</summary>
@@ -205,6 +228,7 @@ namespace ShootingGallery
         float nextFireworkTime;
         Stall normalMainStall;      // 普通のメイン屋台 (豪華タイムが終わったら戻す)
         Stall[] normalFeverStalls;  // 普通のフィーバー屋台
+        Stall[] gimmickFeverStalls; // ギミックのあるフィーバー屋台 (デバッグモードの後に戻す)
         Color normalFogColor, normalAmbient;
         float normalFogStart, normalFogEnd;
         Light sunLight;       // シーンの平行光源 (カジノの暗転で消す)
@@ -257,6 +281,9 @@ namespace ShootingGallery
             foreach (var l in lightsRoot.GetComponentsInChildren<Light>())
                 if (l.type == LightType.Directional && l.enabled) { sunLight = l; sunIntensity = l.intensity; break; }
             normalFeverStalls = feverStalls;
+            gimmickFeverStalls = feverStalls;
+            if (debugStalls != null)
+                foreach (var s in debugStalls) s.HideImmediate();
             if (deluxeMainStall != null) deluxeMainStall.HideImmediate();
             if (deluxeFeverStalls != null)
                 foreach (var s in deluxeFeverStalls) s.HideImmediate();
@@ -298,6 +325,22 @@ namespace ShootingGallery
                 mineCave.Closed += OnMineClosed;
                 mineCave.Covered += HideHatch; // 土の床が広がりきってから、その下でハッチを消す
                 mineCave.GemBroken += OnGemBroken;
+            }
+            if (submarineDive != null)
+            {
+                submarineDive.Covered += OnSubCovered;
+                submarineDive.Underwater += OnSubUnderwater;
+                submarineDive.Surfaced += OnSubSurfaced;
+                submarineDive.Drained += OnSubDrained;
+                submarineDive.Closed += OnSubClosed;
+            }
+            if (concertHall != null)
+            {
+                concertHall.Covered += OnConcertCovered;
+                concertHall.Opened += OnConcertOpened;
+                concertHall.MusicStarted += OnConcertMusic;
+                concertHall.CoveredBack += OnConcertCoveredBack;
+                concertHall.Closed += OnConcertClosed;
             }
             player.DebugRequested += StartDebug; // X ボタン長押しでデバッグモード
             player.ResetRequested += ResetToTitle; // A ボタン長押しで最初に戻る
@@ -343,6 +386,8 @@ namespace ShootingGallery
                 if (SpaceActive && spaceStage.TimeLeft <= 0f) EndSpace();
                 if (GhostActive && ghostManor.TimeLeft <= 0f) EndGhost();
                 if (MineActive && mineCave.TimeLeft <= 0f) EndMine();
+                if (SubmarineActive && submarineDive.TimeLeft <= 0f) EndSubmarine();
+                if (MusicActive && concertHall.TimeLeft <= 0f) EndMusic();
                 UpdateFestival(); // 見ている屋台の武器に持ち替える / 時間切れ
                 if (timeLeft <= 0f) EndRound();
             }
@@ -449,6 +494,8 @@ namespace ShootingGallery
             h = Mix(h, SpaceActive, SpaceActive ? Mathf.CeilToInt(spaceStage.TimeLeft) * 1000 + spaceStage.Hits : 0);
             h = Mix(h, GhostActive, GhostActive ? Mathf.CeilToInt(ghostManor.TimeLeft) * 1000 + ghostManor.Hits : 0);
             h = Mix(h, MineActive, MineActive ? Mathf.CeilToInt(mineCave.TimeLeft) * 1000 + mineCave.Hits : 0);
+            h = Mix(h, SubmarineActive, SubmarineActive ? Mathf.CeilToInt(submarineDive.TimeLeft) * 1000 + submarineDive.Hits : 0);
+            h = Mix(h, MusicActive, MusicActive ? Mathf.CeilToInt(concertHall.TimeLeft) * 1000 + concertHall.Hits : 0);
             h = Mix(h, FestivalActive, FestivalActive ? Mathf.CeilToInt(festivalStage.TimeLeft) * 1000 + festivalStage.Hits : 0);
             return h;
         }
@@ -479,8 +526,10 @@ namespace ShootingGallery
                     string space = SpaceActive ? $"   SPACE {Mathf.CeilToInt(spaceStage.TimeLeft)}  HIT {spaceStage.Hits}" : "";
                     string ghost = GhostActive ? $"   GHOST {Mathf.CeilToInt(ghostManor.TimeLeft)}  BUSTED {ghostManor.Hits}" : "";
                     string mine = MineActive ? $"   MINE {Mathf.CeilToInt(mineCave.TimeLeft)}  DUG {mineCave.Hits}" : "";
+                    string sub = SubmarineActive ? $"   SUB {Mathf.CeilToInt(submarineDive.TimeLeft)}  HIT {submarineDive.Hits}" : "";
+                    string concert = MusicActive ? $"   CONCERT {Mathf.CeilToInt(concertHall.TimeLeft)}  HIT {concertHall.Hits}" : "";
                     string festival = FestivalActive ? $"   FESTIVAL {Mathf.CeilToInt(festivalStage.TimeLeft)}  GOT {festivalStage.Hits}" : "";
-                    ninja += kaiju + casino + western + space + ghost + mine + festival;
+                    ninja += kaiju + casino + western + space + ghost + mine + sub + concert + festival;
                     int secs = (int)elapsed;
                     string time = DebugMode ? $"DEBUG {secs / 60}:{secs % 60:00}" : Endless ? $"ENDLESS {secs / 60}:{secs % 60:00}" : $"TIME {Mathf.CeilToInt(Mathf.Max(0f, timeLeft))}";
                     string score = FestivalActive ? "" : $"SCORE {Score}   "; // 夏祭りの世界ではスコアがお金 (お金はその上の大きな表示に出す)
@@ -519,6 +568,9 @@ namespace ShootingGallery
             State = GameState.Playing;
             Endless = endless;
             DebugMode = debug; // 的を出す前に決めておく (起き上がる時に種類別に化ける)
+            // フィーバーの輪に使う屋台: デバッグモードはメイン屋台と同じギミックなしの屋台、普段はギミックのある屋台 (豪華タイムは StopEverything で終わっている)
+            feverStalls = debug && debugStalls != null && debugStalls.Length > 0 ? debugStalls : gimmickFeverStalls;
+            normalFeverStalls = feverStalls;
             Score = 0;
             Stage = 0;
             stallsReturnUntil = 0f;
@@ -566,6 +618,8 @@ namespace ShootingGallery
             if (SpaceActive) EndSpace();
             if (GhostActive) EndGhost();
             if (MineActive) EndMine();
+            if (SubmarineActive) EndSubmarine();
+            if (MusicActive) EndMusic();
             if (FestivalActive) EndFestival();
             if (IsFever) EndFever();
             if (DeluxeActive) EndDeluxe(); // 普通のメイン屋台に戻してからタイトルへ (身長の的は普通のメイン屋台にある)
@@ -620,6 +674,13 @@ namespace ShootingGallery
                 }
                 return;
             }
+            // 操作方法の看板のクレジット / ライセンスの的 (タイトルの間でも撃てる。点数なし)
+            if (target.kind == TargetKind.Credits)
+            {
+                var viewer = target.GetComponentInParent<CreditsViewer>(true);
+                if (viewer != null) viewer.OnButton(target);
+                return;
+            }
             if (State != GameState.Playing) return;
             if (target.kind == TargetKind.SniperBig) target.points = sniper.PointsAt(point); // 真ん中に近いほど高い
 
@@ -658,6 +719,13 @@ namespace ShootingGallery
             }
 
             // 夏祭りの食べ物: お金 (スコア) を払って買う (点数は入らない)
+            // 音楽モードの楽器: 撃つと跳ねて音が鳴る。点数が入るのはソロを弾いている楽器だけ
+            if (target.kind == TargetKind.MusicInstrument)
+            {
+                target.points = concertHall != null ? concertHall.OnInstrumentHit(target, point) : 0;
+                if (target.points <= 0) return;
+            }
+
             if (target.kind == TargetKind.FestivalFood)
             {
                 BuyFood(target, point);
@@ -808,6 +876,30 @@ namespace ShootingGallery
                     popupColor = target.points >= 500 ? new Color(1f, 0.85f, 0.35f) : new Color(0.7f, 0.95f, 1f);
                     Sfx.Play(target.points >= 300 ? "bonus" : "hit");
                     if (mineCave != null && target.GetComponentInParent<MineCart>() != null) mineCave.RegisterCartHit(); // 宝石は MineGem が数える
+                    break;
+                case TargetKind.Submarine:
+                    popupColor = new Color(1f, 0.85f, 0.25f);
+                    RequestMode(target); // 順番待ちに入れる (他のモードの途中なら、終わってから始まる)
+                    break;
+                case TargetKind.SubmarineObject: // 海の生き物・ほかの潜水艦・壺・宝箱
+                    popupColor = target.points >= 1000 ? new Color(1f, 0.85f, 0.3f) : target.points >= 400 ? new Color(1f, 0.55f, 0.45f) : new Color(0.55f, 0.95f, 1f);
+                    Sfx.Play(target.points >= 300 ? "bonus" : "hit");
+                    if (target.points >= 1000) ShowMessage($"TREASURE!!\n+{target.points}", 1.5f, popupColor);
+                    if (submarineDive != null) submarineDive.RegisterHit();
+                    break;
+                case TargetKind.Music:
+                    popupColor = new Color(1f, 0.85f, 0.3f);
+                    RequestMode(target); // 順番待ちに入れる (他のモードの途中なら、終わってから始まる)
+                    break;
+                case TargetKind.MusicInstrument: // ソロの楽器 (音は ConcertHall が鳴らした)
+                    popupColor = new Color(1f, 0.85f, 0.3f);
+                    Sfx.Play("bonus");
+                    var inst = target.GetComponentInParent<MusicInstrument>();
+                    ShowMessage($"BRAVO!! {(inst != null ? inst.displayName : "SOLO")}\n+{target.points}", 1.5f, popupColor);
+                    break;
+                case TargetKind.MusicNote: // 五線譜の音符 (その高さの音が鳴る)
+                    popupColor = target.points >= 400 ? new Color(1f, 0.85f, 0.3f) : new Color(0.75f, 0.9f, 1f);
+                    if (concertHall != null) concertHall.OnNoteHit(target);
                     break;
                 case TargetKind.Festival:
                     popupColor = new Color(1f, 0.55f, 0.35f);

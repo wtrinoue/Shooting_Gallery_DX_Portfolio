@@ -228,6 +228,12 @@ VS Code の診断で、新規ファイルの型が「見つからない」と出
   - **射的の倒れ方 (同日)**: 当たっても確率で倒れる (FestivalStage.HitPrize / prizeFallChance = 25% → 50% → 75% → 100%。4発目で必ず倒れる。景品ごとに数え、倒れたら0に戻る)。倒れない時は Target.Wobble でぐらっと揺れる (当てるほど大きく、WOBBLE / ALMOST! と出る。点数なし)。コルク銃の弾込めは 1.6秒 → 0.8秒。
   - **さらに調整 (同日)**: 射的の確率を 50% → 75% → 100% (3発目で必ず。フィールド名を prizeFallOdds に変更して Inspector の古い値を無視)。景品の当たり判定 (HitBox) を見た目よりかなり大きく (横約2倍・高さ最大 0.46m・手前へ張り出す)。残高のパネルは傾けずにまっすぐ立て、0.75 倍に縮小 (前は -40° で前かがみに見えていた)。輪投げは段々の台をやめ、水槽と同じく **手前の下のふちを軸に 40° 傾けた板** (Board, 5段×0.66m) に杭を板に垂直に立てる。奥行きは BackZ 2.7 に短縮、景品の棚は 2.45m に。輪がかかる判定は杭の軸からの距離 (FestivalThrow.NearestPeg)、外れた輪は面に沿って寝る。
 
+- **潜水艦モード (2026-10-14 追加)**: 潜水艦の的 (TargetKind.Submarine, 「SUB」) で始まる。Core/GameManager.Submarine.cs、Modes/Submarine/ (SubmarineDive = 演出の流れ・プレイヤーの上げ下げ・的の出し方・海の雰囲気、SubmarinePod = プレイヤーを包む丸い潜水艦、SeaCreature = 泳ぐ/漂う/動かない海の的、TreasureChest = 開閉する宝箱)、Effects/Bubble.cs (泡)、Weapons/Torpedo.cs、Builder/Modes/GalleryBuilder.Submarine.cs (地形・潜水艦) と GalleryBuilder.SubmarineSea.cs (的)。**流れ** (ユーザーの指定): 足元から砂の床 (半径12m) が広がる → Covered でハッチを消し、出ている屋台を **Stall.Bury** (ぐらっと斜めに傾き、傾いた向きにそって砂に埋もれる。だんだん速く、根元に砂けむり。屋台ごとに少しずらす) → 同時に真ん中から海の水面 (半径70m) が一気に広がる → それを横目に SubmarinePod が現れる (口を開けた上下の半球がむくっと出て「ぱっくん」と閉じ、レンズの窓が左のちょうつがいでドアのように閉まる) → 開けた海を 20m 沈む (縦穴はなし)。帰りは浮かんで水面から顔を出す → 潜水艦が開いて消える → 水が引く → Drained で屋台が **Stall.Unbury** (斜めのまま砂からせり上がって立ち直る) → 砂の床が縮んで Closed (ハッチと屋台の的を戻す)。頭が水にもぐった時 / 出た時に水中の色・霧 (subFogColor など) に切り替える。**潜水艦**: 頭が真ん中の半径1mの球 (当たり判定なし)。閉じている間は球ごと視線を追いかけて回り、窓 (正面52°の丸い穴。PodShellMesh は +Z を極にした球面座標で窓のふちがきれいな円) がいつも見ている方に来る。内側に計器盤 (深さの針・回るソナー・ボタン)、前を照らすスポットライト、プロペラ3つ (上下に動く時に泡)。**的** (TargetKind.SubmarineObject): クラゲ9 (100)、フグ4 (150、ときどきふくらむ)、アンコウ3 (300、光るちょうちん)、タコ3 (200、墨)、ウミガメ2 (250)、サメ2 (500)、ほかの潜水艦3 (400、泡を引く)、神殿の壺5 (150)、宝箱4 (1000、開いている間だけ撃てる。当てると金貨が飛び散りしばらく開かない)。当てると泡が出て縮み、少しして別の所から出直す。**武器は魚雷** (WeaponType.Torpedo = 17。撃った直後はゆっくりでプロペラが回って加速、後ろに泡を引き、当たった所で爆発 = Bomb.Blast)。海の底: サンゴ礁 (枝・脳・うちわ・管サンゴ、イソギンチャク)、節ごとに揺れる海藻の森、沈んだ帆船、神殿 (柱・破風・金の像)、岩のアーチ、崖、泡の出る割れ目、光の筋、マリンスノー、小魚の群れ。効果音 Sfx "torpedo" / "bubbles" / "hatchclose"。
+  - **同日の追加**: 海の的すべてに **点数の札** (暗い板に大きな数字、FaceCenter でプレイヤーを向く。的の visual の子なので当たると消える。宝箱は開いている間だけ)。文字は岩を透けるので、もぐっている間だけ出す (SubmarineDive.pointSigns / SetSigns)。潜水艦が砂の床にめり込んでいたので、砂の床の真ん中に **ドレミのハッチと同じ絞り羽根のハッチ** (半径1.6m、BuildSubHatch。真鍮のふちと虹色のランプ) を追加: 潜水艦が閉じたら開いて沈み、6m 通り抜けたら閉じる。帰りは 8m まで上がってきたら開き、上まで来たら閉じる (SubmarineDive.Iris)。見えない当たり判定は MeshRenderer を取り除いてコライダーだけ (HitOnly。マテリアルなしの Renderer が SceneEnvironment の警告に引っかかっていた)。
+  - **見上げた時の見た目 (同日)**: 砂の床を厚さ 0.4m の砂の板で包んだ (BuildSandSlab: 平らな裏面・ハッチの穴の内壁・ふちの壁・裏の真鍮の輪)。潜る途中で見上げても、砂の小山・開いた羽根・地面の穴のふち・屋台の根元が見えず、平らな砂の天井にハッチの穴が1つあるだけになる。水面の裏 (Sea_SurfaceBelow) は地上の物が透けないよう不透明度 0.88 に。
+- **WebXR (unityroom) 対応 (2026-10-14)**: WebXR Export (com.de-panther.webxr / webxr-interactions 0.25.0、OpenUPM) を追加。WebXR/XRBridge.cs (asmdef ShootingGallery.WebXR) が OpenXR と WebXR の違いを吸収 (VR中の判定・床の基準・振動・ゲーム内の「Enter VR」ボタン・WebGL で HDR オフ & Render Scale 1 = 左目が暗くなる対策)。PlayerRig の A/B/X ボタンは `{PrimaryButton}` などの用途でも指定 (WebXR のコントローラーは buttonA / buttonB という名前のため)。
+
+- **クレジット / ライセンス表示 (2026-10-14)**: 操作方法の看板のいちばん下に「CREDITS / LICENSES」の的 (TargetKind.Credits。タイトルの間でも撃てる・点数なし。GameManager.OnTargetHit の先頭で CreditsViewer.OnButton へ)。撃つと看板の前にパネルが開き、Resources/THIRD_PARTY_NOTICES.txt (WebXR Export と Mozilla の著作権表示・Apache License 2.0 全文・Unity の表示) を13行ずつのページで大きく表示。PREV / CLOSE / NEXT の的でページ送り (Core/CreditsViewer.cs、Builder/GalleryBuilder.Controls.cs の BuildCredits)。Apache 2.0 の「ライセンスの写しを渡す」を、どのビルドでも満たすため。
 ## 7. 未確認・今後の候補
 - **最近の変更はどれも Unity 上での動作確認をしていない** (VS Code の診断でエラーなしのみ)。ユーザーから不具合報告が来たら、まず該当スクリプトを読むこと。
 - ユーザーは最新版を反映するために「作り直す → 貼り直し」が必要 (スナイパー追加・生成時の非表示化・点数の配分変更・マシンガンチャレンジ追加)。
@@ -236,3 +242,19 @@ VS Code の診断で、新規ファイルの型が「見つからない」と出
 - 足元の黄色い丸 (PlayerMark) を削除: GalleryBuilder.BuildEnvironment で作らないようにした。playerMark は null のまま (Bonus/Ghost/Kaiju/Sky/Space/Western の参照はすべて null チェック済み)。要 作り直す → 貼り直し。
 - 鉱山の当たり判定を拡大: トロッコの荷 LoadHit を (1.3, 1.05, 1.6) 中心 y0.35 に、壁・床の宝石は細い結晶のコライダーをやめて見えない箱 GemHit (size*2, size*1.9, size*2) で包む。要 作り直す → 貼り直し。
 - 鉱山の点数の文字が地上から透けて見える問題: TextMesh は岩や地面を透けて描かれるので、MineCave.UpdateLabels で、プレイヤーが洞窟の天井 (depth - caveRoomHeight) より下にいる間だけ宝石・トロッコの点数文字の Renderer を有効にする。スクリプトのみ (作り直し不要)。
+
+### 文字のフォント (WebGL で日本語が消える対策)
+- Unity 標準の LegacyRuntime.ttf は英数字のみ。PC/Quest は OS のフォントから日本語を借りるが、WebGL (unityroom) では借りられず日本語が空白になっていた。
+- `Assets/Resources/Fonts/MPLUS1p-Medium.ttf` (M PLUS 1p, SIL OFL 1.1) を同梱し、`GalleryBuilder.Prepare()` で `Resources.Load<Font>("Fonts/MPLUS1p-Medium")` を使う (無ければ LegacyRuntime)。
+- ライセンス表示は `Resources/THIRD_PARTY_NOTICES.txt` の 3. と末尾の OFL 全文 (ゲーム内のクレジットで読める)。
+- フォントを変えたら「シーンに生成」し直すこと (TextMesh はフォント参照をシーンに保存しているため)。
+
+### 音楽モード (四分音符の的 / TargetKind.Music, MusicInstrument, MusicNote)
+- 流れ: 的を撃つ → 頭上に濃い灰色の円い天井とレール、赤いカーテンが 0→360 度ぐるりと閉まる (StageCurtain) → 閉まっている間に屋台を HideImmediate・ホールを表示 (Covered) → カーテンが逆向きに開いて天井ごと消える (Opened) → 演奏開始・ステージが明るくなる (MusicStarted)。帰りも同じ流れ (CoveredBack で屋台を ShowImmediate、Closed で的を出す)。
+- コード: Modes/Music/ (ConcertHall = 進行・ソロの交代・五線譜・音, MusicInstrument = 拍に合わせた揺れ・弓・スライド・マレット・シンバル・ソロ表示・ジャンプ, MusicStaff/MusicNote = 波打つ五線譜と音符の的, StageCurtain, ConcertMusic = 曲と楽器の音をコードで合成), Core/GameManager.Music.cs, Builder/Modes/GalleryBuilder.Music.cs (ホール・カーテン・五線譜・的の見た目) と GalleryBuilder.MusicInstruments.cs (楽器 46 個)。
+- 点数: ソロの楽器だけ (撃つと跳ねて点数 + 五線譜が出る。0.9 秒後にソロが別の楽器へ)。ソロでない楽器は跳ねて音が鳴るだけ (OnInstrumentHit が 0 を返し、GameManager は点数を入れずに戻る)。音符は 4分 100 / 8分 150 / 2分 200、金色は +300。
+- 拍 (ConcertHall.Beat) は曲の再生位置から計算し、ループをまたいで増え続ける。曲は 112BPM・8小節。
+- (追記) プレイヤーは客席の後ろの方 (ホールを HallShiftZ=5m 奥へずらしてある) で、カーテンが閉まっている間に浮き床ごと 2.6m 上がる (ConcertHall.lift / platform。プレイヤーの root の y も動かす。帰りに下ろす)。
+- (追記) カーテンは的を撃った時の視線の右 (StageCurtain.startDeg = 90) から時計回りに閉まり、反時計回りに開く。
+- (追記) 五線譜は4本を staffInterval ごとに次々に出す。ステージ手前の少し外側から、プレイヤーの横を通って後ろへ抜けるベジェ曲線。音符はステージ側からプレイヤーの方へ流れる。
+- (追記) 武器はトランペット (WeaponType.Trumpet = 18, Weapons/NoteShot.cs)。音符 (4分/2分/8分) をまっすぐ吹き出し、しっぽに TrailRenderer 5本で波打つ五線譜をなびかせる。音は ConcertHall.PlayTrumpetShot (今の和音に合う高さ)。

@@ -1,8 +1,6 @@
-using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.XR;
-using UnityEngine.XR;
 
 namespace ShootingGallery
 {
@@ -79,13 +77,18 @@ namespace ShootingGallery
 
         bool? xrModeApplied;
         float yaw, pitch;
+        TrackedPoseDriver rightPose, leftPose;
+        float handCheckAt = -1f; // VR になってから手の追跡を確かめる時刻 (ログ用)
 
         public bool DualWield => dualWield;
         public WeaponType Weapon => weapon;
 
         void Awake()
         {
-            rightTrigger = new InputAction("RightTrigger", InputActionType.Button);
+            if (rightHand != null) rightPose = rightHand.GetComponent<TrackedPoseDriver>();
+            if (leftHand != null) leftPose = leftHand.GetComponent<TrackedPoseDriver>();
+
+            rightTrigger =new InputAction("RightTrigger", InputActionType.Button);
             rightTrigger.AddBinding("<XRController>{RightHand}/trigger");
             rightTrigger.AddBinding("<Mouse>/leftButton");
             rightTrigger.AddBinding("<Keyboard>/space");
@@ -95,23 +98,28 @@ namespace ShootingGallery
             leftTrigger.AddBinding("<Keyboard>/f");
 
             resetButton = new InputAction("Reset", InputActionType.Button);
+            // ボタンは用途 ({PrimaryButton} など) でも指定する: WebXR のコントローラーは名前が buttonA / buttonB で、primaryButton では見つからない
             resetButton.AddBinding("<XRController>{RightHand}/primaryButton"); // Quest の A ボタン
+            resetButton.AddBinding("<XRController>{RightHand}/{PrimaryButton}");
             resetButton.AddBinding("<Keyboard>/3");       // PC: 3 キー (テンキーも可)
             resetButton.AddBinding("<Keyboard>/numpad3");
 
             endlessButton = new InputAction("Endless", InputActionType.Button);
             endlessButton.AddBinding("<XRController>{RightHand}/secondaryButton"); // Quest の B ボタン
+            endlessButton.AddBinding("<XRController>{RightHand}/{SecondaryButton}");
             endlessButton.AddBinding("<Keyboard>/2");     // PC: 2 キー
             endlessButton.AddBinding("<Keyboard>/numpad2");
 
             debugButton = new InputAction("Debug", InputActionType.Button);
             debugButton.AddBinding("<XRController>{LeftHand}/primaryButton"); // Quest の X ボタン
+            debugButton.AddBinding("<XRController>{LeftHand}/{PrimaryButton}");
             debugButton.AddBinding("<Keyboard>/1");       // PC: 1 キー
             debugButton.AddBinding("<Keyboard>/numpad1");
         }
 
         void OnEnable()
         {
+            Application.onBeforeRender += OnBeforeRender;
             rightTrigger.Enable();
             leftTrigger.Enable();
             resetButton.Enable();
@@ -121,6 +129,7 @@ namespace ShootingGallery
 
         void OnDisable()
         {
+            Application.onBeforeRender -= OnBeforeRender;
             rightTrigger.Disable();
             leftTrigger.Disable();
             resetButton.Disable();
@@ -136,9 +145,10 @@ namespace ShootingGallery
 
         void Update()
         {
-            bool xr = XRSettings.isDeviceActive;
+            bool xr = XRBridge.IsActive;
             if (xrModeApplied != xr) ApplyMode(xr);
             if (!xr) UpdateDesktop();
+            else UpdateHandsFallback();
 
             UpdateReset();
 
@@ -200,6 +210,8 @@ namespace ShootingGallery
             WeaponType.CorkGun => new Color(1f, 0.8f, 0.3f),
             WeaponType.Poi => new Color(0.4f, 0.8f, 1f),
             WeaponType.Coin => new Color(1f, 0.85f, 0.25f),
+            WeaponType.Torpedo => new Color(0.35f, 0.9f, 1f),
+            WeaponType.Trumpet => new Color(1f, 0.82f, 0.3f),
             _ => Color.white
         };
 
@@ -264,7 +276,7 @@ namespace ShootingGallery
         /// </summary>
         public void CalibrateHeight()
         {
-            if (!XRSettings.isDeviceActive || head == null || cameraOffset == null) return;
+            if (!XRBridge.IsActive || head == null || cameraOffset == null) return;
             float eye = referenceHeightCm / 100f * eyeHeightRatio;
             calibratedOffsetY = eye - head.transform.localPosition.y; // head の localPosition は CameraOffset から見た、実際に追跡している頭の高さ
             cameraOffset.localPosition = Vector3.up * calibratedOffsetY.Value;
@@ -281,7 +293,8 @@ namespace ShootingGallery
 
             if (xr)
             {
-                bool floor = TrySetFloorOrigin();
+                handCheckAt = Time.unscaledTime + 3f;
+                bool floor = XRBridge.TrySetFloorOrigin();
                 cameraOffset.localPosition = Vector3.up * (calibratedOffsetY ?? (floor ? 0f : standingEyeHeight) + xrHeightBoost);
             }
             else
@@ -293,17 +306,67 @@ namespace ShootingGallery
             }
         }
 
-        static bool TrySetFloorOrigin()
+        // ---- 手の追跡の予備 ----
+        // 手 (銃) はふつう TrackedPoseDriver が Input System のコントローラー (<XRController>{RightHand}/pointerPosition) から動かす。
+        // そのコントローラーが Input System に見つからない時は手が止まったままになるので、XR の標準の API (UnityEngine.XR.InputDevices) から直接読んで動かす
+
+        static readonly UnityEngine.XR.InputFeatureUsage<Vector3> PointerPosition = new UnityEngine.XR.InputFeatureUsage<Vector3>("PointerPosition");
+        static readonly UnityEngine.XR.InputFeatureUsage<Quaternion> PointerRotation = new UnityEngine.XR.InputFeatureUsage<Quaternion>("PointerRotation");
+
+        void OnBeforeRender()
         {
-            var subsystems = new List<XRInputSubsystem>();
-            SubsystemManager.GetSubsystems(subsystems);
-            bool ok = false;
-            foreach (var s in subsystems)
+            if (xrModeApplied == true) UpdateHandsFallback();
+        }
+
+        void UpdateHandsFallback()
+        {
+            bool rightOk = HandFallback(rightHand, rightPose, UnityEngine.XR.XRNode.RightHand);
+            bool leftOk = HandFallback(leftHand, leftPose, UnityEngine.XR.XRNode.LeftHand);
+
+            if (handCheckAt > 0f && Time.unscaledTime >= handCheckAt)
             {
-                if ((s.GetSupportedTrackingOriginModes() & TrackingOriginModeFlags.Floor) != 0)
-                    ok |= s.TrySetTrackingOriginMode(TrackingOriginModeFlags.Floor);
+                handCheckAt = -1f;
+                LogHandTracking(rightOk, leftOk);
             }
-            return ok;
+        }
+
+        /// <summary>Input System で手が追えていれば何もしない。追えていなければ XR の標準の API から読んで置く。手が動いていれば true</summary>
+        static bool HandFallback(Transform hand, TrackedPoseDriver tpd, UnityEngine.XR.XRNode node)
+        {
+            if (hand == null) return false;
+            var action = tpd != null && tpd.enabled ? tpd.positionInput.action : null;
+            if (action != null && action.controls.Count > 0) return true;
+
+            var device = UnityEngine.XR.InputDevices.GetDeviceAtXRNode(node);
+            if (!device.isValid) return false;
+            if (!device.TryGetFeatureValue(PointerPosition, out var pos) && !device.TryGetFeatureValue(UnityEngine.XR.CommonUsages.devicePosition, out pos)) return false;
+            if (!device.TryGetFeatureValue(PointerRotation, out var rot) && !device.TryGetFeatureValue(UnityEngine.XR.CommonUsages.deviceRotation, out rot)) return false;
+            hand.localPosition = pos;
+            hand.localRotation = rot;
+            return true;
+        }
+
+        // VR になって少したってから、手がどの方法で追えているかをコンソールに出す (手が動かない時の原因調べ用)
+        void LogHandTracking(bool rightOk, bool leftOk)
+        {
+            var sb = new System.Text.StringBuilder("[PlayerRig] 手の追跡: ");
+            sb.Append($"右 {Describe(rightPose, rightOk)} / 左 {Describe(leftPose, leftOk)}\n");
+            sb.Append("Input System の XR 機器: ");
+            foreach (var d in InputSystem.devices)
+                if (d is TrackedDevice) sb.Append($"[{d.layout} \"{d.displayName}\" {string.Join(",", d.usages)}] ");
+            var xrDevices = new System.Collections.Generic.List<UnityEngine.XR.InputDevice>();
+            UnityEngine.XR.InputDevices.GetDevices(xrDevices);
+            sb.Append("\nXR の機器: ");
+            foreach (var d in xrDevices) sb.Append($"[{d.name} {d.characteristics}] ");
+            if (rightOk && leftOk) Debug.Log(sb.ToString());
+            else Debug.LogWarning(sb.ToString());
+        }
+
+        static string Describe(TrackedPoseDriver tpd, bool ok)
+        {
+            var action = tpd != null ? tpd.positionInput.action : null;
+            if (action != null && action.controls.Count > 0) return $"Input System ({action.controls[0].path})";
+            return ok ? "予備 (XR の標準の API)" : "追えていない";
         }
 
         void UpdateDesktop()

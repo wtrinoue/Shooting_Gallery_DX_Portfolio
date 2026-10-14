@@ -7,10 +7,10 @@ namespace ShootingGallery
     /// <summary>1丁の銃。見た目の切り替えと発射(レイキャスト)を担当する。</summary>
     public class GunController : MonoBehaviour
     {
-        [Tooltip("WeaponType の順 (Handgun, MachineGun, Shotgun, Bomb, Sniper, Bazooka, Shuriken, FireBall, Dart, Revolver, Missile, Flashlight, Pickaxe, RingToss, CorkGun, Poi, Coin) に並べた見た目")]
-        public GameObject[] models = new GameObject[17];
+        [Tooltip("WeaponType の順 (Handgun, MachineGun, Shotgun, Bomb, Sniper, Bazooka, Shuriken, FireBall, Dart, Revolver, Missile, Flashlight, Pickaxe, RingToss, CorkGun, Poi, Coin, Torpedo, Trumpet) に並べた見た目")]
+        public GameObject[] models = new GameObject[19];
         [Tooltip("各見た目の銃口。最初の子をマズルフラッシュとして使う")]
-        public Transform[] muzzles = new Transform[17];
+        public Transform[] muzzles = new Transform[19];
         [Header("夏祭り (輪投げの輪 / コルク / ポイ / お金)")]
         [Tooltip("輪の形 (ドーナツ形のメッシュ) と、投げるたびに選ぶ輪の色")]
         public Mesh ringMesh;
@@ -44,6 +44,21 @@ namespace ShootingGallery
         public Material missileTrailMaterial;
         [Tooltip("発射台に込めてあるミサイル (撃つと消え、少しして次が込められる)")]
         public GameObject missileLoaded;
+        [Header("潜水艦")]
+        [Tooltip("進んでいく魚雷の胴体 / 先端と帯 / プロペラ / 後ろに引く泡 / 水の中の爆発")]
+        public Material torpedoBodyMaterial;
+        public Material torpedoNoseMaterial;
+        public Material torpedoPropellerMaterial;
+        public Material bubbleMaterial;
+        public Material torpedoExplosionMaterial;
+        [Tooltip("発射管に込めてある魚雷 (撃つと消え、少しして次が込められる)")]
+        public GameObject torpedoLoaded;
+        [Header("音楽 (トランペット)")]
+        [Tooltip("吹き出す音符の色 (撃つたびにランダム) / しっぽの五線譜の筋 / 2分音符の玉の中 / 当たった時の光")]
+        public Material[] noteShotMaterials;
+        public Material noteLineMaterial;
+        public Material noteHoleMaterial;
+        public Material noteSparkMaterial;
         [Header("Sniper / Shuriken")]
         [Tooltip("レーザーポインター (銃口から当たる所まで伸びる)。スナイパーは赤、手裏剣は白")]
         public LineRenderer laser;
@@ -148,6 +163,7 @@ namespace ShootingGallery
             for (int i = 0; i < models.Length; i++)
                 if (models[i] != null) models[i].SetActive(i == (int)type);
             if (missileLoaded != null) missileLoaded.SetActive(true); // 込める途中で止まっていても、持ち替えたら込めてある
+            if (torpedoLoaded != null) torpedoLoaded.SetActive(true);
             // スナイパーは赤、手裏剣とダーツ (と夏祭りの武器) は白のレーザー
             bool white = type == WeaponType.Shuriken || type == WeaponType.Dart || type == WeaponType.Pickaxe || IsFestival(type);
             if (laser != null && whiteLaserMaterial != null) laser.sharedMaterial = white ? whiteLaserMaterial : redLaserMaterial;
@@ -420,7 +436,7 @@ namespace ShootingGallery
                 if (Physics.Linecast(origin, point, out var block, hitMask, QueryTriggerInteraction.Ignore)
                     && block.collider.GetComponentInParent<Target>() != t) continue;
                 t.Hit(point);
-                InputDevices.GetDeviceAtXRNode(hapticNode).SendHapticImpulse(0, 0.4f, 0.05f);
+                XRBridge.Haptic(hapticNode, 0.4f, 0.05f);
             }
         }
 
@@ -508,6 +524,18 @@ namespace ShootingGallery
                     reloadRoutine = isActiveAndEnabled ? StartCoroutine(Reload(def.fireInterval * 0.9f, missileLoaded)) : null;
                 }
             }
+            else if (current == WeaponType.Trumpet)
+                NoteShot.Spawn(origin, muzzle.forward, def.projectileSpeed, noteShotMaterials, noteLineMaterial, noteHoleMaterial, noteSparkMaterial);
+            else if (current == WeaponType.Torpedo)
+            {
+                Torpedo.Spawn(origin, muzzle.forward, def.projectileSpeed, def.blastRadius, torpedoBodyMaterial, torpedoNoseMaterial, torpedoPropellerMaterial,
+                              bubbleMaterial, torpedoExplosionMaterial);
+                if (torpedoLoaded != null)
+                {
+                    if (reloadRoutine != null) StopCoroutine(reloadRoutine);
+                    reloadRoutine = isActiveAndEnabled ? StartCoroutine(Reload(def.fireInterval * 0.9f, torpedoLoaded)) : null;
+                }
+            }
             else if (def.projectile)
             {
                 bool fire = current == WeaponType.FireBall;
@@ -532,7 +560,7 @@ namespace ShootingGallery
             flashRoutine = isActiveAndEnabled ? StartCoroutine(Flash(muzzle)) : null;
             Sfx.PlayShot(current);
             bool heavy = current == WeaponType.Shotgun || current == WeaponType.Bomb || current == WeaponType.Sniper || current == WeaponType.Bazooka || current == WeaponType.CorkGun;
-            InputDevices.GetDeviceAtXRNode(hapticNode).SendHapticImpulse(0, heavy ? 0.9f : 0.5f, heavy ? 0.12f : 0.06f);
+            XRBridge.Haptic(hapticNode, heavy ? 0.9f : 0.5f, heavy ? 0.12f : 0.06f);
         }
 
         // 弾がまっすぐ一瞬で届く武器 (ハンドガン, マシンガン, ショットガン)

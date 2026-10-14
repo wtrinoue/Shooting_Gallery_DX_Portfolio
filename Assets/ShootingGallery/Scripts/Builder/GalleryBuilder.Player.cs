@@ -338,6 +338,44 @@ namespace ShootingGallery
             var cnMuzzle = Group(cn, "Muzzle");
             cnMuzzle.localPosition = new Vector3(0f, 0.015f, 0.1f);
 
+            // 17: 魚雷の発射管 (潜水艦モード専用。紺の太い筒に黄色い帯と丸いのぞき窓。筒の先から黄色い先端の魚雷が顔を出している。撃つと消えて、少しして次が込められる)
+            var tp = Group(gunGo.transform, "Model_Torpedo");
+            var tpNavy = Mat("Torpedo_Tube", new Color(0.12f, 0.2f, 0.32f), null, false, 0.55f);
+            var tpYellow = Mat("Torpedo_Nose", new Color(1f, 0.8f, 0.12f), new Color(0.18f, 0.12f, 0f), false, 0.6f);
+            var tpBody = Mat("Torpedo_Body", new Color(0.45f, 0.48f, 0.5f), null, false, 0.7f);
+            var tpBrass = Mat("Torpedo_Brass", new Color(0.85f, 0.65f, 0.3f), null, false, 0.75f);
+            GunPart(PrimitiveType.Cylinder, tp, new Vector3(0f, 0.025f, 0.07f), new Vector3(0.062f, 0.12f, 0.062f), tpNavy, 90f);    // 発射管
+            GunPart(PrimitiveType.Cylinder, tp, new Vector3(0f, 0.025f, 0.185f), new Vector3(0.07f, 0.01f, 0.07f), tpYellow, 90f);   // 先の黄色い輪
+            GunPart(PrimitiveType.Cylinder, tp, new Vector3(0f, 0.025f, -0.045f), new Vector3(0.07f, 0.01f, 0.07f), tpYellow, 90f);  // 後ろの黄色い輪
+            GunPart(PrimitiveType.Cylinder, tp, new Vector3(0f, 0.025f, -0.055f), new Vector3(0.05f, 0.006f, 0.05f), tpBrass, 90f);  // 後ろのふた
+            GunPart(PrimitiveType.Cylinder, tp, new Vector3(0f, 0.062f, 0.05f), new Vector3(0.028f, 0.006f, 0.028f), tpBrass);        // のぞき窓の縁
+            GunPart(PrimitiveType.Cylinder, tp, new Vector3(0f, 0.066f, 0.05f), new Vector3(0.02f, 0.002f, 0.02f), Mat("Torpedo_Glass", new Color(0.4f, 0.85f, 1f), new Color(0.1f, 0.35f, 0.5f))); // のぞき窓
+            GunPart(PrimitiveType.Cube, tp, new Vector3(0f, -0.025f, 0.01f), new Vector3(0.026f, 0.065f, 0.032f), tpNavy, 15f);       // 握り
+            var tpLoaded = Group(tp, "LoadedTorpedo"); // 発射管から顔を出している魚雷の先
+            GunPart(PrimitiveType.Sphere, tpLoaded, new Vector3(0f, 0.025f, 0.2f), new Vector3(0.045f, 0.045f, 0.06f), tpYellow);
+            GunPart(PrimitiveType.Cylinder, tpLoaded, new Vector3(0f, 0.025f, 0.188f), new Vector3(0.046f, 0.012f, 0.046f), tpBody, 90f);
+            var tpMuzzle = Muzzle(tp, new Vector3(0f, 0.025f, 0.22f), Mat("Torpedo_Flash", new Color(0.75f, 0.95f, 1f), null, true));
+
+            // 18: トランペット (音楽モード専用。金色の管と3本のピストン、前を向いた朝顔から音符を吹き出す)
+            var tr = Group(gunGo.transform, "Model_Trumpet");
+            var trBrass = Mat("Concert_Brass", new Color(1f, 0.8f, 0.32f), new Color(0.15f, 0.1f, 0.02f), false, 0.9f);
+            var trSilver = Mat("Concert_Silver", new Color(0.85f, 0.86f, 0.9f), new Color(0.05f, 0.05f, 0.06f), false, 0.9f);
+            var trPearl = Mat("Concert_Pearl", new Color(0.97f, 0.95f, 0.9f), null, false, 0.8f);
+            GunPart(PrimitiveType.Cylinder, tr, new Vector3(0f, 0.035f, 0.02f), new Vector3(0.016f, 0.09f, 0.016f), trBrass, 90f);    // 上の管 (マウスピースから)
+            GunPart(PrimitiveType.Cylinder, tr, new Vector3(0f, 0.035f, -0.075f), new Vector3(0.012f, 0.012f, 0.012f), trSilver, 90f); // マウスピース
+            GunPart(PrimitiveType.Cylinder, tr, new Vector3(0f, -0.01f, 0.03f), new Vector3(0.014f, 0.07f, 0.014f), trBrass, 90f);    // 下の管
+            for (int i = 0; i < 3; i++)
+            {
+                float z = 0.005f + i * 0.022f;
+                GunPart(PrimitiveType.Cylinder, tr, new Vector3(0f, 0.015f, z), new Vector3(0.018f, 0.035f, 0.018f), trSilver);       // ピストン
+                GunPart(PrimitiveType.Sphere, tr, new Vector3(0f, 0.055f, z), Vector3.one * 0.016f, trPearl);                          // ピストンのボタン
+            }
+            GunPart(PrimitiveType.Cylinder, tr, new Vector3(0f, 0.035f, 0.13f), new Vector3(0.018f, 0.02f, 0.018f), trBrass, 90f);    // 朝顔の手前
+            var trBell = Flare(tr, "Bell", new Vector3(0f, 0.035f, 0.15f), Vector3.forward, 0.01f, 0.045f, 0.07f, trBrass);
+            trBell.GetComponent<Renderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            GunPart(PrimitiveType.Cube, tr, new Vector3(0f, -0.04f, 0.01f), new Vector3(0.024f, 0.06f, 0.03f), Mat("Concert_InstBlack", new Color(0.05f, 0.05f, 0.06f), null, false, 0.75f), 15f); // 握り
+            var trMuzzle = Muzzle(tr, new Vector3(0f, 0.035f, 0.23f), Mat("Note_Spark", new Color(1f, 0.9f, 0.5f), new Color(2.4f, 2f, 0.9f), true));
+
             var laserMat = Mat("Laser", new Color(1f, 0.1f, 0.1f), null, true);
             var laserGo = new GameObject("Laser");
             laserGo.transform.SetParent(gunGo.transform, false);
@@ -363,8 +401,8 @@ namespace ShootingGallery
             gun.bombMaterial = Mat("Bomb", new Color(0.12f, 0.12f, 0.14f), new Color(0.5f, 0.15f, 0f));
             gun.explosionMaterial = TransparentMat("Explosion", new Color(1f, 0.55f, 0.15f, 0.8f));
             gun.models = new[] { hg.gameObject, mg.gameObject, sg.gameObject, bm.gameObject, sr.gameObject, bz.gameObject, sk.gameObject, kj.gameObject, dt.gameObject, rv.gameObject, ms.gameObject, fl.gameObject, px.gameObject,
-                                 rt.gameObject, cg.gameObject, po.gameObject, cn.gameObject };
-            gun.muzzles = new[] { hgMuzzle, mgMuzzle, sgMuzzle, bmMuzzle, srMuzzle, bzMuzzle, skMuzzle, kjMuzzle, dtMuzzle, rvMuzzle, msMuzzle, flMuzzle, pxMuzzle, rtMuzzle, cgMuzzle, poMuzzle, cnMuzzle };
+                                 rt.gameObject, cg.gameObject, po.gameObject, cn.gameObject, tp.gameObject, tr.gameObject };
+            gun.muzzles = new[] { hgMuzzle, mgMuzzle, sgMuzzle, bmMuzzle, srMuzzle, bzMuzzle, skMuzzle, kjMuzzle, dtMuzzle, rvMuzzle, msMuzzle, flMuzzle, pxMuzzle, rtMuzzle, cgMuzzle, poMuzzle, cnMuzzle, tpMuzzle, trMuzzle };
             gun.ringMesh = ringMesh;
             gun.ringMaterials = ringMats;
             gun.corkMaterial = cork;
@@ -384,7 +422,17 @@ namespace ShootingGallery
             gun.missileFlameMaterial = Mat("Missile_Flame", new Color(0.6f, 0.8f, 1f), new Color(1.5f, 2.2f, 4f), true);
             gun.missileTrailMaterial = TransparentMat("Missile_Trail", new Color(0.85f, 0.9f, 1f, 0.45f));
             gun.missileLoaded = loaded.gameObject;
-            gun.infoText = MakeText(gunGo.transform, "InfoText", "HANDGUN", new Vector3(0f, 0.11f, 0f), 0.025f, Color.white);
+            gun.torpedoBodyMaterial = tpBody;
+            gun.torpedoNoseMaterial = tpYellow;
+            gun.torpedoPropellerMaterial = tpBrass;
+            gun.bubbleMaterial = BubbleMat();
+            gun.torpedoExplosionMaterial = TransparentMat("Torpedo_Explosion", new Color(0.75f, 0.95f, 1f, 0.7f));
+            gun.torpedoLoaded = tpLoaded.gameObject;
+            gun.noteShotMaterials = new[] { Mat("NoteShot_Gray", new Color(0.2f, 0.2f, 0.22f), null, true) }; // プレイヤーの音符は濃い灰色 (流れてくる蛍光色の音符と見分けやすく。照明に左右されない)
+            gun.noteLineMaterial = Mat("Staff_Line", new Color(1f, 0.92f, 0.65f), new Color(1.2f, 1f, 0.6f), true);
+            gun.noteHoleMaterial = Mat("NoteShot_Hole", new Color(0.75f, 0.75f, 0.78f), null, true);
+            gun.noteSparkMaterial = Mat("Note_Spark", new Color(1f, 0.9f, 0.5f), new Color(2.4f, 2f, 0.9f), true);
+            gun.infoText = MakeText(gunGo.transform, "InfoText", "HANDGUN", new Vector3(0f, 0.11f, 0f), 0.025f, Color.white, overlay: true);
 
             // 特殊武器の残り時間ゲージ (銃の上に浮かぶ横長バー)
             const float GaugeWidth = 0.14f;

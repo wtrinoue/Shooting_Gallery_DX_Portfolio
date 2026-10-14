@@ -2,7 +2,7 @@ using UnityEngine;
 
 namespace ShootingGallery
 {
-    public enum WeaponType { Handgun = 0, MachineGun = 1, Shotgun = 2, Bomb = 3, Sniper = 4, Bazooka = 5, Shuriken = 6, FireBall = 7, Dart = 8, Revolver = 9, Missile = 10, Flashlight = 11, Pickaxe = 12, RingToss = 13, CorkGun = 14, Poi = 15, Coin = 16 }
+    public enum WeaponType { Handgun = 0, MachineGun = 1, Shotgun = 2, Bomb = 3, Sniper = 4, Bazooka = 5, Shuriken = 6, FireBall = 7, Dart = 8, Revolver = 9, Missile = 10, Flashlight = 11, Pickaxe = 12, RingToss = 13, CorkGun = 14, Poi = 15, Coin = 16, Torpedo = 17, Trumpet = 18 }
 
     public struct WeaponDef
     {
@@ -49,6 +49,10 @@ namespace ShootingGallery
                     return new WeaponDef { displayName = "REVOLVER", fireInterval = 0.22f, automatic = false, pellets = 1, spreadDeg = 0f, range = 60f, magazine = 6, reloadTime = 1.6f };
                 case WeaponType.Missile: // 宇宙モード専用。ミサイルが煙を引いてまっすぐ速く飛び、当たった所で爆発する
                     return new WeaponDef { displayName = "MISSILE", fireInterval = 0.4f, automatic = false, pellets = 1, projectile = true, projectileSpeed = 26f, blastRadius = 1.5f, projectileGravity = 0f };
+                case WeaponType.Torpedo: // 潜水艦モード専用。プロペラで少しゆっくり進む魚雷。泡を引いてまっすぐ進み、当たった所で爆発する
+                    return new WeaponDef { displayName = "TORPEDO", fireInterval = 0.5f, automatic = false, pellets = 1, projectile = true, projectileSpeed = 9f, blastRadius = 1.7f, projectileGravity = 0f };
+                case WeaponType.Trumpet: // 音楽モード専用。音符を吹き出す (それなりの速さでまっすぐ飛び、しっぽに波打つ五線譜をなびかせる)。押しっぱなしで次々に
+                    return new WeaponDef { displayName = "TRUMPET", fireInterval = 0.2f, automatic = true, pellets = 1, range = 40f, projectile = true, projectileSpeed = 15f, projectileGravity = 0f };
                 case WeaponType.Pickaxe: // 発掘モード専用。つるはしを縦にくるくる回しながら投げる。押しっぱなしで次々に投げられる (マシンガンほど速くない。手裏剣と同じく、当たった所に刺さる)。白いレーザーで狙う
                     return new WeaponDef { displayName = "PICKAXE", fireInterval = 0.15f, automatic = true, pellets = 1, range = 35f, projectileSpeed = 19f };
                 case WeaponType.RingToss: // 夏祭りモード (輪投げの屋台)。銃を向けた所へ、いつも同じ形の丸い放物線で輪が飛ぶ (GunController.ArcVelocity。projectileSpeed は使わない)
