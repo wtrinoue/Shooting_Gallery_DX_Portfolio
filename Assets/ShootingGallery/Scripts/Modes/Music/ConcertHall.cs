@@ -117,9 +117,104 @@ namespace ShootingGallery
         AudioClip CurrentBgm => UseBgmClip ? bgmClip : ConcertMusic.Loop;
         float BeatSec => UseBgmClip ? 60f / Mathf.Max(1f, bgmTempo) : ConcertMusic.BeatSeconds;
         float FirstBeat => UseBgmClip ? bgmBeatOffset : 0f;
-        // 曲を流し始める拍: bgmSkipSeconds にいちばん近い拍の頭 (指揮棒の「1」をたたく瞬間に音が出て、そのあとも拍とずれないように)。その拍の曲の時刻から流す
-        float StartBeat => UseBgmClip && bgmSkipSeconds > 0f ? Mathf.Max(0f, Mathf.Round((bgmSkipSeconds - FirstBeat) / BeatSec)) : 0f;
-        float StartAt => StartBeat > 0f ? FirstBeat + StartBeat * BeatSec : 0f;
+        // 曲を流し始める拍 (指揮棒の「1」をたたく瞬間に音が出て、そのあとも拍とずれないように)。その拍の曲の時刻から流す。
+        // 拍の表があれば bgmSkipSeconds にいちばん近い小節の頭 (表の 1拍目)、なければいちばん近い拍の頭
+        float StartBeat
+        {
+            get
+            {
+                if (!UseBgmClip) return 0f;
+                if (HasBeatMap) return 4f * Mathf.Round(TimeToBeat(bgmSkipSeconds) / 4f);
+                return bgmSkipSeconds > 0f ? Mathf.Max(0f, Mathf.Round((bgmSkipSeconds - FirstBeat) / BeatSec)) : 0f;
+            }
+        }
+        float StartAt => UseBgmClip && (HasBeatMap || StartBeat > 0f) ? Mathf.Max(0f, BeatToTime(StartBeat)) : 0f;
+
+        // ---- 拍の表 (人が曲に合わせて打った拍。time,bar,beat の CSV) ----
+        // 表があれば、曲の時刻 ⇔ 拍を表から求める (テンポが途中で変わっても、指揮棒・楽器が曲についていく)。なければ bgmTempo / bgmBeatOffset の一定のテンポ。
+        // 拍の番号 = (小節 - 1) × 4 + (拍 - 1)。0 が 1小節目の1拍目。打った時刻は人の手の揺れ (±数十 ms) があるので、前後 beatMapSmooth 拍ずつの直線に当てはめてならす。
+        // 表の外は、表の最初 / 最後の8拍のテンポのまま延ばす
+        [Tooltip("曲に合わせて人が打った拍の表 (time,bar,beat の CSV。Assets/Source/music_stage.csv)。空なら bgmTempo の一定のテンポ")]
+        public TextAsset beatMap;
+        [Tooltip("拍の表の、手の揺れをならす幅 (前後何拍ずつ)")]
+        public int beatMapSmooth = 3;
+        float[] mapBeats, mapTimes;
+        float mapHeadSlope, mapTailSlope; // 表の外を延ばすテンポ (秒 / 拍)
+        bool HasBeatMap => UseBgmClip && mapTimes != null && mapTimes.Length >= 2;
+
+        void LoadBeatMap()
+        {
+            mapBeats = mapTimes = null;
+            if (beatMap == null) return;
+            var beats = new List<float>();
+            var times = new List<float>();
+            foreach (var raw in beatMap.text.Split('\n'))
+            {
+                var p = raw.Trim().Split(',');
+                if (p.Length < 3) continue;
+                var inv = System.Globalization.CultureInfo.InvariantCulture;
+                if (!float.TryParse(p[0], System.Globalization.NumberStyles.Float, inv, out float t)) continue; // 見出しの行など
+                if (!int.TryParse(p[1], out int bar) || !int.TryParse(p[2], out int beat)) continue;
+                float b = (bar - 1) * 4 + (beat - 1);
+                if (beats.Count > 0 && (b <= beats[beats.Count - 1] || t <= times[times.Count - 1])) continue; // 戻っている行は使わない
+                beats.Add(b);
+                times.Add(t);
+            }
+            if (beats.Count < 2) return;
+            int n = beats.Count;
+            mapBeats = beats.ToArray();
+            mapTimes = new float[n];
+            // 手の揺れをならす: 前後 beatMapSmooth 拍の (拍, 時刻) に直線を当てはめ、その拍の所の時刻にする
+            for (int k = 0; k < n; k++)
+            {
+                FitLine(beats, times, Mathf.Max(0, k - beatMapSmooth), Mathf.Min(n - 1, k + beatMapSmooth), out float a, out float s);
+                mapTimes[k] = a + s * mapBeats[k];
+            }
+            for (int k = 1; k < n; k++) mapTimes[k] = Mathf.Max(mapTimes[k], mapTimes[k - 1] + 0.05f); // 念のため、時刻は必ず進む
+            FitLine(beats, times, 0, Mathf.Min(n - 1, 7), out _, out mapHeadSlope);
+            FitLine(beats, times, Mathf.Max(0, n - 8), n - 1, out _, out mapTailSlope);
+            mapHeadSlope = Mathf.Max(0.1f, mapHeadSlope);
+            mapTailSlope = Mathf.Max(0.1f, mapTailSlope);
+        }
+
+        // i0〜i1 の点に直線 time = a + s × beat を当てはめる (最小二乗)
+        static void FitLine(List<float> beats, List<float> times, int i0, int i1, out float a, out float s)
+        {
+            double n = 0, sx = 0, sy = 0, sxx = 0, sxy = 0;
+            for (int i = i0; i <= i1; i++) { n++; sx += beats[i]; sy += times[i]; sxx += beats[i] * beats[i]; sxy += beats[i] * times[i]; }
+            double d = n * sxx - sx * sx;
+            s = d > 1e-6 ? (float)((n * sxy - sx * sy) / d) : 0.45f;
+            a = (float)((sy - s * sx) / n);
+        }
+
+        // 曲の時刻 (秒) → 拍
+        float TimeToBeat(float sec)
+        {
+            if (!HasBeatMap) return (sec - FirstBeat) / BeatSec;
+            int n = mapTimes.Length;
+            if (sec <= mapTimes[0]) return mapBeats[0] + (sec - mapTimes[0]) / mapHeadSlope;
+            if (sec >= mapTimes[n - 1]) return mapBeats[n - 1] + (sec - mapTimes[n - 1]) / mapTailSlope;
+            int i = System.Array.BinarySearch(mapTimes, sec);
+            if (i >= 0) return mapBeats[i];
+            i = ~i; // mapTimes[i - 1] < sec < mapTimes[i]
+            return Mathf.Lerp(mapBeats[i - 1], mapBeats[i], (sec - mapTimes[i - 1]) / (mapTimes[i] - mapTimes[i - 1]));
+        }
+
+        // 拍 → 曲の時刻 (秒)
+        float BeatToTime(float beat)
+        {
+            if (!HasBeatMap) return FirstBeat + beat * BeatSec;
+            int n = mapBeats.Length;
+            if (beat <= mapBeats[0]) return mapTimes[0] + (beat - mapBeats[0]) * mapHeadSlope;
+            if (beat >= mapBeats[n - 1]) return mapTimes[n - 1] + (beat - mapBeats[n - 1]) * mapTailSlope;
+            int i = System.Array.BinarySearch(mapBeats, beat);
+            if (i >= 0) return mapTimes[i];
+            i = ~i;
+            return Mathf.Lerp(mapTimes[i - 1], mapTimes[i], (beat - mapBeats[i - 1]) / (mapBeats[i] - mapBeats[i - 1]));
+        }
+
+        // その拍の1拍の長さ (秒)
+        float BeatSecAt(float beat) => Mathf.Max(0.05f, BeatToTime(beat + 0.5f) - BeatToTime(beat - 0.5f));
 
         [Header("時間")]
         [Tooltip("音楽モードの長さ (秒。カーテンが閉まり始めてから)")]
@@ -187,6 +282,7 @@ namespace ShootingGallery
             stageBase = new float[stageLights.Length];
             for (int i = 0; i < stageLights.Length; i++) stageBase[i] = stageLights[i] != null ? stageLights[i].intensity : 0f;
             PrepareSpots();
+            LoadBeatMap();
             houseBase = houseLight != null ? houseLight.intensity : 0f;
             PrepareBaton();
             foreach (var inst in instruments) if (inst != null) inst.Init(this);
@@ -275,7 +371,7 @@ namespace ShootingGallery
                 yield return null;
             }
             batonFlick = batonFlickHeight;
-            for (float t = 0f; t < 1f; t += Time.deltaTime / Mathf.Max(0.05f, BeatSec * 0.5f))
+            for (float t = 0f; t < 1f; t += Time.deltaTime / Mathf.Max(0.05f, BeatSecAt(StartBeat - 0.25f) * 0.5f))
             {
                 batonHoldBeat = 3.5f + 0.5f * t;
                 batonFlick = batonFlickHeight * (1f - t) * (1f - t); // 跳ね上げた分は振り下ろしの勢いの中で消える
@@ -357,17 +453,20 @@ namespace ShootingGallery
         float CurrentMusicVolume() =>
             Mathf.Lerp(introVolume, musicVolume, Mathf.SmoothStep(0f, 1f, (Time.time - playStartTime) / Mathf.Max(0.01f, introFadeSeconds)));
 
+        // 曲 1周の拍の数 (頭に戻った時に拍を数え続けるため)
+        float LoopBeats(AudioClip clip) => Mathf.Max(1f, TimeToBeat(clip.length) - TimeToBeat(0f));
+
         void TryStartMusic()
         {
             var clip = CurrentBgm;
             if (!bgm || music == null || clip == null || music.isPlaying) return;
             music.clip = clip;
             music.volume = CurrentMusicVolume();
-            float loopBeats = (clip.length - FirstBeat) / BeatSec;
-            loops = Mathf.FloorToInt(idleBeatClock / loopBeats);
+            float loopBeats = LoopBeats(clip);
+            loops = Mathf.FloorToInt((idleBeatClock - TimeToBeat(0f)) / loopBeats);
             float raw = idleBeatClock - loops * loopBeats;
             lastRawBeat = raw;
-            float time = idleBeatClock <= StartBeat ? StartAt : FirstBeat + raw * BeatSec; // 演奏の始まりからなら、流し始める所 (bgmSkipSeconds) から
+            float time = idleBeatClock <= StartBeat ? StartAt : BeatToTime(raw); // 演奏の始まりからなら、流し始める所 (bgmSkipSeconds) から
             music.timeSamples = Mathf.Clamp(Mathf.RoundToInt(time * clip.frequency), 0, clip.samples - 1);
             music.Play();
         }
@@ -694,10 +793,10 @@ namespace ShootingGallery
             // 拍: 演奏中は曲の再生位置から (楽器の揺れが音とずれないように)。それ以外はゆっくり進める
             if (music != null && music.isPlaying && music.clip != null)
             {
-                float raw = (music.timeSamples / (float)music.clip.frequency - FirstBeat) / BeatSec;
+                float raw = TimeToBeat(music.timeSamples / (float)music.clip.frequency); // 拍の表があれば表から
                 if (raw < lastRawBeat - 1f) loops++; // 曲の頭に戻った
                 lastRawBeat = raw;
-                Beat = loops * (music.clip.length - FirstBeat) / BeatSec + raw;
+                Beat = loops * LoopBeats(music.clip) + raw;
             }
             else
             {

@@ -24,7 +24,8 @@ namespace ShootingGallery
         const float ConcertCurtainH = 2.35f;
         const float HallShiftZ = 0.8f;     // ホールを奥へずらす量 (プレイヤーは客席の前の方、ステージの手前の縁から約 5.4m)
         const float ConcertLiftH = 4.2f;   // プレイヤーを浮き床ごと持ち上げる高さ (ステージ全体を見下ろせて、奥のソロの楽器も狙いやすいように)
-        public const string ConcertBgmPath = "Assets/Source/music_stage.mp3"; // 音楽モードの BGM (魔王魂。135BPM・ヘ短調)
+        public const string ConcertBgmPath = "Assets/Source/music_stage.mp3"; // 音楽モードの BGM (魔王魂。約134BPM・ヘ短調)
+        public const string ConcertBeatMapPath = "Assets/Source/music_stage.csv"; // その曲の拍の表 (time,bar,beat。ユーザーが手で打った)
         const float PlatformR = 1.4f;      // 浮き床の半径 (足元だけの小さな台)
         const float RailH = 0.35f;         // 浮き床の手すりの高さ (足元を囲むだけの低い手すり)
 
@@ -72,6 +73,7 @@ namespace ShootingGallery
 #if UNITY_EDITOR
             // BGM: 魔王魂 の曲 (エディターで「シーンに生成」する時だけ結びつける。無ければコードで作った曲。クレジットは Resources/THIRD_PARTY_NOTICES.txt)
             concert.bgmClip = UnityEditor.AssetDatabase.LoadAssetAtPath<AudioClip>(ConcertBgmPath);
+            concert.beatMap = UnityEditor.AssetDatabase.LoadAssetAtPath<TextAsset>(ConcertBeatMapPath); // 人が曲に合わせて打った拍の表 (指揮棒・楽器の拍)
 #endif
             concert.staffStartZ = HallBack + HallShiftZ - 2f;    // 五線譜が出てくる所: ステージの左右の端の上空、奥から
             concert.staffNearZ = HallFront + HallShiftZ + 4.6f;  //   手前まで (端の手前のコントラバス・第1バイオリンより奥)

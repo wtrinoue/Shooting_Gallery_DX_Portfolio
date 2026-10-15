@@ -23,9 +23,13 @@ namespace ShootingGallery
         public Stall[] feverStalls;
         [Tooltip("デバッグモードの輪に並べる屋台 (メイン屋台と同じギミックなしの屋台 5軒)。デバッグモードの間はフィーバー屋台の代わりにこれを使う")]
         public Stall[] debugStalls;
+        [Tooltip("WORLD GATE の輪の屋台 (1段だけの屋台 6軒。1軒目が正面)。WORLD GATE の間はメイン屋台・フィーバー屋台の代わりにこれを使う")]
+        public Stall[] gateStalls;
         [Tooltip("プレイヤー(中心)からメイン屋台までの距離。最初のステージの輪の半径")]
         public float stallRadius = 3.5f;
         public Target startTarget;
+        [Tooltip("タイトルの WORLD GATE の的 (START の横)。撃つと、別の世界へ飛ぶ的が並んだ6軒の屋台に囲まれる")]
+        public Target worldGateTarget;
         [Tooltip("操作方法の看板 (プレイヤーの背中側)。タイトルの間だけ表示する (ゲーム中はフィーバーの屋台が並ぶ場所なので隠す)")]
         public GameObject controlsBoard;
         [Tooltip("タイトルの間だけ穴をふさぐ平らな床のふたと、穴のふち (ラウンドが始まるとふたが消え、ふちとハッチが出る)")]
@@ -219,6 +223,7 @@ namespace ShootingGallery
         public TargetKind[] DebugKinds(Stall stall)
         {
             if (!DebugMode || stall == null) return null;
+            if (GateMode) return GateKinds(stall); // WORLD GATE: 別の世界へ飛ぶ的だけを、輪の屋台に順に詰めて並べる
             int i = stall == mainStall ? 0 : activeFeverStalls.IndexOf(stall) + 1;
             return i > 0 || stall == mainStall ? DebugKindsByStall[i % DebugKindsByStall.Length] : null;
         }
@@ -284,6 +289,8 @@ namespace ShootingGallery
             gimmickFeverStalls = feverStalls;
             if (debugStalls != null)
                 foreach (var s in debugStalls) s.HideImmediate();
+            if (gateStalls != null)
+                foreach (var s in gateStalls) if (s != null) s.HideImmediate();
             if (deluxeMainStall != null) deluxeMainStall.HideImmediate();
             if (deluxeFeverStalls != null)
                 foreach (var s in deluxeFeverStalls) s.HideImmediate();
@@ -479,7 +486,7 @@ namespace ShootingGallery
             h = Mix(h, highScore);
             if (State != GameState.Playing) return h;
             h = Mix(h, Stage);
-            h = Mix(h, DebugMode ? 2 : Endless ? 1 : 0);
+            h = Mix(h, GateMode ? 3 : DebugMode ? 2 : Endless ? 1 : 0);
             h = Mix(h, DebugMode || Endless ? (int)elapsed : Mathf.CeilToInt(Mathf.Max(0f, timeLeft)));
             h = Mix(h, IsFever, Mathf.CeilToInt(feverLeft));
             h = Mix(h, SniperActive, SniperShotsLeft);
@@ -531,7 +538,7 @@ namespace ShootingGallery
                     string festival = FestivalActive ? $"   FESTIVAL {Mathf.CeilToInt(festivalStage.TimeLeft)}  GOT {festivalStage.Hits}" : "";
                     ninja += kaiju + casino + western + space + ghost + mine + sub + concert + festival;
                     int secs = (int)elapsed;
-                    string time = DebugMode ? $"DEBUG {secs / 60}:{secs % 60:00}" : Endless ? $"ENDLESS {secs / 60}:{secs % 60:00}" : $"TIME {Mathf.CeilToInt(Mathf.Max(0f, timeLeft))}";
+                    string time = GateMode ? $"WORLD GATE {secs / 60}:{secs % 60:00}" : DebugMode ? $"DEBUG {secs / 60}:{secs % 60:00}" : Endless ? $"ENDLESS {secs / 60}:{secs % 60:00}" : $"TIME {Mathf.CeilToInt(Mathf.Max(0f, timeLeft))}";
                     string score = FestivalActive ? "" : $"SCORE {Score}   "; // 夏祭りの世界ではスコアがお金 (お金はその上の大きな表示に出す)
                     hudText.text = $"{score}STAGE {Stage + 1}\n{time}{fever}{deluxe}{sniperShots}{mg}{naval}{sky}{ninja}";
                     break;
@@ -556,8 +563,10 @@ namespace ShootingGallery
             State = GameState.Title;
             Endless = false;
             DebugMode = false;
+            GateMode = false;
             mainStall.SetTargetsAvailable(false);
             startTarget.SetAvailable(true);
+            if (worldGateTarget != null) worldGateTarget.SetAvailable(true);
             if (controlsBoard != null) controlsBoard.SetActive(true);
             SetFlatFloor(true); // タイトルの間は、穴もふちもない平らな床
             ShowMessage("SHOOT  START !", 9999f, Color.white);
@@ -577,6 +586,7 @@ namespace ShootingGallery
             elapsed = 0f;
             timeLeft = endless ? EndlessTime : roundDuration;
             startTarget.SetAvailable(false);
+            if (worldGateTarget != null) worldGateTarget.SetAvailable(false);
             if (controlsBoard != null) controlsBoard.SetActive(false);
             SetFlatFloor(false); // ラウンドが始まった: 平らな床のふたが消え、穴のふちとハッチがふくらんで出る
             mainStall.SetTargetsAvailable(true);
@@ -623,6 +633,7 @@ namespace ShootingGallery
             if (FestivalActive) EndFestival();
             if (IsFever) EndFever();
             if (DeluxeActive) EndDeluxe(); // 普通のメイン屋台に戻してからタイトルへ (身長の的は普通のメイン屋台にある)
+            EndWorldGate(); // WORLD GATE の屋台を沈め、普通のメイン屋台を戻す (START・WORLD GATE の的はメイン屋台にある)
             if (bonusStage != null) bonusStage.Close();
             // 点数の的はその場ですぐに消す (倒れる動きもなし。終わった後の静けさ)。せり上がり途中の屋台も、着いた時に的を出さない
             mainStall.SetTargetsAvailable(false);
@@ -672,6 +683,11 @@ namespace ShootingGallery
                     player.CalibrateHeight(); // 視点を身長 180cm の人の高さに合わせる (屋台との位置関係をいつも同じにする)
                     StartRound();
                 }
+                return;
+            }
+            if (target.kind == TargetKind.WorldGate)
+            {
+                if (State != GameState.Playing) StartWorldGate(); // 別の世界へ飛ぶ的だけが並んだ6軒の屋台に囲まれる
                 return;
             }
             // 操作方法の看板のクレジット / ライセンスの的 (タイトルの間でも撃てる。点数なし)

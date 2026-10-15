@@ -166,6 +166,7 @@ namespace ShootingGallery
             // ---- 2. メイン屋台の的 ----
             var mainStall = BuildStallContent(mainShell, Gimmick.Classic, mainCloth);
             var startTarget = BuildStartTarget(mainShell);
+            var worldGateTarget = BuildWorldGateTarget(mainShell); // START の横の WORLD GATE の的
             var controlsBoard = BuildControlsBoard(); // 背中側の操作方法の看板 (シーンに生成した時も見えるまま置く)
             // START の的はシーンに生成した時も見えるまま置く (タイトルで最初に出る的。再生時は GameManager が出し入れする)
             msgText.text = LoadingText(++stepsDone, stepsTotal);
@@ -199,6 +200,7 @@ namespace ShootingGallery
             }
             msgText.text = LoadingText(++stepsDone, stepsTotal);
             LogStep("デバッグモードの屋台", step);
+            var gateStalls = BuildWorldGateStalls(); // WORLD GATE の6軒 (1段だけ。別の世界へ飛ぶ的が並ぶ)
             yield return null;
 
             // ---- 3b. 豪華屋台 (DELUXE の的を撃つと、出ている屋台がこれに入れ替わる。隠した状態で作る) ----
@@ -246,6 +248,7 @@ namespace ShootingGallery
             gm.mainStall = mainStall;
             gm.feverStalls = feverStalls;
             gm.debugStalls = debugStalls;
+            gm.gateStalls = gateStalls;
             gm.bonusStage = bonusStage;
             gm.sniper = sniper;
             gm.machineGunChallenge = machineGunChallenge;
@@ -267,6 +270,7 @@ namespace ShootingGallery
             gm.fireworkMaterials = FireworkMaterials();
             gm.stallRadius = stallRadius;
             gm.startTarget = startTarget;
+            gm.worldGateTarget = worldGateTarget;
             gm.controlsBoard = controlsBoard;
             gm.hudText = hudText;
             gm.messageText = msgText;
