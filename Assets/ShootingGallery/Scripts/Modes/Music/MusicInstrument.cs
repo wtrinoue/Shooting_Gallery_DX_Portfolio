@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace ShootingGallery
@@ -88,11 +89,15 @@ namespace ShootingGallery
         public void Init(ConcertHall owner)
         {
             hall = owner;
+            MergeMeshes();
             if (pivot != null)
             {
                 pivotPos = pivot.localPosition;
                 pivotRot = pivot.localRotation;
-                bodyRenderers = pivot.GetComponentsInChildren<Renderer>(true);
+                var all = pivot.GetComponentsInChildren<Renderer>(true);
+                var list = new List<Renderer>(all.Length);
+                foreach (var r in all) if (r.enabled) list.Add(r); // まとめて消した元の部品は除く (まとめた物が入る)
+                bodyRenderers = list.ToArray();
                 bodyMaterials = new Material[bodyRenderers.Length];
                 for (int i = 0; i < bodyRenderers.Length; i++) bodyMaterials[i] = bodyRenderers[i].sharedMaterial;
             }
@@ -108,6 +113,31 @@ namespace ShootingGallery
             clapPos = new Vector3[clappers != null ? clappers.Length : 0];
             for (int i = 0; i < clapPos.Length; i++) clapPos[i] = clappers[i].localPosition;
             SetSolo(false);
+        }
+
+        bool merged;
+        /// <summary>見た目を1つにまとめた部品の数 (確かめる用)</summary>
+        public int MergedParts { get; private set; }
+
+        // 動かない部品の見た目を材質ごとに1つにまとめる (楽器は40個ほどあり、部品ごとに描くと重いので)。
+        // 1. Pivot の下 (楽器の本体。拍に合わせて Pivot ごと揺れる): 別に動く部品 (弓・スライド・マレット・シンバル) とソロの印・当たり判定の箱はそのまま
+        // 2. 根元 (椅子・足元の光の輪): 撃たれると揺れる Wobble の下とソロの印はそのまま
+        void MergeMeshes()
+        {
+            if (merged) return;
+            merged = true;
+            var exclude = new HashSet<Transform>();
+            void Add(Transform t) { if (t != null) exclude.Add(t); }
+            Add(bow); Add(slider); Add(soloMark != null ? soloMark.transform : null); Add(soloStaff); Add(hitBox);
+            if (beaters != null) foreach (var t in beaters) Add(t);
+            if (clappers != null) foreach (var t in clappers) Add(t);
+            if (soloNotes != null) foreach (var t in soloNotes) Add(t);
+            if (pivot != null) MergedParts += MeshMerger.Merge(pivot, exclude);
+
+            var wobble = hitTarget != null && hitTarget.visual != null ? hitTarget.visual : pivot != null ? pivot.parent : null;
+            exclude.Clear();
+            Add(wobble); Add(pivot); Add(soloMark != null ? soloMark.transform : null);
+            MergedParts += MeshMerger.Merge(transform, exclude);
         }
 
         public void SetSolo(bool on)

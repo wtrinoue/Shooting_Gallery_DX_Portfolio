@@ -216,6 +216,15 @@ namespace ShootingGallery
         // その拍の1拍の長さ (秒)
         float BeatSecAt(float beat) => Mathf.Max(0.05f, BeatToTime(beat + 0.5f) - BeatToTime(beat - 0.5f));
 
+        [Header("軽量化 (WebGL の VR は両目で2回描くので、リアルタイムの明かりと影を減らす)")]
+        [Tooltip("ソロ・指揮台のスポットライトを光の筋だけにする (明かりは使わない。指揮台は演奏前の暗い間だけ照らす)。ステージを照らす2灯 (StageWash) も消して、残りの明かりを washMakeUp 倍にして補う")]
+        public bool lightweight = true;
+        public float washMakeUp = 1.35f;
+        [Tooltip("ホールが出ている間は、外の明かりの影を切る")]
+        public bool noShadowsInHall = true;
+        [Tooltip("同時に出す五線譜の数の上限")]
+        public int maxStaffs = 3;
+
         [Header("時間")]
         [Tooltip("音楽モードの長さ (秒。カーテンが閉まり始めてから)")]
         public float duration = 52f;
@@ -281,11 +290,21 @@ namespace ShootingGallery
             }
             stageBase = new float[stageLights.Length];
             for (int i = 0; i < stageLights.Length; i++) stageBase[i] = stageLights[i] != null ? stageLights[i].intensity : 0f;
+            if (lightweight)
+                for (int i = 0; i < stageLights.Length; i++)
+                {
+                    if (stageLights[i] == null) continue;
+                    if (stageLights[i].type == LightType.Spot) { stageLights[i].enabled = false; stageBase[i] = 0f; } // StageWash
+                    else stageBase[i] *= washMakeUp;
+                }
+            CollectShadowLights();
             PrepareSpots();
             LoadBeatMap();
             houseBase = houseLight != null ? houseLight.intensity : 0f;
             PrepareBaton();
-            foreach (var inst in instruments) if (inst != null) inst.Init(this);
+            int mergedParts = 0;
+            foreach (var inst in instruments) if (inst != null) { inst.Init(this); mergedParts += inst.MergedParts; }
+            Debug.Log($"[ConcertHall] 楽器の部品 {mergedParts} 個の見た目をまとめました (軽量化)");
             foreach (var s in staffs) if (s != null) s.Init();
             if (curtain != null) { curtain.Init(); curtain.HideInstant(); }
             SetTargets(false);
@@ -324,6 +343,7 @@ namespace ShootingGallery
                 LowerBatonNow();
                 SetTargets(false);
                 if (hall != null) hall.SetActive(false);
+                SetHallShadows(false);
                 if (curtain != null) curtain.HideInstant();
                 SetLift(0f);
                 if (platform != null) platform.SetActive(false);
@@ -343,6 +363,7 @@ namespace ShootingGallery
             // 2. 閉まっている間に、外をコンサートホールにする (演奏前の薄暗いステージ)
             SetTargets(true); // 隠れたまま的を立てておく (出す時に起き上がる動きを見せない)
             if (hall != null) hall.SetActive(true);
+            SetHallShadows(true);
             SetLights(0f);
             if (platform != null) platform.SetActive(true);
             Covered?.Invoke();
@@ -419,6 +440,7 @@ namespace ShootingGallery
             yield return curtain.Draw(0f, 1f, curtainCloseSeconds);
             SetTargets(false);
             if (hall != null) hall.SetActive(false);
+            SetHallShadows(false);
             SetLift(0f); // 閉まっている間に、その場で元の地面の高さへ戻す
             if (platform != null) platform.SetActive(false);
             CoveredBack?.Invoke(false);
@@ -553,6 +575,7 @@ namespace ShootingGallery
                 foreach (var go in showWhilePlaying) if (go != null) go.SetActive(k > 0.3f);
             lightLevel = k;
             ApplySpots(); // 光の筋も showWhilePlaying に入っているので、その後でソロのある物だけにする
+            if (podiumSpot != null) podiumSpot.enabled = podiumLevel > 0.01f && !(lightweight && k > 0.5f);
         }
 
         // ---- ソロのスポットライト (ソロ1つに1台。その楽器の斜め上前に固定して照らす) ----
@@ -636,7 +659,7 @@ namespace ShootingGallery
             {
                 bool on = spotOwner[i] != null && lightLevel > 0.01f;
                 followSpots[i].intensity = followBase[i] * lightLevel;
-                followSpots[i].enabled = on;
+                followSpots[i].enabled = on && !lightweight; // 軽量化の時は光の筋だけ (楽器はソロの蛍光色で目立つ)
                 if (followBeams[i] != null) followBeams[i].gameObject.SetActive(on && lightLevel > 0.3f);
             }
         }
@@ -711,6 +734,30 @@ namespace ShootingGallery
             if (!passAt.ContainsKey(inst)) passAt[inst] = Time.time + delay;
         }
 
+        // ---- 影 (ホールが出ている間は、外の明かりの影を切る。影を描く分が丸ごと減る) ----
+
+        readonly List<Light> shadowLights = new List<Light>();
+        readonly List<LightShadows> shadowModes = new List<LightShadows>();
+
+        void CollectShadowLights()
+        {
+            shadowLights.Clear();
+            shadowModes.Clear();
+            foreach (var l in FindObjectsByType<Light>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+                if (l.shadows != LightShadows.None && !l.transform.IsChildOf(transform))
+                {
+                    shadowLights.Add(l);
+                    shadowModes.Add(l.shadows);
+                }
+        }
+
+        void SetHallShadows(bool hallShown)
+        {
+            if (!noShadowsInHall) return;
+            for (int i = 0; i < shadowLights.Count; i++)
+                if (shadowLights[i] != null) shadowLights[i].shadows = hallShown ? LightShadows.None : shadowModes[i];
+        }
+
         // ---- 浮き床 ----
 
         // 浮き床 (とカーテン) とプレイヤーを、地面から h (m) の高さにする
@@ -770,8 +817,14 @@ namespace ShootingGallery
             lastStaffTime = Time.time;
             if (!playing || staffs == null) return;
             MusicStaff staff = null;
-            foreach (var s in staffs) if (s != null && !s.IsBusy) { staff = s; break; }
-            if (staff == null) return;
+            int busy = 0;
+            foreach (var s in staffs)
+            {
+                if (s == null) continue;
+                if (s.IsBusy) busy++;
+                else if (staff == null) staff = s;
+            }
+            if (staff == null || busy >= maxStaffs) return;
 
             float side = 0f, level = -1f;
             for (int k = 0; k < 2; k++)
@@ -993,7 +1046,7 @@ namespace ShootingGallery
             if (podiumSpot != null)
             {
                 podiumSpot.intensity = podiumSpotBase * k;
-                podiumSpot.enabled = k > 0.01f;
+                podiumSpot.enabled = k > 0.01f && !(lightweight && lightLevel > 0.5f); // 軽量化の時は、ステージが明るくなったら光の筋だけ
             }
             if (podiumBeam != null) podiumBeam.gameObject.SetActive(k > 0.2f);
         }
