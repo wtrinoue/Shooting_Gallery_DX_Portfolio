@@ -6,7 +6,8 @@ namespace ShootingGallery
     /// ボーナスステージ (フィーバー中の青い玉を撃つと始まる)。
     /// プレイヤーの足元の丸い穴をふさいでいる絞り羽根が、カメラの絞りのように回りながら開き、半球の地下室が現れる
     /// (プレイヤーは空中に浮いたまま)。地下室の内側にずらりと並んだ的のどれを撃っても、撃つたびに
-    /// ド→レ→ミ…→ド と音階が上がる。的の点数は開くたびに 1000 / 2000 / 3000 からランダムに決まり、的に書いてある。当たった的は縮んで消える。
+    /// ド→レ→ミ…→ド と音階が上がる。的の点数は開くたびに 1000 / 2000 / 3000 からランダムに決まり、的に書いてある。
+    /// 的は撃っても壊れず (ぷるっと縮んで戻る)、当てるたびにその的の点数が 500 ずつ下がる (500 より下にはならない)。
     /// 8回当て切るとファンファーレが鳴り、絞りが閉じる。
     /// </summary>
     public class BonusStage : MonoBehaviour
@@ -31,6 +32,10 @@ namespace ShootingGallery
         public int notes = 8;
         [Tooltip("開くたびに、的ごとにこの中からランダムに点数を決める")]
         public int[] pointChoices = { 1000, 2000, 3000 };
+        [Tooltip("的に当てるたびに、その的の点数をこれだけ下げる")]
+        public int pointDrop = 500;
+        [Tooltip("下がっても、これより下にはならない")]
+        public int minPoints = 500;
         [Tooltip("当て切ってから絞りが閉じ始めるまでの秒数 (ファンファーレを聞く間)")]
         public float finishWait = 1.5f;
         [Tooltip("開き終わってから、的が1つずつ出てくる間隔 (秒)")]
@@ -41,6 +46,7 @@ namespace ShootingGallery
         float timer;
         int hits;
         int raised; // Active になってから出した的の数
+        int[] currentPoints; // 的ごとの今の点数 (target.points は GameManager が入った点数を書き込むので、こちらで覚えておく)
         Quaternion[] closedRotations;
 
         public bool IsBusy => phase != Phase.Closed;
@@ -50,6 +56,8 @@ namespace ShootingGallery
         {
             closedRotations = new Quaternion[irisBlades.Length];
             for (int i = 0; i < irisBlades.Length; i++) closedRotations[i] = irisBlades[i].localRotation;
+            // 的は撃っても壊れない (ぷるっと縮んで戻るだけ)。作り直す前のシーンでもそうなるように、ここで決める
+            foreach (var t in targets) if (t != null) t.stayUpOnHit = true;
         }
 
         void Start()
@@ -85,7 +93,12 @@ namespace ShootingGallery
                 phase = Phase.Finishing;
                 timer = 0f;
             }
-            return target.points;
+            // 当たった的の今の点数を入れ、その的の点数を pointDrop ずつ下げる (minPoints より下にはしない)
+            int i = System.Array.IndexOf(targets, target);
+            if (i < 0 || currentPoints == null) return target.points;
+            int points = currentPoints[i];
+            SetPoints(i, Mathf.Max(minPoints, points - pointDrop));
+            return points;
         }
 
         /// <summary>途中で終わる (フィーバー終了など)</summary>
@@ -149,13 +162,19 @@ namespace ShootingGallery
         {
             if (pointChoices == null || pointChoices.Length == 0) return;
             for (int i = 0; i < targets.Length; i++)
-            {
-                int p = pointChoices[Random.Range(0, pointChoices.Length)];
-                targets[i].points = p;
-                if (pointLabels == null || i >= pointLabels.Length || pointLabels[i] == null) continue;
-                pointLabels[i].text = p.ToString();
-                pointLabels[i].color = p >= 3000 ? new Color(1f, 0.35f, 0.55f) : p >= 2000 ? new Color(1f, 0.85f, 0.25f) : Color.white;
-            }
+                SetPoints(i, pointChoices[Random.Range(0, pointChoices.Length)]);
+        }
+
+        // i 番目の的の点数を p にして、的の文字も書き換える。点数が高いほど派手な色の文字
+        void SetPoints(int i, int p)
+        {
+            if (i < 0 || i >= targets.Length) return;
+            if (currentPoints == null || currentPoints.Length != targets.Length) currentPoints = new int[targets.Length];
+            currentPoints[i] = p;
+            targets[i].points = p;
+            if (pointLabels == null || i >= pointLabels.Length || pointLabels[i] == null) return;
+            pointLabels[i].text = p.ToString();
+            pointLabels[i].color = p >= 3000 ? new Color(1f, 0.35f, 0.55f) : p >= 2000 ? new Color(1f, 0.85f, 0.25f) : p >= 1000 ? Color.white : new Color(0.7f, 0.85f, 1f);
         }
 
         static float Ease(float t)

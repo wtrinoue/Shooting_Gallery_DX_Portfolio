@@ -28,6 +28,7 @@ namespace ShootingGallery
     {
         public const string WorldName = "ShootingGallery";
         const string GeneratedMaterialDir = "Assets/ShootingGallery/Generated/Materials";
+        const string TextFontPath = "Fonts/MPLUS1p-Medium";
 
         [Header("Layout")]
         [Tooltip("プレイヤー(中心)から屋台までの距離")]
@@ -65,7 +66,10 @@ namespace ShootingGallery
         {
             if (litShader == null) litShader = Shader.Find("Universal Render Pipeline/Lit");
             if (unlitShader == null) unlitShader = Shader.Find("Universal Render Pipeline/Unlit");
-            font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            // 日本語の入ったフォント (Resources/Fonts/MPLUS1p-Medium.ttf, SIL OFL)。Unity 標準の LegacyRuntime は英数字だけで、
+            // PC・Quest では日本語を端末のフォントから借りて描けるが、WebGL (ブラウザ) では借りられず日本語が消えてしまうため
+            font = Resources.Load<Font>(TextFontPath);
+            if (font == null) font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             mats.Clear();
             meshes.Clear();
         }
@@ -153,7 +157,7 @@ namespace ShootingGallery
                 new Color(0.85f, 0.45f, 0.1f), new Color(0.1f, 0.55f, 0.6f), new Color(0.75f, 0.15f, 0.45f),
                 new Color(0.2f, 0.45f, 0.85f), new Color(0.15f, 0.15f, 0.2f), new Color(0.6f, 0.5f, 0.1f)
             };
-            int stepsTotal = 3 + feverGimmicks.Length + DeluxeFeverGimmicks.Length;
+            int stepsTotal = 4 + feverGimmicks.Length + DeluxeFeverGimmicks.Length;
             int stepsDone = 1;
             msgText.text = LoadingText(stepsDone, stepsTotal);
             LogStep("準備中の表示", step);
@@ -162,6 +166,7 @@ namespace ShootingGallery
             // ---- 2. メイン屋台の的 ----
             var mainStall = BuildStallContent(mainShell, Gimmick.Classic, mainCloth);
             var startTarget = BuildStartTarget(mainShell);
+            var worldGateTarget = BuildWorldGateTarget(mainShell); // START の横の WORLD GATE の的
             var controlsBoard = BuildControlsBoard(); // 背中側の操作方法の看板 (シーンに生成した時も見えるまま置く)
             // START の的はシーンに生成した時も見えるまま置く (タイトルで最初に出る的。再生時は GameManager が出し入れする)
             msgText.text = LoadingText(++stepsDone, stepsTotal);
@@ -184,6 +189,19 @@ namespace ShootingGallery
                 LogStep($"フィーバー屋台 {gimmick}", step);
                 yield return null;
             }
+
+            // ---- 3a. デバッグモードの屋台 (メイン屋台と同じギミックなしの屋台を5軒。デバッグモードの輪にだけ並ぶ。隠した状態で作る) ----
+            var debugStalls = new Stall[5];
+            for (int i = 0; i < debugStalls.Length; i++)
+            {
+                float angle = 360f / (debugStalls.Length + 1) * (i + 1);
+                var shell = BuildStallShell($"Stall_Debug{i + 1}", angle, Gimmick.Classic, mainCloth, false);
+                debugStalls[i] = BuildStallContent(shell, Gimmick.Classic, mainCloth);
+            }
+            msgText.text = LoadingText(++stepsDone, stepsTotal);
+            LogStep("デバッグモードの屋台", step);
+            var gateStalls = BuildWorldGateStalls(); // WORLD GATE の6軒 (1段だけ。別の世界へ飛ぶ的が並ぶ)
+            yield return null;
 
             // ---- 3b. 豪華屋台 (DELUXE の的を撃つと、出ている屋台がこれに入れ替わる。隠した状態で作る) ----
             var deluxeMain = BuildDeluxeStall("Stall_Deluxe_Grand", DeluxeGimmick.Grand, 0, 0f);
@@ -214,6 +232,12 @@ namespace ShootingGallery
             var casinoHall = BuildCasino();
             var westernTrain = BuildWestern();
             var spaceStage = BuildSpace(bonusStage);
+            var ghostManor = BuildGhost();
+            var mineCave = BuildMine();
+            var submarineDive = BuildSubmarine();
+            var concertHall = BuildConcertHall();
+            var artMuseum = BuildMuseum();
+            var festivalStage = BuildFestival();
             LogStep("武器の的 / UFO", step);
 
             // ---- 5. ゲーム開始 ----
@@ -224,21 +248,32 @@ namespace ShootingGallery
             gm.player = player;
             gm.mainStall = mainStall;
             gm.feverStalls = feverStalls;
+            gm.debugStalls = debugStalls;
+            gm.gateStalls = gateStalls;
             gm.bonusStage = bonusStage;
             gm.sniper = sniper;
             gm.machineGunChallenge = machineGunChallenge;
             gm.navalBattle = navalBattle;
             gm.skyBattle = skyBattle;
+            gm.parachuteTemplate = BuildParachute(); // 空中ステージの帰りに屋台を降ろすパラシュート
             gm.ninjaDojo = ninjaDojo;
             gm.kaijuCity = kaijuCity;
             gm.casinoHall = casinoHall;
             gm.westernTrain = westernTrain;
             gm.spaceStage = spaceStage;
+            gm.ghostManor = ghostManor;
+            gm.mineCave = mineCave;
+            gm.submarineDive = submarineDive;
+            gm.concertHall = concertHall;
+            gm.artMuseum = artMuseum;
+            gm.festivalStage = festivalStage;
+            BuildMoneyPanel(hudText.transform.parent, gm); // 夏祭りモードのお金と残り時間の表示 (HUD の上の方)
             gm.deluxeMainStall = deluxeMain;
             gm.deluxeFeverStalls = deluxeFever;
             gm.fireworkMaterials = FireworkMaterials();
             gm.stallRadius = stallRadius;
             gm.startTarget = startTarget;
+            gm.worldGateTarget = worldGateTarget;
             gm.controlsBoard = controlsBoard;
             gm.hudText = hudText;
             gm.messageText = msgText;
@@ -279,8 +314,8 @@ namespace ShootingGallery
             hud.transform.localPosition = new Vector3(0f, 2.05f, 2.2f);
             var follow = hud.AddComponent<HudFollow>();
             follow.head = player.head.transform;
-            var hudText = MakeText(hud.transform, "HudText", "", new Vector3(0f, 0.12f, 0f), 0.11f, Color.white);
-            var msgText = MakeText(hud.transform, "MessageText", "", new Vector3(0f, -0.35f, 0f), 0.16f, Color.white);
+            var hudText = MakeText(hud.transform, "HudText", "", new Vector3(0f, 0.12f, 0f), 0.11f, Color.white, overlay: true);
+            var msgText = MakeText(hud.transform, "MessageText", "", new Vector3(0f, -0.35f, 0f), 0.16f, Color.white, overlay: true);
             return (hudText, msgText);
         }
 
@@ -303,10 +338,7 @@ namespace ShootingGallery
             light.shadows = LightShadows.Soft;
 
             BuildGround();
-
-            // 足元の目印 (ここから動かない)。ボーナスステージで床が開いている間は隠れる
-            playerMark = Prim(PrimitiveType.Cylinder, "PlayerMark", world, new Vector3(0f, 0.005f, 0f), new Vector3(0.8f, 0.005f, 0.8f),
-                              Mat("PlayerMark", new Color(0.9f, 0.8f, 0.4f), new Color(0.3f, 0.25f, 0.05f)), false);
+            // 足元の目印 (黄色い丸) は不要になったので作らない。playerMark は null のまま (使う側はすべて null チェック済み)
         }
     }
 }

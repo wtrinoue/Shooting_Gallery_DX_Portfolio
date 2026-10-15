@@ -79,6 +79,12 @@ namespace ShootingGallery
                     else CityBuildings(root, lots, center, dist);
                 }
 
+            // ---- 動く的: 道路を走る車・街の上を横切る飛行機・まわりを回るヘリコプター ----
+            var vehicles = new List<KaijuVehicle>();
+            for (int i = 0; i < 7; i++) vehicles.Add(KaijuCar(root, i, explosion, dust));
+            for (int i = 0; i < 2; i++) vehicles.Add(KaijuPlane(root, i, explosion, dust));
+            for (int i = 0; i < 2; i++) vehicles.Add(KaijuHelicopter(root, i, explosion, dust));
+
             // ---- 空: 流れる雲と太陽 ----
             var cloud = Mat("Cloud", new Color(0.96f, 0.97f, 1f), new Color(0.32f, 0.34f, 0.38f));
             var cloudBelts = new List<ConveyorBelt>();
@@ -105,6 +111,7 @@ namespace ShootingGallery
             var city = go.AddComponent<KaijuCity>();
             city.lots = lots.ToArray();
             city.targets = targets.ToArray();
+            city.vehicles = vehicles.ToArray();
             city.clouds = cloudBelts.ToArray();
             city.showDuringStage = show.ToArray();
             var groundParts = new List<Transform>();
@@ -274,6 +281,174 @@ namespace ShootingGallery
             building.explosionMaterial = explosion;
             building.dustMaterial = dust;
             return building;
+        }
+
+        // ---- 動く的 (KaijuVehicle) ----
+
+        // 乗り物の共通部分: 根元 (KaijuVehicle と当たり判定の Target)・見た目 (Body)・上に浮かぶ点数の札 (いつもプレイヤーの方を向く)
+        KaijuVehicle VehicleRoot(Transform parent, string name, KaijuVehicle.Kind kind, float signY, float signSize, Color numberColor, out Transform body, out TextMesh label)
+        {
+            var root = Group(parent, name);
+            body = Group(root, "Body");
+            var sign = Group(body, "Sign");
+            sign.localPosition = Vector3.up * signY;
+            sign.gameObject.AddComponent<FaceCenter>();
+            Prim(PrimitiveType.Cube, "SignBoard", sign, Vector3.zero, new Vector3(signSize * 2.2f, signSize * 0.9f, 0.04f), Mat("KaijuSign", new Color(0.08f, 0.08f, 0.1f), new Color(0.04f, 0.04f, 0.05f)), false);
+            label = MakeText(sign, "Points", "100", new Vector3(0f, 0f, -0.03f), signSize * 0.7f, numberColor);
+
+            var target = root.gameObject.AddComponent<Target>();
+            target.kind = TargetKind.KaijuVehicle;
+            target.manualControl = true;
+            target.visual = Group(root, "HitMarker");
+            target.SetAvailable(false);
+            var v = root.gameObject.AddComponent<KaijuVehicle>();
+            v.kind = kind;
+            v.body = body;
+            v.target = target;
+            v.pointLabels = new[] { label };
+            v.groundY = CityY + 0.01f;
+            v.roadStep = CityBlock;
+            v.roadMin = 1;
+            v.roadMax = CityCells - 2;
+            v.roadExtent = (CityCells - 0.5f) * CityBlock;
+            v.laneOffset = CityRoad * 0.24f;
+            return v;
+        }
+
+        /// <summary>道路を走る車 (セダン・タクシー・バス・トラックを順に)。ビルの大きさに合わせた小さな車</summary>
+        KaijuVehicle KaijuCar(Transform parent, int index, Material explosion, Material smoke)
+        {
+            int type = index % 4; // 0 セダン / 1 タクシー / 2 バス / 3 トラック
+            var colors = new[] { new Color(0.85f, 0.15f, 0.12f), new Color(1f, 0.8f, 0.15f), new Color(0.2f, 0.55f, 0.35f), new Color(0.92f, 0.92f, 0.95f) };
+            var paint = Mat($"KaijuCar_{type}", colors[type], null, false, 0.7f);
+            var glass = Mat("KaijuCar_Glass", new Color(0.25f, 0.35f, 0.45f), null, false, 0.9f);
+            var tire = Mat("KaijuCar_Tire", new Color(0.08f, 0.08f, 0.08f));
+            var lamp = Mat("KaijuCar_Lamp", new Color(1f, 0.95f, 0.7f), new Color(1.5f, 1.3f, 0.8f));
+            float len = type >= 2 ? 0.9f : 0.55f, wid = type >= 2 ? 0.3f : 0.26f;
+            var v = VehicleRoot(parent, $"KaijuCar_{index}", KaijuVehicle.Kind.Car, type >= 2 ? 0.75f : 0.62f, 0.26f, new Color(1f, 0.85f, 0.35f), out var body, out _);
+            switch (type)
+            {
+                case 2: // バス: 長い箱に窓の列
+                    Prim(PrimitiveType.Cube, "BusBody", body, new Vector3(0f, 0.17f, 0f), new Vector3(wid, 0.26f, len), paint);
+                    Prim(PrimitiveType.Cube, "BusWindows", body, new Vector3(0f, 0.22f, 0f), new Vector3(wid + 0.01f, 0.08f, len * 0.9f), glass, false);
+                    Prim(PrimitiveType.Cube, "BusStripe", body, new Vector3(0f, 0.12f, 0f), new Vector3(wid + 0.012f, 0.03f, len), Mat("KaijuCar_White", Color.white), false);
+                    break;
+                case 3: // トラック: 運転席と荷台の箱
+                    Prim(PrimitiveType.Cube, "Cab", body, new Vector3(0f, 0.15f, len * 0.36f), new Vector3(wid, 0.22f, len * 0.26f), Mat("KaijuCar_Blue", new Color(0.2f, 0.4f, 0.85f), null, false, 0.7f));
+                    Prim(PrimitiveType.Cube, "CabGlass", body, new Vector3(0f, 0.2f, len * 0.495f), new Vector3(wid * 0.85f, 0.08f, 0.01f), glass, false);
+                    Prim(PrimitiveType.Cube, "Cargo", body, new Vector3(0f, 0.19f, -len * 0.13f), new Vector3(wid + 0.02f, 0.3f, len * 0.7f), paint);
+                    break;
+                default: // セダン / タクシー
+                    Prim(PrimitiveType.Cube, "CarBody", body, new Vector3(0f, 0.09f, 0f), new Vector3(wid, 0.1f, len), paint);
+                    Prim(PrimitiveType.Cube, "Cabin", body, new Vector3(0f, 0.17f, -0.03f), new Vector3(wid * 0.85f, 0.08f, len * 0.5f), paint);
+                    Prim(PrimitiveType.Cube, "CabinGlass", body, new Vector3(0f, 0.17f, -0.03f), new Vector3(wid * 0.86f, 0.055f, len * 0.46f), glass, false);
+                    if (type == 1) Prim(PrimitiveType.Cube, "TaxiSign", body, new Vector3(0f, 0.23f, -0.03f), new Vector3(0.08f, 0.04f, 0.04f), lamp, false);
+                    break;
+            }
+            foreach (float s in new[] { -1f, 1f })
+            {
+                Prim(PrimitiveType.Cube, "Headlight", body, new Vector3(s * wid * 0.32f, 0.09f, len / 2f + 0.002f), new Vector3(0.05f, 0.03f, 0.01f), lamp, false);
+                foreach (float z in new[] { -1f, 1f })
+                {
+                    var w = Prim(PrimitiveType.Cylinder, "Wheel", body, new Vector3(s * wid / 2f, 0.045f, z * len * 0.32f), new Vector3(0.09f, 0.02f, 0.09f), tire, false);
+                    w.transform.localRotation = Quaternion.Euler(0f, 0f, 90f);
+                }
+            }
+            v.pointChoices = type >= 2 ? new[] { 200, 300 } : new[] { 100, 200 };
+            v.speed = type >= 2 ? 2.4f : Random.Range(3f, 4f);
+            v.size = 0.45f;
+            v.explosionMaterial = explosion;
+            v.smokeMaterial = smoke;
+            v.respawnDelay = new Vector2(1.5f, 3.5f);
+            return v;
+        }
+
+        /// <summary>街の上を横切るプロペラ旅客機 (白い胴体に青い線・2つのプロペラ)</summary>
+        KaijuVehicle KaijuPlane(Transform parent, int index, Material explosion, Material smoke)
+        {
+            var white = Mat("KaijuPlane_White", new Color(0.93f, 0.94f, 0.96f), null, false, 0.6f);
+            var stripe = Mat("KaijuPlane_Blue", new Color(0.15f, 0.3f, 0.75f), null, false, 0.6f);
+            var glass = Mat("KaijuCar_Glass", new Color(0.25f, 0.35f, 0.45f), null, false, 0.9f);
+            var dark = Mat("KaijuPlane_Prop", new Color(0.12f, 0.12f, 0.14f));
+            var v = VehicleRoot(parent, $"KaijuPlane_{index}", KaijuVehicle.Kind.Plane, 1.1f, 0.45f, new Color(1f, 0.85f, 0.35f), out var body, out _);
+            const float L = 2.2f;
+            var hull = Prim(PrimitiveType.Capsule, "Fuselage", body, Vector3.zero, new Vector3(0.36f, L / 2f, 0.36f), white);
+            hull.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            var line = Prim(PrimitiveType.Capsule, "Stripe", body, new Vector3(0f, 0.02f, 0f), new Vector3(0.37f, L / 2f * 0.92f, 0.1f), stripe, false);
+            line.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            Prim(PrimitiveType.Cube, "Cockpit", body, new Vector3(0f, 0.1f, L / 2f - 0.22f), new Vector3(0.24f, 0.08f, 0.12f), glass, false);
+            Prim(PrimitiveType.Cube, "Wing", body, new Vector3(0f, -0.04f, 0.1f), new Vector3(2.6f, 0.04f, 0.42f), white);
+            Prim(PrimitiveType.Cube, "TailWing", body, new Vector3(0f, 0.04f, -L / 2f + 0.15f), new Vector3(0.9f, 0.03f, 0.22f), white, false);
+            Prim(PrimitiveType.Cube, "TailFin", body, new Vector3(0f, 0.3f, -L / 2f + 0.15f), new Vector3(0.04f, 0.45f, 0.3f), stripe);
+            var rotors = new List<Transform>();
+            foreach (float s in new[] { -1f, 1f })
+            {
+                var eng = Prim(PrimitiveType.Cylinder, "Engine", body, new Vector3(s * 0.65f, -0.07f, 0.28f), new Vector3(0.14f, 0.16f, 0.14f), white, false);
+                eng.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+                var prop = Group(body, "Propeller");
+                prop.localPosition = new Vector3(s * 0.65f, -0.07f, 0.46f);
+                for (int b = 0; b < 3; b++)
+                {
+                    var blade = Prim(PrimitiveType.Cube, "Blade", prop, Vector3.zero, new Vector3(0.04f, 0.42f, 0.01f), dark, false);
+                    blade.transform.localRotation = Quaternion.Euler(0f, 0f, b * 120f);
+                    blade.transform.localPosition = blade.transform.localRotation * Vector3.up * 0.1f;
+                }
+                rotors.Add(prop);
+            }
+            v.rotors = rotors.ToArray();
+            v.rotorAxes = new[] { Vector3.forward, Vector3.forward };
+            v.rotorSpeed = 1400f;
+            v.pointChoices = new[] { 300, 500 };
+            v.speed = 6.5f;
+            v.altitude = new Vector2(3.2f, 5f);
+            v.distance = new Vector2(6f, 20f);
+            v.size = 0.9f;
+            v.explosionMaterial = explosion;
+            v.smokeMaterial = smoke;
+            v.respawnDelay = new Vector2(2f, 4f);
+            return v;
+        }
+
+        /// <summary>怪獣のまわりを回るヘリコプター (報道ヘリ: 青と白、大きな回転翼)</summary>
+        KaijuVehicle KaijuHelicopter(Transform parent, int index, Material explosion, Material smoke)
+        {
+            var paint = Mat(index % 2 == 0 ? "KaijuHeli_Blue" : "KaijuHeli_Red", index % 2 == 0 ? new Color(0.2f, 0.4f, 0.85f) : new Color(0.85f, 0.2f, 0.15f), null, false, 0.6f);
+            var white = Mat("KaijuPlane_White", new Color(0.93f, 0.94f, 0.96f), null, false, 0.6f);
+            var glass = Mat("KaijuCar_Glass", new Color(0.25f, 0.35f, 0.45f), null, false, 0.9f);
+            var dark = Mat("KaijuPlane_Prop", new Color(0.12f, 0.12f, 0.14f));
+            var v = VehicleRoot(parent, $"KaijuHeli_{index}", KaijuVehicle.Kind.Helicopter, 0.95f, 0.38f, new Color(1f, 0.85f, 0.35f), out var body, out _);
+            Prim(PrimitiveType.Sphere, "Cabin", body, Vector3.zero, new Vector3(0.5f, 0.45f, 0.75f), paint);
+            Prim(PrimitiveType.Sphere, "Window", body, new Vector3(0f, 0.04f, 0.16f), new Vector3(0.42f, 0.32f, 0.48f), glass, false);
+            Prim(PrimitiveType.Cube, "TailBoom", body, new Vector3(0f, 0.05f, -0.6f), new Vector3(0.09f, 0.09f, 0.7f), white);
+            Prim(PrimitiveType.Cube, "TailFin", body, new Vector3(0f, 0.15f, -0.92f), new Vector3(0.03f, 0.25f, 0.14f), paint, false);
+            foreach (float s in new[] { -1f, 1f })
+            {
+                Prim(PrimitiveType.Cube, "Skid", body, new Vector3(s * 0.2f, -0.3f, 0f), new Vector3(0.03f, 0.03f, 0.7f), dark, false);
+                Prim(PrimitiveType.Cube, "SkidLeg", body, new Vector3(s * 0.17f, -0.24f, 0f), new Vector3(0.02f, 0.12f, 0.3f), dark, false);
+            }
+            Prim(PrimitiveType.Cylinder, "Mast", body, new Vector3(0f, 0.27f, 0f), new Vector3(0.05f, 0.05f, 0.05f), dark, false);
+            var main = Group(body, "MainRotor");
+            main.localPosition = new Vector3(0f, 0.32f, 0f);
+            for (int b = 0; b < 2; b++)
+            {
+                var blade = Prim(PrimitiveType.Cube, "Blade", main, Vector3.zero, new Vector3(1.7f, 0.015f, 0.08f), dark, false);
+                blade.transform.localRotation = Quaternion.Euler(0f, b * 90f, 0f);
+            }
+            var tail = Group(body, "TailRotor");
+            tail.localPosition = new Vector3(0.05f, 0.12f, -0.95f);
+            Prim(PrimitiveType.Cube, "TailBlade", tail, Vector3.zero, new Vector3(0.01f, 0.3f, 0.04f), dark, false);
+            v.rotors = new[] { main, tail };
+            v.rotorAxes = new[] { Vector3.up, Vector3.right };
+            v.rotorSpeed = 1500f;
+            v.pointChoices = new[] { 300, 500 };
+            v.speed = 3f;
+            v.altitude = new Vector2(2.2f, 3.6f);
+            v.distance = new Vector2(7f, 14f);
+            v.size = 0.7f;
+            v.explosionMaterial = explosion;
+            v.smokeMaterial = smoke;
+            v.respawnDelay = new Vector2(2.5f, 5f);
+            return v;
         }
 
         /// <summary>怪獣の的: 緑の板に怪獣の足あとと、「KAIJU」の文字。まわりを炎の玉が回る</summary>

@@ -20,9 +20,24 @@ namespace ShootingGallery
         public static void Spawn(Vector3 position, Vector3 direction, float speed, float blastRadius,
                                  Material bodyMaterial, Material finMaterial, Material flameMaterial, Material trailMaterial, Material explosionMaterial)
         {
-            var go = new GameObject("Missile");
-            go.transform.position = position;
-            go.transform.rotation = Quaternion.LookRotation(direction);
+            // 撃つたびに部品から作らず、FxPool で使い回す (材質は銃ごとに決まっているので、作る時に付ければよい)
+            var go = FxPool.Get(PoolKey, () => Build(bodyMaterial, finMaterial, flameMaterial, trailMaterial));
+            go.transform.SetPositionAndRotation(position, Quaternion.LookRotation(direction));
+            var m = go.GetComponent<Missile>();
+            m.velocity = direction.normalized * speed;
+            m.blastRadius = blastRadius;
+            m.explosionMaterial = explosionMaterial;
+            m.age = 0f;
+            var t = go.GetComponent<TrailRenderer>();
+            if (t != null) { t.Clear(); t.emitting = true; }
+        }
+
+        const string PoolKey = "Missile";
+
+        // ミサイル1発分の見た目と部品を作る
+        static GameObject Build(Material bodyMaterial, Material finMaterial, Material flameMaterial, Material trailMaterial)
+        {
+            var go = new GameObject(PoolKey);
 
             // 白い胴体・赤い先端・4枚の羽根・後ろの炎 (+Z が前)
             Part(PrimitiveType.Cylinder, go.transform, Vector3.zero, new Vector3(0.05f, 0.11f, 0.05f), Quaternion.Euler(90f, 0f, 0f), bodyMaterial);
@@ -45,10 +60,8 @@ namespace ShootingGallery
             }
 
             var m = go.AddComponent<Missile>();
-            m.velocity = direction.normalized * speed;
-            m.blastRadius = blastRadius;
-            m.explosionMaterial = explosionMaterial;
             m.flame = flame;
+            return go;
         }
 
         static Transform Part(PrimitiveType type, Transform parent, Vector3 pos, Vector3 scale, Quaternion rot, Material mat)
@@ -89,21 +102,30 @@ namespace ShootingGallery
             var trail = GetComponent<TrailRenderer>();
             if (trail != null)
             {
-                var left = new GameObject("MissileTrail");
+                var left = FxPool.Get("MissileTrail", () =>
+                {
+                    var g = new GameObject("MissileTrail");
+                    var tr = g.AddComponent<TrailRenderer>();
+                    tr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                    tr.receiveShadows = false;
+                    tr.autodestruct = false;
+                    return g;
+                });
                 left.transform.position = transform.position;
-                var copy = left.AddComponent<TrailRenderer>();
+                var copy = left.GetComponent<TrailRenderer>();
+                copy.emitting = false;
+                copy.Clear();
                 copy.sharedMaterial = trail.sharedMaterial;
                 copy.time = trail.time;
                 copy.widthCurve = trail.widthCurve;
-                copy.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-                var positions = new Vector3[trail.positionCount];
-                trail.GetPositions(positions);
-                copy.AddPositions(positions);
-                copy.emitting = false;
-                copy.autodestruct = true;
-                Destroy(left, trail.time + 0.5f);
+                int count = trail.GetPositions(trailPositions);
+                if (count < trailPositions.Length) System.Array.Clear(trailPositions, count, trailPositions.Length - count);
+                for (int i = 0; i < count; i++) copy.AddPosition(trailPositions[i]);
+                FxPool.ReleaseAfter("MissileTrail", left, trail.time + 0.5f);
             }
-            Destroy(gameObject);
+            FxPool.Release(PoolKey, gameObject);
         }
+
+        static readonly Vector3[] trailPositions = new Vector3[256]; // 煙の筋の点 (使い回し)
     }
 }

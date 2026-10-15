@@ -22,7 +22,9 @@ namespace ShootingGallery
             ground.transform.SetParent(world, false);
             var mesh = GroundMesh(Far, PitRadius, GroundThickness);
             ground.AddComponent<MeshFilter>().sharedMesh = mesh;
-            ground.AddComponent<MeshRenderer>().sharedMaterial = Mat("Ground", new Color(0.22f, 0.18f, 0.14f));
+            var groundRenderer = ground.AddComponent<MeshRenderer>();
+            groundRenderer.sharedMaterial = Mat("Ground", new Color(0.22f, 0.18f, 0.14f));
+            groundRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off; // 床は影を受けるだけ (落とす相手がない)
             ground.AddComponent<MeshCollider>().sharedMesh = mesh;
 
             // 穴のふち: 金属の輪と、内側の光る線
@@ -156,7 +158,8 @@ namespace ShootingGallery
                 target.kind = TargetKind.BigBonus;
                 target.points = 1000; // 実際の点数は開くたびに BonusStage がランダムに決める (1000 / 2000 / 3000)
                 target.manualControl = true;
-                target.shrinkOnHit = true; // 後ろは壁なので、倒れずに縮んで消える
+                target.shrinkOnHit = true; // 後ろは壁なので、倒れずに縮む (片付ける時に縮んで消える)
+                target.stayUpOnHit = true; // 撃っても壊れない (ぷるっと縮んで戻るだけ。当てるたびに点数が下がる)
                 var pivot = Group(root, "Pivot");
                 target.visual = pivot;
                 Disc(pivot, "Back", 0f, diameter * 1.12f, 0.008f, gold);

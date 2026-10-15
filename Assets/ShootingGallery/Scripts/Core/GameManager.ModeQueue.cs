@@ -14,7 +14,7 @@ namespace ShootingGallery
         struct PendingMode
         {
             public TargetKind kind;
-            public float yaw;   // 的があった向き (カジノ・西部劇・忍者の正面)
+            public float yaw;   // 的があった向き (カジノ・西部劇・忍者・海戦・空中などの正面)
             public Stall stall; // 的があった屋台 (スナイパー・マシンガンのチャレンジで引っ込める屋台)
         }
 
@@ -27,7 +27,7 @@ namespace ShootingGallery
         static bool IsModeKind(TargetKind kind) =>
             kind == TargetKind.Sniper || kind == TargetKind.MachineGunChallenge || kind == TargetKind.Deluxe ||
             kind == TargetKind.Naval || kind == TargetKind.Sky || kind == TargetKind.Ninja || kind == TargetKind.Kaiju ||
-            kind == TargetKind.Casino || kind == TargetKind.Western || kind == TargetKind.Space;
+            kind == TargetKind.Casino || kind == TargetKind.Western || kind == TargetKind.Space || kind == TargetKind.Ghost || kind == TargetKind.Mine || kind == TargetKind.Festival || kind == TargetKind.Submarine || kind == TargetKind.Music || kind == TargetKind.Museum;
 
         /// <summary>モードの的を撃った: すぐに始める (同時に撃った2番目以降は取り消す)</summary>
         void RequestMode(Target target)
@@ -77,12 +77,18 @@ namespace ShootingGallery
             if (SniperActive) { EndSniper(false, null); wait = Mathf.Max(wait, stallMoveDuration); }
             if (MachineGunChallengeActive) { EndMachineGunChallenge(); wait = Mathf.Max(wait, machineGunChallenge.SwapBackDelay + stallMoveDuration); }
             if (NavalActive) { EndNaval(); wait = Mathf.Max(wait, navalBattle.riseTime * 0.6f + stallMoveDuration); }
-            if (SkyActive) { EndSky(); wait = Mathf.Max(wait, skyBattle.riseTime + 0.1f + stallMoveDuration); }
+            if (SkyActive) { EndSky(); wait = Mathf.Max(wait, skyBattle.groundGrowTime + parachuteTime + 1.5f); } // パラシュートで降りきるまで
             if (NinjaActive) { EndNinja(); wait = Mathf.Max(wait, ninjaDojo.CloseTime + 0.1f + stallMoveDuration); }
             if (KaijuActive) { EndKaiju(); wait = Mathf.Max(wait, kaijuCity.CloseTime + KaijuGrowTime + 0.3f); }
             if (CasinoActive) { EndCasino(); wait = Mathf.Max(wait, casinoHall.CloseTime + 0.1f + stallMoveDuration); }
             if (WesternActive) { EndWestern(); wait = Mathf.Max(wait, westernTrain.CloseTime + stallMoveDuration); }
             if (SpaceActive) { EndSpace(); wait = Mathf.Max(wait, spaceStage.CloseTime + 0.1f + stallMoveDuration); }
+            if (GhostActive) { EndGhost(); wait = Mathf.Max(wait, ghostManor.CloseTime + stallMoveDuration); }
+            if (MineActive) { EndMine(); wait = Mathf.Max(wait, mineCave.CloseTime + 0.1f); }
+            if (SubmarineActive) { EndSubmarine(); wait = Mathf.Max(wait, submarineDive.CloseTime + 0.1f); }
+            if (MusicActive) { EndMusic(); wait = Mathf.Max(wait, concertHall.CloseTime + 0.1f); }
+            if (MuseumActive) { EndMuseum(); wait = Mathf.Max(wait, artMuseum.CloseTime + 0.1f); }
+            if (FestivalActive) { EndFestival(); wait = Mathf.Max(wait, festivalStage.CloseTime + stallMoveDuration); }
             if (DeluxeActive && !keepDeluxe) { EndDeluxe(); wait = Mathf.Max(wait, swapOutTime + swapInTime); }
             if (bonusStage != null && bonusStage.IsBusy) { bonusStage.Close(); wait = Mathf.Max(wait, bonusStage.slideTime + 0.3f); }
             return wait;
@@ -98,13 +104,19 @@ namespace ShootingGallery
                 case TargetKind.Sniper: StartSniper(stall); break;
                 case TargetKind.MachineGunChallenge: StartMachineGunChallenge(stall); break;
                 case TargetKind.Deluxe: StartDeluxe(); break;
-                case TargetKind.Naval: StartNaval(); break;
-                case TargetKind.Sky: StartSky(); break;
+                case TargetKind.Naval: StartNaval(p.yaw); break;
+                case TargetKind.Sky: StartSky(p.yaw); break;
                 case TargetKind.Ninja: StartNinja(p.yaw); break;
                 case TargetKind.Kaiju: StartKaiju(); break;
                 case TargetKind.Casino: StartCasino(p.yaw); break;
                 case TargetKind.Western: StartWestern(p.yaw); break;
                 case TargetKind.Space: StartSpace(); break;
+                case TargetKind.Ghost: StartGhost(p.yaw); break;
+                case TargetKind.Mine: StartMine(); break;
+                case TargetKind.Submarine: StartSubmarine(); break;
+                case TargetKind.Music: StartMusic(p.yaw); break;
+                case TargetKind.Museum: StartMuseum(p.yaw); break;
+                case TargetKind.Festival: StartFestival(p.yaw); break;
             }
         }
     }

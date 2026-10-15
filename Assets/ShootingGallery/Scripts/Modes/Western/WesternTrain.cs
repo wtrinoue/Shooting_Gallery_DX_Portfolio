@@ -64,6 +64,7 @@ namespace ShootingGallery
         public event System.Action Arrived, Left;
 
         float startTime, nextLaunchTime;
+        readonly System.Collections.Generic.List<WesternRider> free = new System.Collections.Generic.List<WesternRider>(); // 空いている的 (使い回す)
         bool lastLeft;
         Coroutine anim;
         bool onTrain;
@@ -115,7 +116,7 @@ namespace ShootingGallery
             nextLaunchTime = Time.time + Random.Range(launchInterval.x, launchInterval.y);
 
             int running = 0;
-            var free = new System.Collections.Generic.List<WesternRider>();
+            free.Clear();
             foreach (var r in riders)
             {
                 if (r.IsRunning) running++;
@@ -142,7 +143,7 @@ namespace ShootingGallery
                 age += dt;
                 if (t == null || age > 2.2f)
                 {
-                    if (t != null) Destroy(t.gameObject);
+                    if (t != null) FxPool.Release("TrainSmoke", t.gameObject);
                     smoke.RemoveAt(i);
                     continue;
                 }
@@ -152,12 +153,7 @@ namespace ShootingGallery
             }
             if (!IsActive || !onTrain || smokeStack == null || Time.time < nextSmokeTime) return;
             nextSmokeTime = Time.time + 0.18f;
-            var puff = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            puff.name = "Smoke";
-            Destroy(puff.GetComponent<Collider>());
-            var r = puff.GetComponent<Renderer>();
-            r.sharedMaterial = smokeMaterial;
-            r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            var puff = FxPool.Get("TrainSmoke", () => FxPool.Primitive(PrimitiveType.Sphere, smokeMaterial)); // 作って消さずに使い回す
             puff.transform.position = smokeStack.position;
             puff.transform.localScale = Vector3.one * 0.4f;
             smoke.Add((puff.transform, 0f));
@@ -214,7 +210,7 @@ namespace ShootingGallery
                 g.age += dt;
                 if (g.t == null || g.age > g.life)
                 {
-                    if (g.t != null) Destroy(g.t.gameObject);
+                    if (g.t != null) FxPool.Release(g.puff ? "SandPuff" : "SandGrain", g.t.gameObject);
                     grains.RemoveAt(i);
                     continue;
                 }
@@ -241,13 +237,9 @@ namespace ShootingGallery
 
         void SpawnGrain(Vector3 eye, Material mat, bool puff)
         {
-            var go = GameObject.CreatePrimitive(puff ? PrimitiveType.Sphere : PrimitiveType.Quad);
-            go.name = puff ? "SandPuff" : "SandGrain";
-            Destroy(go.GetComponent<Collider>());
-            var r = go.GetComponent<Renderer>();
-            r.sharedMaterial = mat;
-            r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            r.receiveShadows = false;
+            // 1秒に何百個も出るので、作って消さずに使い回す
+            var go = FxPool.Get(puff ? "SandPuff" : "SandGrain", () => FxPool.Primitive(puff ? PrimitiveType.Sphere : PrimitiveType.Quad, mat));
+            go.GetComponent<Renderer>().sharedMaterial = mat;
             // カメラのまわり (少し風上) に出して、風下へ吹き飛ばす
             var dir = Quaternion.Euler(Random.Range(-25f, 20f), Random.Range(0f, 360f), 0f) * Vector3.forward;
             float dist = puff ? Random.Range(2f, 6f) : Random.Range(0.4f, 4.5f);
