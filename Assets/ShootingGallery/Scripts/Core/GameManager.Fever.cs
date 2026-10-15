@@ -66,8 +66,9 @@ namespace ShootingGallery
             var added = new List<Stall>();
             while (activeFeverStalls.Count < n - 1 && pool.Count > 0)
             {
-                int j = Random.Range(0, pool.Count);
-                activeFeverStalls.Insert(Random.Range(0, activeFeverStalls.Count + 1), pool[j]);
+                // デバッグモードは決まった順 (屋台ごとの的の種類が、いつも同じ向きに並ぶように)
+                int j = DebugMode ? 0 : Random.Range(0, pool.Count);
+                activeFeverStalls.Insert(DebugMode ? activeFeverStalls.Count : Random.Range(0, activeFeverStalls.Count + 1), pool[j]);
                 added.Add(pool[j]);
                 pool.RemoveAt(j);
             }

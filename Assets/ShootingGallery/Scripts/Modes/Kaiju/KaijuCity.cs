@@ -15,6 +15,8 @@ namespace ShootingGallery
         public Transform[] lots;
         [Tooltip("的のビル")]
         public KaijuBuilding[] targets;
+        [Tooltip("動く的 (道路を走る車・飛行機・ヘリコプター)")]
+        public KaijuVehicle[] vehicles;
         [Tooltip("屋台といっしょに足元へ小さくなる床の部品 (地面・穴のふち・足元の目印・ボーナスステージのハッチ)。GameManager が縮める")]
         public Transform[] groundParts;
         [Tooltip("怪獣モードの間だけ表示する物 (街の地面・道路・雲・太陽)")]
@@ -95,6 +97,8 @@ namespace ShootingGallery
             SetCityScale(1f, 1f);
             if (!IsActive) return;
             foreach (var b in targets) b.Activate();
+            if (vehicles != null)
+                for (int i = 0; i < vehicles.Length; i++) vehicles[i].Activate(0.3f + i * 0.4f); // 少しずつずらして出てくる
         }
 
         /// <summary>街が伸びきるまでの秒数</summary>
@@ -128,6 +132,7 @@ namespace ShootingGallery
         IEnumerator Outro()
         {
             foreach (var b in targets) b.Deactivate();
+            if (vehicles != null) foreach (var v in vehicles) v.Deactivate();
             // 遠くから近くへ沈む (速め)
             float total = riseTime + spreadTime * 0.5f;
             for (float t = 0f; t < total; t += Time.deltaTime)

@@ -60,7 +60,7 @@ namespace ShootingGallery
             if (State != GameState.Playing) return;
             player.GiveWeapon(WeaponType.FireBall, kaijuCity.TimeLeft);
             Sfx.Play("roar");
-            ShowMessage("BREAK THE COLORED BUILDINGS!", 2.5f, new Color(0.4f, 1f, 0.4f));
+            ShowMessage("SMASH BUILDINGS, CARS,\nPLANES & HELICOPTERS!", 2.5f, new Color(0.4f, 1f, 0.4f));
         }
 
         /// <summary>怪獣モードの時間切れ: 街を沈め、縮めた屋台を元の大きさに戻す</summary>
@@ -79,7 +79,7 @@ namespace ShootingGallery
             if (State == GameState.Playing)
             {
                 Sfx.Play(broken > 0 ? "complete" : "end");
-                ShowMessage($"KAIJU MODE END\nBROKE {broken} BUILDINGS", 2.5f, new Color(0.4f, 1f, 0.4f));
+                ShowMessage($"KAIJU MODE END\nSMASHED {broken}", 2.5f, new Color(0.4f, 1f, 0.4f));
             }
         }
 

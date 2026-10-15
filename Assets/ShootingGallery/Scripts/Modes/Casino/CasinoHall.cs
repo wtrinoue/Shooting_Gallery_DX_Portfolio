@@ -69,6 +69,8 @@ namespace ShootingGallery
         public float outroDarkHold = 1.6f;
         public float outroOpenTime = 0.6f;
         public float outroLookTime = 0.7f;
+        [Tooltip("視界が開けてスロットが見える瞬間の、ジャーン・歓声の音の大きさ (1 = いつもの大きさ)")]
+        [Range(0f, 1f)] public float revealVolume = 0.45f;
 
         public bool IsActive { get; private set; }
         /// <summary>明かりが点いて、スロットとルーレットが使える状態</summary>
@@ -182,9 +184,9 @@ namespace ShootingGallery
             // 4. ジャーン! 視界が一気に開け、全部の明かりが一度にまぶしく点き、ネオンがチカチカと灯り、紙吹雪が舞って歓声が上がる
             //    (ここまでのスポットライトとスロットは、視界をふさいだまま音だけで聞かせる)
             ScreenFader.FadeTo(0f, revealOpenTime);
-            Sfx.Play("crash");
-            Sfx.Play("deluxe");
-            Sfx.Play("cheer");
+            Sfx.Play("crash", revealVolume);
+            Sfx.Play("deluxe", revealVolume);
+            Sfx.Play("cheer", revealVolume);
             if (luxury != null) luxury.SetActive(true);
             StartCoroutine(LightShow());
             SpawnConfetti();
@@ -291,14 +293,10 @@ namespace ShootingGallery
             if (confettiMaterials == null || confettiMaterials.Length == 0) return;
             for (int i = 0; i < confettiCount; i++)
             {
-                var piece = GameObject.CreatePrimitive(PrimitiveType.Quad);
-                piece.name = "Confetti";
-                Destroy(piece.GetComponent<Collider>());
-                var r = piece.GetComponent<Renderer>();
-                r.sharedMaterial = confettiMaterials[i % confettiMaterials.Length];
-                r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                var mat = confettiMaterials[i % confettiMaterials.Length];
+                var piece = FxPool.Get("Confetti", () => FxPool.Primitive(PrimitiveType.Quad, mat), transform); // 作って消さずに使い回す
+                piece.GetComponent<Renderer>().sharedMaterial = mat;
                 var t = piece.transform;
-                t.SetParent(transform, false);
                 Vector2 p = Random.insideUnitCircle * 5.5f;
                 t.localPosition = new Vector3(p.x, ceilingRest.y - Random.Range(0.4f, 1.6f), p.y);
                 t.localRotation = Random.rotation;
@@ -314,7 +312,7 @@ namespace ShootingGallery
 
         void ClearConfetti()
         {
-            foreach (var c in confetti) if (c.t != null) Destroy(c.t.gameObject);
+            foreach (var c in confetti) if (c.t != null) FxPool.Release("Confetti", c.t.gameObject);
             confetti.Clear();
         }
 
@@ -332,7 +330,7 @@ namespace ShootingGallery
                 c.t.Rotate(c.spinAxis, c.spin * dt, Space.Self);
                 if (c.t.localPosition.y < 0.06f)
                 {
-                    Destroy(c.t.gameObject);
+                    FxPool.Release("Confetti", c.t.gameObject);
                     confetti.RemoveAt(i);
                     continue;
                 }

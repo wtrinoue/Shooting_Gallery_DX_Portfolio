@@ -10,6 +10,9 @@ namespace ShootingGallery
         // ユーティリティ
         // ------------------------------------------------------------------
 
+        /// <summary>これより小さい部品 (いちばん長い辺, m) は影を落とさない</summary>
+        const float ShadowMinSize = 0.8f;
+
         /// <summary>プリミティブを作る。position / scale は parent のローカル。collider = false なら当たり判定なし。</summary>
         protected GameObject Prim(PrimitiveType type, string name, Transform parent, Vector3 position, Vector3 scale, Material mat, bool collider = true)
         {
@@ -18,7 +21,15 @@ namespace ShootingGallery
             go.transform.SetParent(parent != null ? parent : world, false);
             go.transform.localPosition = position;
             go.transform.localScale = scale;
-            go.GetComponent<Renderer>().sharedMaterial = mat;
+            var rend = go.GetComponent<Renderer>();
+            rend.sharedMaterial = mat;
+            // 影は大きな部品 (屋台の本体・柱・屋根・壁など) だけに落とさせる。小さな部品・光る部品・半透明の部品の影は目立たないのに、
+            // 影の描画 (VR は両目分) の数だけ重くなるので切る
+            var size = rend.bounds.size;
+            bool glowing = mat != null && mat.IsKeywordEnabled("_EMISSION");
+            bool transparent = mat != null && mat.renderQueue >= (int)UnityEngine.Rendering.RenderQueue.AlphaTest + 50;
+            if (Mathf.Max(size.x, Mathf.Max(size.y, size.z)) < ShadowMinSize || glowing || transparent)
+                rend.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
 
             if (!collider) RemoveCollider(go);
             else if (type == PrimitiveType.Cylinder && scale.y * 2f < Mathf.Max(scale.x, scale.z))
@@ -48,7 +59,11 @@ namespace ShootingGallery
             return go;
         }
 
-        protected TextMesh MakeText(Transform parent, string name, string text, Vector3 localPos, float height, Color color)
+        /// <summary>
+        /// 3D の文字を作る。ふつうは手前の物に隠れる文字 (Shaders/Text3DDepth.shader)。
+        /// overlay = true なら Unity 標準の文字のまま、何があっても透けて見える (HUD・銃の上の文字など、いつも見えてほしい文字)
+        /// </summary>
+        protected TextMesh MakeText(Transform parent, string name, string text, Vector3 localPos, float height, Color color, bool overlay = false)
         {
             var go = new GameObject(name);
             go.transform.SetParent(parent, false);
@@ -61,20 +76,43 @@ namespace ShootingGallery
             tm.anchor = TextAnchor.MiddleCenter;
             tm.alignment = TextAlignment.Center;
             tm.color = color;
-            go.GetComponent<MeshRenderer>().sharedMaterial = font.material;
+            var depthMat = overlay ? null : DepthTextMat();
+            go.GetComponent<MeshRenderer>().sharedMaterial = depthMat != null ? depthMat : font.material;
+            go.GetComponent<MeshRenderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off; // 文字は影を落とさない
             return tm;
+        }
+
+        /// <summary>手前の物に隠れる文字のマテリアル (全部の文字で1つ。文字の画像は実行中に DepthText が付け直す)。シェーダーが見つからなければ null</summary>
+        Material DepthTextMat()
+        {
+            const string Name = "Text_DepthTested";
+            if (mats.TryGetValue(Name, out var cached)) return cached;
+            var shader = Shader.Find(DepthText.ShaderName);
+            if (shader == null) return null;
+            var mat = new Material(shader) { name = Name };
+            mat.mainTexture = font.material.mainTexture;
+            mat = SaveAsAssetIfEditing(mat, Name);
+            mats[Name] = mat;
+            return mat;
         }
 
         Material LanternMat() => Mat("Lantern", new Color(1f, 0.55f, 0.2f), new Color(1.6f, 0.6f, 0.15f));
 
-        /// <summary>URP マテリアルを生成 (同じ名前なら使い回す)。</summary>
-        protected Material Mat(string name, Color color, Color? emission = null, bool unlit = false, float smoothness = 0.25f)
+        /// <summary>URP マテリアルを生成 (同じ名前なら使い回す)。matte = true なら、まわりの景色の映り込みとハイライトを切る (曲面でも、平らな部品と同じ見た目になる)</summary>
+        protected Material Mat(string name, Color color, Color? emission = null, bool unlit = false, float smoothness = 0.25f, bool matte = false)
         {
             if (mats.TryGetValue(name, out var cached)) return cached;
 
             var mat = new Material(unlit ? unlitShader : litShader) { name = name };
             mat.SetColor("_BaseColor", color);
             if (!unlit) mat.SetFloat("_Smoothness", smoothness);
+            if (!unlit && matte)
+            {
+                mat.SetFloat("_SpecularHighlights", 0f);
+                mat.EnableKeyword("_SPECULARHIGHLIGHTS_OFF");
+                mat.SetFloat("_EnvironmentReflections", 0f);
+                mat.EnableKeyword("_ENVIRONMENTREFLECTIONS_OFF");
+            }
             if (emission.HasValue)
             {
                 mat.EnableKeyword("_EMISSION");

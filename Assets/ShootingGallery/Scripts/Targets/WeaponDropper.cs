@@ -153,7 +153,14 @@ namespace ShootingGallery
         public StageOffer casinoOffer = new StageOffer { kind = TargetKind.Casino, startDelay = new Vector2(35f, 60f) };
         public StageOffer westernOffer = new StageOffer { kind = TargetKind.Western, startDelay = new Vector2(30f, 60f) };
         public StageOffer spaceOffer = new StageOffer { kind = TargetKind.Space, startDelay = new Vector2(30f, 60f) };
-        StageOffer[] Offers => new[] { kaijuOffer, casinoOffer, westernOffer, spaceOffer };
+        public StageOffer ghostOffer = new StageOffer { kind = TargetKind.Ghost, startDelay = new Vector2(30f, 60f) };
+        public StageOffer mineOffer = new StageOffer { kind = TargetKind.Mine, startDelay = new Vector2(30f, 60f) };
+        public StageOffer submarineOffer = new StageOffer { kind = TargetKind.Submarine, startDelay = new Vector2(30f, 60f) };
+        public StageOffer festivalOffer = new StageOffer { kind = TargetKind.Festival, startDelay = new Vector2(30f, 60f) };
+        public StageOffer musicOffer = new StageOffer { kind = TargetKind.Music, startDelay = new Vector2(30f, 60f) };
+        public StageOffer museumOffer = new StageOffer { kind = TargetKind.Museum, startDelay = new Vector2(30f, 60f) };
+        StageOffer[] offers; // (呼ぶたびに配列を作らないように、初めの1回だけ作る)
+        StageOffer[] Offers => offers ??= new[] { kaijuOffer, casinoOffer, westernOffer, spaceOffer, ghostOffer, mineOffer, festivalOffer, submarineOffer, musicOffer, museumOffer };
         bool wasStageMode;
 
         bool wasPlaying, wasFever, challengeWasBusy;
@@ -206,7 +213,7 @@ namespace ShootingGallery
             bool sky = gm != null && gm.SkyActive;
             bool ninja = gm != null && gm.NinjaActive;
             // 海戦・空中ステージ・忍者モードが続けて来すぎないように、どれかが終わったら全部の間隔をあける
-            bool stageMode = naval || sky || ninja || (gm != null && (gm.KaijuActive || gm.CasinoActive || gm.WesternActive || gm.SpaceActive));
+            bool stageMode = naval || sky || ninja || (gm != null && (gm.KaijuActive || gm.CasinoActive || gm.WesternActive || gm.SpaceActive || gm.GhostActive || gm.MineActive || gm.FestivalActive || gm.SubmarineActive || gm.MusicActive || gm.MuseumActive));
             if (wasStageMode && !stageMode)
             {
                 foreach (var o in Offers) o.next = Mathf.Max(o.next, Time.time + Random.Range(o.gap.x, o.gap.y));
@@ -318,12 +325,13 @@ namespace ShootingGallery
             else
                 kind = sniperDue && (!mgDue || nextSniperTime <= nextMgChallengeTime) ? TargetKind.Sniper : TargetKind.MachineGunChallenge;
 
-            var stalls = gm.ShownStalls();
+            var stalls = gm.ShownStalls(stallBuffer);
             if (fever) stalls.Remove(gm.mainStall); // フィーバー中はまわりの屋台に出す
             if (stalls.Count == 0) return;
             var stall = stalls[Random.Range(0, stalls.Count)];
 
-            var candidates = new List<Target>();
+            var candidates = targetBuffer;
+            candidates.Clear();
             foreach (var t in stall.targets)
                 if (t != null && t.kind == TargetKind.Normal && t.face != null && t.IsUp && !t.manualControl && !active.ContainsKey(t))
                     candidates.Add(t);
@@ -365,9 +373,13 @@ namespace ShootingGallery
         public float stageResumeDelay = 3f;
         [Tooltip("予定の時間からこの秒数たっても出せなかった (時間切れが近いなど) ものはとばす")]
         public float stageGiveUp = 6f;
+        [Tooltip("1つの屋台に同時に出ていてよい数 (最初の屋台だけの時も、これより多くは出さない)")]
+        public int stageMaxPerStall = 1;
+        [Tooltip("フィーバーで他の屋台も出ている時の、最初の屋台 (メイン屋台) の選ばれやすさ (他の屋台は 1)")]
+        [Range(0f, 1f)] public float stageMainStallWeight = 0.3f;
 
         static readonly TargetKind[] StageKinds =
-            { TargetKind.Naval, TargetKind.Sky, TargetKind.Ninja, TargetKind.Kaiju, TargetKind.Casino, TargetKind.Western, TargetKind.Space };
+            { TargetKind.Naval, TargetKind.Sky, TargetKind.Ninja, TargetKind.Kaiju, TargetKind.Casino, TargetKind.Western, TargetKind.Space, TargetKind.Ghost, TargetKind.Mine, TargetKind.Festival, TargetKind.Submarine, TargetKind.Music, TargetKind.Museum };
 
         /// <summary>出す予定の、別の世界へ飛ぶモードの的 1つ分</summary>
         class StageSpawn
@@ -423,7 +435,8 @@ namespace ShootingGallery
             if (!paused && Time.time >= stageResumeAt) stageClock += Time.deltaTime;
             if (stagePlan.Count == 0) PlanNextStage(); // 1回分を出しきったら (またはとばしたら)、次の区切りの時刻を抽選
             // 予定から長く遅れたもの (出せる状態にならなかった) はとばす
-            stagePlan.RemoveAll(s => s.target == null && stageClock - s.at > stageGiveUp);
+            for (int i = stagePlan.Count - 1; i >= 0; i--) // (毎フレーム呼ぶので、ラムダを作らないループで)
+                if (stagePlan[i].target == null && stageClock - stagePlan[i].at > stageGiveUp) stagePlan.RemoveAt(i);
         }
 
         // ---- 別の世界へ飛ぶモードの的 (海戦・空中・忍者・怪獣・カジノ・西部劇・宇宙) を、ランダムな普通の的から化けさせる ----
@@ -447,7 +460,8 @@ namespace ShootingGallery
             foreach (var s in stagePlan) if (s.target != null) outCount++;
 
             List<Target> candidates = null;
-            var usedStalls = new List<Stall>();
+            var usedStalls = usedStallBuffer;
+            usedStalls.Clear();
             foreach (var s in stagePlan)
             {
                 if (s.target != null || s.at > stageClock) continue;
@@ -455,18 +469,17 @@ namespace ShootingGallery
                 if (Count(s.kind) > 0) continue; // 同じ種類がまだ出ている
                 if (candidates == null)
                 {
-                    candidates = new List<Target>();
-                    foreach (var stall in gm.ShownStalls())
+                    candidates = targetBuffer;
+                    candidates.Clear();
+                    foreach (var stall in gm.ShownStalls(stallBuffer))
                         foreach (var t in stall.targets)
                             if (t != null && t.kind == TargetKind.Normal && t.face != null && t.IsUp && !t.manualControl && !active.ContainsKey(t)
                                 && t != reservedTarget && !IsStageReserved(t))
                                 candidates.Add(t);
                 }
                 if (candidates.Count == 0) break;
-                // なるべく、この回でまだ選んでいない屋台の的から選ぶ (3か所にばらける)
-                var pool = candidates.FindAll(t => !usedStalls.Contains(t.GetComponentInParent<Stall>()));
-                if (pool.Count == 0) pool = candidates;
-                var pick = pool[Random.Range(0, pool.Count)];
+                var pick = PickStageTarget(gm, candidates, usedStalls);
+                if (pick == null) break; // どの屋台ももう上限まで出ている: 空くまで待つ
                 if (!CanOfferStage(s.kind, pick, LifetimeOf(s.kind) + 1f)) continue; // 時間切れが近いなど (遅れすぎたら UpdateStagePlan がとばす)
                 if (!pick.Reappear(0.4f)) { candidates.Remove(pick); continue; }
                 s.target = pick;
@@ -475,6 +488,55 @@ namespace ShootingGallery
                 usedStalls.Add(pick.GetComponentInParent<Stall>());
                 outCount++;
             }
+        }
+
+        // 毎フレーム使うリスト (使い回して、ごみを出さないように)
+        readonly List<Stall> stallBuffer = new List<Stall>();
+        readonly List<Stall> usedStallBuffer = new List<Stall>();
+        readonly List<Target> targetBuffer = new List<Target>();
+        readonly List<Target> poolBuffer = new List<Target>();
+
+        // 化けさせる的を選ぶ: まず屋台を選び (最初の屋台は選ばれにくく)、その屋台の的からランダムに1つ。
+        // 別の世界へ飛ぶ的がもう stageMaxPerStall 個出ている屋台、この回でもう選んだ屋台は選ばない (最初の屋台にばかり出ないように)
+        Target PickStageTarget(GameManager gm, List<Target> candidates, List<Stall> usedStalls)
+        {
+            var stalls = stallBuffer; // candidates を作った後なので使い回してよい
+            stalls.Clear();
+            foreach (var t in candidates)
+            {
+                var st = t.GetComponentInParent<Stall>();
+                if (st != null && !stalls.Contains(st) && !usedStalls.Contains(st) && StageCountOn(st) < Mathf.Max(1, stageMaxPerStall)) stalls.Add(st);
+            }
+            if (stalls.Count == 0) return null;
+
+            float total = 0f;
+            foreach (var st in stalls) total += StallWeight(gm, st, stalls.Count);
+            float r = Random.value * total;
+            Stall chosen = stalls[stalls.Count - 1];
+            foreach (var st in stalls)
+            {
+                r -= StallWeight(gm, st, stalls.Count);
+                if (r <= 0f) { chosen = st; break; }
+            }
+
+            var pool = poolBuffer;
+            pool.Clear();
+            foreach (var t in candidates) if (t.GetComponentInParent<Stall>() == chosen) pool.Add(t);
+            return pool.Count > 0 ? pool[Random.Range(0, pool.Count)] : null;
+        }
+
+        float StallWeight(GameManager gm, Stall st, int stallCount) =>
+            st == gm.mainStall && stallCount > 1 ? Mathf.Max(0.01f, stageMainStallWeight) : 1f;
+
+        // この屋台に今出ている (化けるのを待っている的も含む) 別の世界へ飛ぶ的の数
+        int StageCountOn(Stall stall)
+        {
+            int n = 0;
+            foreach (var kv in active)
+                if (System.Array.IndexOf(StageKinds, kv.Value.kind) >= 0 && kv.Key != null && kv.Key.GetComponentInParent<Stall>() == stall) n++;
+            foreach (var s in stagePlan)
+                if (s.target != null && s.target.GetComponentInParent<Stall>() == stall) n++;
+            return n;
         }
 
         bool IsStageReserved(Target t)
@@ -535,7 +597,7 @@ namespace ShootingGallery
             }
 
             // 青い玉: フィーバー中だけ、メイン以外の屋台に1つまで (撃たれずに消えたらまた出る)
-            if (gm.IsFever && !gm.NavalActive && !gm.SkyActive && !gm.NinjaActive && !gm.KaijuActive && !gm.CasinoActive && !gm.WesternActive && !gm.SpaceActive && !gm.BonusUsedThisFever && (gm.bonusStage == null || !gm.bonusStage.IsBusy)
+            if (gm.IsFever && !gm.NavalActive && !gm.SkyActive && !gm.NinjaActive && !gm.KaijuActive && !gm.CasinoActive && !gm.WesternActive && !gm.SpaceActive && !gm.GhostActive && !gm.MineActive && !gm.FestivalActive && !gm.SubmarineActive && !gm.MusicActive && !gm.MuseumActive && !gm.BonusUsedThisFever && (gm.bonusStage == null || !gm.bonusStage.IsBusy)
                 && Count(TargetKind.BlueOrb) == 0 && Time.time >= nextBlueOrbTime
                 && target.GetComponentInParent<Stall>() != gm.mainStall && Random.value < blueOrbChance)
             {
@@ -595,6 +657,12 @@ namespace ShootingGallery
             TargetKind.Casino => casinoOffer.lifetime,
             TargetKind.Western => westernOffer.lifetime,
             TargetKind.Space => spaceOffer.lifetime,
+            TargetKind.Ghost => ghostOffer.lifetime,
+            TargetKind.Mine => mineOffer.lifetime,
+            TargetKind.Submarine => submarineOffer.lifetime,
+            TargetKind.Music => musicOffer.lifetime,
+            TargetKind.Museum => museumOffer.lifetime,
+            TargetKind.Festival => festivalOffer.lifetime,
             _ => lifetime
         };
 
@@ -610,6 +678,12 @@ namespace ShootingGallery
                 TargetKind.Casino => gm.CanOfferCasino(target, lifetime),
                 TargetKind.Western => gm.CanOfferWestern(target, lifetime),
                 TargetKind.Space => gm.CanOfferSpace(target, lifetime),
+                TargetKind.Ghost => gm.CanOfferGhost(target, lifetime),
+                TargetKind.Mine => gm.CanOfferMine(target, lifetime),
+                TargetKind.Submarine => gm.CanOfferSubmarine(target, lifetime),
+                TargetKind.Music => gm.CanOfferMusic(target, lifetime),
+                TargetKind.Museum => gm.CanOfferMuseum(target, lifetime),
+                TargetKind.Festival => gm.CanOfferFestival(target, lifetime),
                 _ => false
             };
         }
@@ -628,6 +702,13 @@ namespace ShootingGallery
             TargetKind.Casino => casinoOffer.points,
             TargetKind.Western => westernOffer.points,
             TargetKind.Space => spaceOffer.points,
+            TargetKind.Ghost => ghostOffer.points,
+            TargetKind.Mine => mineOffer.points,
+            TargetKind.Submarine => submarineOffer.points,
+            TargetKind.Music => musicOffer.points,
+            TargetKind.Museum => museumOffer.points,
+            TargetKind.GateBack => 0, // WORLD GATE の BACK (点数なし)
+            TargetKind.Festival => festivalOffer.points,
             _ => weaponPoints
         };
 

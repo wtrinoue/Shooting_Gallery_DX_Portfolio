@@ -60,7 +60,7 @@ namespace ShootingGallery
             Place();
 
             hitTarget.points = pointChoices.Length > 0 ? pointChoices[Random.Range(0, pointChoices.Length)] : 100;
-            foreach (var label in pointLabels) if (label != null) label.text = hitTarget.points.ToString();
+            foreach (var label in pointLabels) if (label != null) label.text = PointText.Of(hitTarget.points);
             hitTarget.SetAvailable(true);
             hitTarget.Raise(9999f);
         }

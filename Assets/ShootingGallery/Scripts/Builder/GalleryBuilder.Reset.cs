@@ -29,7 +29,7 @@ namespace ShootingGallery
                 seg.GetComponent<Renderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
                 segments[i] = seg.GetComponent<Renderer>();
             }
-            var label = MakeText(visual, "Label", holdText, new Vector3(0f, -0.09f, 0f), 0.022f, Color.white);
+            var label = MakeText(visual, "Label", holdText, new Vector3(0f, -0.09f, 0f), 0.022f, Color.white, overlay: true);
 
             var indicator = root.gameObject.AddComponent<ResetIndicator>();
             indicator.visual = visual.gameObject;

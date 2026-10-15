@@ -51,7 +51,64 @@ namespace ShootingGallery
             // 下: 遊び方
             MakeText(board, "HowTo1", "START の的を撃つとゲーム開始！", new Vector3(0f, 0.85f, -0.01f), 0.1f, new Color(1f, 0.85f, 0.3f));
             MakeText(board, "HowTo2", "特別な的を撃つと、武器やステージが変わるよ", new Vector3(0f, 0.65f, -0.01f), 0.07f, Color.white);
+
+            BuildCredits(board, panel, gold);
             return board.gameObject;
+        }
+
+        /// <summary>
+        /// 看板のいちばん下の「CREDITS / LICENSES」の的と、撃つと看板の前に開くクレジットとライセンス全文のパネル (CreditsViewer)。
+        /// パネルは大きな文字でページに分けて出し、下の的 (前へ / 閉じる / 次へ) を撃ってページを送る。文章は Resources/THIRD_PARTY_NOTICES.txt
+        /// </summary>
+        void BuildCredits(Transform board, Material panelMat, Material gold)
+        {
+            var dark = new Color(0.05f, 0.05f, 0.08f);
+            var open = CreditsButton(board, "CreditsButton", new Vector3(0f, 0.27f, -0.04f), new Vector2(2.3f, 0.26f), "CREDITS / LICENSES  (shoot)", new Color(0.95f, 0.8f, 0.35f), 0.075f, dark);
+
+            var panel = Group(board, "CreditsPanel");
+            panel.localPosition = new Vector3(0f, 1.6f, -0.14f); // 下はしが CREDITS の的より上 (開いている間も的が隠れない)
+            Prim(PrimitiveType.Cube, "Back", panel, Vector3.zero, new Vector3(4.5f, 2.3f, 0.04f), panelMat, false);
+            foreach (float y in new[] { -1.15f, 1.15f })
+                Prim(PrimitiveType.Cube, "FrameH", panel, new Vector3(0f, y, -0.02f), new Vector3(4.54f, 0.04f, 0.03f), gold, false);
+            foreach (float x in new[] { -2.25f, 2.25f })
+                Prim(PrimitiveType.Cube, "FrameV", panel, new Vector3(x, 0f, -0.02f), new Vector3(0.04f, 2.34f, 0.03f), gold, false);
+            MakeText(panel, "Title", "CREDITS & LICENSES", new Vector3(0f, 1f, -0.03f), 0.12f, new Color(1f, 0.85f, 0.35f));
+            var page = MakeText(panel, "PageText", "", new Vector3(-2.1f, 0.86f, -0.03f), 0.075f, Color.white);
+            page.anchor = TextAnchor.UpperLeft;
+            page.alignment = TextAlignment.Left;
+            var number = MakeText(panel, "PageNumber", "1 / 1", new Vector3(0f, -0.54f, -0.03f), 0.07f, new Color(0.75f, 0.78f, 0.88f));
+            var prev = CreditsButton(panel, "PrevButton", new Vector3(-1.5f, -0.88f, -0.05f), new Vector2(0.95f, 0.26f), "< PREV", new Color(0.4f, 0.75f, 1f), 0.08f, dark);
+            var close = CreditsButton(panel, "CloseButton", new Vector3(0f, -0.88f, -0.05f), new Vector2(0.95f, 0.26f), "CLOSE  X", new Color(1f, 0.4f, 0.35f), 0.08f, dark);
+            var next = CreditsButton(panel, "NextButton", new Vector3(1.5f, -0.88f, -0.05f), new Vector2(0.95f, 0.26f), "NEXT >", new Color(0.4f, 0.75f, 1f), 0.08f, dark);
+
+            var viewer = board.gameObject.AddComponent<CreditsViewer>();
+            viewer.notices = Resources.Load<TextAsset>("THIRD_PARTY_NOTICES");
+            viewer.panel = panel.gameObject;
+            viewer.pageText = page;
+            viewer.pageNumber = number;
+            viewer.linesPerPage = 13;
+            viewer.openButton = open;
+            viewer.prevButton = prev;
+            viewer.nextButton = next;
+            viewer.closeButton = close;
+            panel.gameObject.SetActive(false);
+        }
+
+        /// <summary>撃つと押せる板の的 (点数なし)。当たると縮んで、すぐにふくらんで戻る</summary>
+        Target CreditsButton(Transform parent, string name, Vector3 pos, Vector2 size, string label, Color color, float textHeight, Color textColor)
+        {
+            var pivot = Group(parent, name);
+            pivot.localPosition = pos;
+            var visual = Group(pivot, "Visual");
+            Prim(PrimitiveType.Cube, "Plate", visual, Vector3.zero, new Vector3(size.x, size.y, 0.04f), Mat($"Credits_{name}", color, color * 0.45f));
+            MakeText(visual, "Label", label, new Vector3(0f, 0f, -0.03f), textHeight, textColor);
+            var t = pivot.gameObject.AddComponent<Target>();
+            t.kind = TargetKind.Credits;
+            t.points = 0;
+            t.visual = visual;
+            t.shrinkOnHit = true;
+            t.respawnDelay = 0.35f;
+            return t;
         }
 
         /// <summary>1行分: 色付きのボタンの印と、操作の説明 (大きい文字 + 小さい補足)。pos は印の位置。文字は印の右に左寄せ</summary>

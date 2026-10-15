@@ -77,7 +77,7 @@ namespace ShootingGallery
         Target BuildStartTarget(Transform stall)
         {
             var root = Group(stall, "Target_Start");
-            root.localPosition = new Vector3(0f, 1.1f, -0.6f);
+            root.localPosition = new Vector3(-0.5f, 1.1f, -0.6f); // 右に WORLD GATE の的
             var target = root.gameObject.AddComponent<Target>();
             target.kind = TargetKind.Start;
             target.points = 0;

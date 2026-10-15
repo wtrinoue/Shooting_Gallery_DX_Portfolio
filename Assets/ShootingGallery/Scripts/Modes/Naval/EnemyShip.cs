@@ -3,7 +3,7 @@ using UnityEngine;
 namespace ShootingGallery
 {
     /// <summary>
-    /// 海戦モードの敵の船。プレイヤーのまわりの海を走り、どこかに当てると帆に大きく書かれた点数が入り、爆発して沈む (撃沈)。
+    /// 海戦モードの敵の海賊船 (木の帆船)。プレイヤーのまわりの海を波に大きく揺られながら走り、どこかに当てると旗に大きく書かれた点数が入り、爆発して沈む (撃沈)。
     /// 走り方は3種類: 横切る (Cross) / 遠くから近づいて回る (Orbit) / 正面から近づいてからゆっくり回る (Approach)。
     /// 位置は親 (NavalBattle。プレイヤーの足元が原点) のローカル座標で決める。反撃はしない。
     /// </summary>
@@ -16,7 +16,7 @@ namespace ShootingGallery
         public Transform body;
         [Tooltip("船全体の当たり判定 (この船の Target。船体と帆のどこに当たっても撃沈。visual は空のオブジェクトにしておく)")]
         public Target hitTarget;
-        [Tooltip("帆に大きく書いた点数")]
+        [Tooltip("旗に大きく書いた点数")]
         public TextMesh[] pointLabels;
         [Tooltip("出てくるたびに、この中からランダムに点数を選ぶ")]
         public int[] pointChoices = { 300 };
@@ -28,8 +28,10 @@ namespace ShootingGallery
         public Vector2 distance = new Vector2(9f, 12f);
         [Tooltip("撃沈した時の爆発の見た目")]
         public Material explosionMaterial;
-        public float bobHeight = 0.08f;
-        public float rollDeg = 4f;
+        [Tooltip("波に揺られる大きさ: 上下 (m) / 横の傾き (度) / 船首の上下 (度)")]
+        public float bobHeight = 0.2f;
+        public float rollDeg = 8f;
+        public float pitchDeg = 4f;
 
         const float FarRadius = 27f;   // ここより遠くは霧で見えない (出てくる所 / 去っていく所)
         const float SinkTime = 2.6f;
@@ -38,7 +40,7 @@ namespace ShootingGallery
         /// <summary>撃沈されて沈んでいる途中 (撃沈は1隻につき1回)</summary>
         public bool IsSinking { get; private set; }
         public bool IsBusy => IsSailing || IsSinking || retreating;
-        /// <summary>今回の点数 (帆に書いてある数字)</summary>
+        /// <summary>今回の点数 (旗に書いてある数字)</summary>
         public int Points => hitTarget != null ? hitTarget.points : 0;
 
         System.Action<EnemyShip> onSunk;
@@ -77,9 +79,9 @@ namespace ShootingGallery
             body.localRotation = Quaternion.identity;
             Place(0f, true);
 
-            // 点数を決めて帆に書く
+            // 点数を決めて旗に書く
             hitTarget.points = pointChoices.Length > 0 ? pointChoices[Random.Range(0, pointChoices.Length)] : 100;
-            foreach (var label in pointLabels) if (label != null) label.text = hitTarget.points.ToString();
+            foreach (var label in pointLabels) if (label != null) label.text = PointText.Of(hitTarget.points);
             hitTarget.SetAvailable(true);
             hitTarget.Raise(9999f);
         }
@@ -102,10 +104,12 @@ namespace ShootingGallery
             {
                 t += dt;
                 Place(t, false);
-                // 波に揺られる
+                // 波に揺られる: 上下に大きくうねり、横に傾き (ロール)、船首が上がったり下がったり (ピッチ)。2つの波を重ねて、規則的すぎないように
                 float w = Time.time + phase;
-                body.localPosition = Vector3.up * (Mathf.Sin(w * 1.3f) * bobHeight);
-                body.localRotation = Quaternion.Euler(Mathf.Sin(w * 0.9f) * rollDeg * 0.5f, 0f, Mathf.Sin(w * 1.1f) * rollDeg);
+                float swell = Mathf.Sin(w * 1.1f) + 0.45f * Mathf.Sin(w * 2.3f + 1.7f);
+                body.localPosition = Vector3.up * (swell * bobHeight);
+                body.localRotation = Quaternion.Euler((Mathf.Sin(w * 0.95f + 0.8f) + 0.3f * Mathf.Sin(w * 2.1f)) * pitchDeg, 0f,
+                                                      (Mathf.Sin(w * 0.75f) + 0.35f * Mathf.Sin(w * 1.9f + 0.5f)) * rollDeg);
 
                 if (t > 0.6f && !hitTarget.IsUp) Sink(); // 当たった (出てきてすぐは当たり判定が起き上がる途中なので数えない)
                 else if (route == Route.Cross && t > CrossDuration) Vanish(); // 横切り終わった (霧の向こう)
