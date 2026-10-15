@@ -123,7 +123,7 @@ namespace ShootingGallery
         public Color concertSkyColor = new Color(0.01f, 0.008f, 0.01f);
         public Color concertFogColor = new Color(0.03f, 0.02f, 0.02f);
         public Color concertAmbientDim = new Color(0.1f, 0.08f, 0.09f);
-        public Color concertAmbient = new Color(0.3f, 0.25f, 0.23f);
+        public Color concertAmbientBright = new Color(0.62f, 0.56f, 0.5f); // 名前を変えて、シーンに保存された前の値 (concertAmbient 0.3, 0.25, 0.23) を使わない
 
         [Header("Festival (夏祭りモード: 提灯の的を撃つと、屋台が射的・輪投げ・金魚すくい・食べ物の4軒に入れ替わる。見ている屋台で武器が変わり、スコアがお金になる)")]
         public FestivalStage festivalStage;

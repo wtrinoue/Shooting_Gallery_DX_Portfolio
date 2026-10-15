@@ -54,10 +54,10 @@ namespace ShootingGallery
                 ShowMessage("WELCOME TO THE CONCERT!\nSHOOT THE SOLOIST\n& THE FLOWING NOTES!", 3f, new Color(1f, 0.85f, 0.3f));
         }
 
-        // 演奏が始まった: ステージが明るくなる (照明は ConcertHall が上げる)。客席は暗いまま
+        // ステージがぱっと明るくなる (照明は ConcertHall が上げ、明るくなりきった瞬間に演奏が始まる)。ホール全体の環境光も同時に明るくする
         void OnConcertMusic()
         {
-            FadeAmbience(concertFogColor, concertAmbient, concertSkyColor, concertHall.lightUpTime);
+            FadeAmbience(concertFogColor, concertAmbientBright, concertSkyColor, concertHall.lightRiseSeconds);
         }
 
         /// <summary>音楽モードの時間切れ: 演奏が終わり、カーテンが閉まって元の屋台に戻る (ラウンドの終わり・リセットの時は、その場ですぐ戻す)</summary>

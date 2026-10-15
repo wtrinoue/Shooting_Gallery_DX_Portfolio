@@ -24,6 +24,8 @@ namespace ShootingGallery
         public AudioClip roar, slotLever, reelStop, coin, reload, whistle;
         [Header("カジノの明かりが点く演出 (真っ暗になる音 / ドラムロール / シンバル / 歓声)")]
         public AudioClip blackout, drumroll, crash, cheer;
+        [Header("音楽モード (コンサートホールの拍手。パチパチ)")]
+        public AudioClip applause;
         [Header("宇宙モード (ミサイルの発射音 / 星がきらめく音 / 宇宙へ飛び出す音 / 宇宙から戻る音)")]
         public AudioClip missile, twinkle, warpIn, warpOut;
         [Header("マシンガンチャレンジ (カップを倒した音。空なら自動生成。複数入れると毎回ランダムに選ぶ)")]
@@ -120,6 +122,7 @@ namespace ShootingGallery
                 () => { if (drumroll == null) drumroll = Drumroll(3.6f); }, // ドロロロロ…
                 () => { if (crash == null) crash = Noise("Crash", 2f, 2.2f, 1.6f, 0.9f); }, // ジャーン (シンバル)
                 () => { if (cheer == null) cheer = Cheer(); }, // ワーッ
+                () => { if (applause == null) applause = Applause(4.5f); }, // パチパチパチ… (大勢の拍手)
                 () => { if (missile == null) missile = Missile(); }, // シュゴーッ
                 () => { if (twinkle == null) twinkle = Twinkle(); }, // キラキラ…
                 () => { if (warpIn == null) warpIn = Warp("WarpIn", true); }, // ヒュイーン (上がる)
@@ -156,8 +159,8 @@ namespace ShootingGallery
         public static void PlayShot(WeaponType type)
         {
             if (instance == null) return;
-            // トランペット: 音楽モードの曲の今の和音に合う高さで、パッと鳴らす
-            if (type == WeaponType.Trumpet) { ConcertHall.PlayTrumpetShot(Camera.main != null ? Camera.main.transform.position : Vector3.zero); return; }
+            // トランペット: 撃っても音は鳴らさない (ユーザーの指定)
+            if (type == WeaponType.Trumpet) return;
             var clip = type == WeaponType.MachineGun ? instance.machineGunShot
                      : type == WeaponType.Shotgun ? instance.shotgunShot
                      : type == WeaponType.Bomb || type == WeaponType.Bazooka || type == WeaponType.FireBall ? instance.bombShot
@@ -241,6 +244,7 @@ namespace ShootingGallery
                 "drumroll" => instance.drumroll,
                 "crash" => instance.crash,
                 "cheer" => instance.cheer,
+                "applause" => instance.applause,
                 "missile" => instance.missile,
                 "twinkle" => instance.twinkle,
                 "ghost" => instance.ghostWail,
@@ -819,6 +823,55 @@ namespace ShootingGallery
             // 拍手の1つ1つを少し長くする (短すぎるとプチプチになるので、前の値を引きずる)
             for (int i = 1; i < n; i++) data[i] = Mathf.Clamp(data[i] + data[i - 1] * 0.25f, -1f, 1f);
             var clip = AudioClip.Create("Cheer", n, 1, Rate, false);
+            clip.SetData(data, 0);
+            return clip;
+        }
+
+        /// <summary>
+        /// 大勢の拍手 (パチパチ): 1人ずつ手をたたく間隔・手の音の高さ・大きさの違う人を大勢重ねる。
+        /// 1回の「パチ」は、ごく短い雑音を帯域で絞って (手のひらの音の高さ) すぐに消す。始まりはばらばらに広がり、終わりは1人ずつやめていく。
+        /// 最後に部屋の響きを少し足す
+        /// </summary>
+        static AudioClip Applause(float length)
+        {
+            int n = (int)(Rate * length);
+            var data = new float[n];
+            const int Clappers = 30;
+            int clapLen = (int)(0.04f * Rate);
+            for (int c = 0; c < Clappers; c++)
+            {
+                float period = Random.Range(0.17f, 0.3f);           // その人が手をたたく間隔 (秒)
+                float fc = Random.Range(900f, 2600f);               // 手の音の高さ (手の形・大きさで違う)
+                float f = 2f * Mathf.Sin(Mathf.PI * fc / Rate);
+                float loud = Random.Range(0.45f, 1f);
+                float start = Random.Range(0f, 0.4f);               // たたき始めがばらばらに広がる
+                float stop = length - Random.Range(0.3f, 2f);       // 1人ずつやめていく
+                for (float t = start; t < stop; t += period * Random.Range(0.85f, 1.15f))
+                {
+                    int i0 = (int)(t * Rate);
+                    float tau = Random.Range(0.004f, 0.009f) * Rate;  // パチの短さ
+                    float amp = loud * Random.Range(0.6f, 1f);
+                    float low = 0f, band = 0f;
+                    for (int k = 0; k < clapLen && i0 + k < n; k++)
+                    {
+                        float env = Mathf.Exp(-k / tau) * Mathf.Clamp01(k / (0.0006f * Rate)); // 一瞬で立ち上がって、すぐ消える
+                        float x = Random.Range(-1f, 1f) * env;
+                        // 帯域で絞る (状態変数フィルター)。帯域の音を中心に、高い所を少し残して乾いた音に
+                        float high = x - low - 0.7f * band;
+                        band += f * high;
+                        low += f * band;
+                        data[i0 + k] += (band * 0.9f + high * 0.25f) * amp;
+                    }
+                }
+            }
+            // 部屋の響き (少し遅れた音を薄く重ねる)
+            int d1 = (int)(0.023f * Rate), d2 = (int)(0.041f * Rate);
+            for (int i = n - 1; i >= d2; i--) data[i] += data[i - d1] * 0.18f + data[i - d2] * 0.12f;
+            float peak = 0.0001f;
+            for (int i = 0; i < n; i++) peak = Mathf.Max(peak, Mathf.Abs(data[i]));
+            float gain = 0.8f / peak;
+            for (int i = 0; i < n; i++) data[i] *= gain;
+            var clip = AudioClip.Create("Applause", n, 1, Rate, false);
             clip.SetData(data, 0);
             return clip;
         }

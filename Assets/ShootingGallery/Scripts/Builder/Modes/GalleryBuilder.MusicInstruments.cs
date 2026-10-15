@@ -5,11 +5,11 @@ namespace ShootingGallery
 {
     /// <summary>
     /// GalleryBuilder のうち、音楽モードの合奏団の楽器 (演奏者はいない)。オーケストラの並び方を参考に、指揮台を中心に扇形に置く:
-    ///   手前: 弦楽器 (左にバイオリン、右にビオラ・チェロ、右奥にコントラバス)。左はしにハープとグランドピアノ。
-    ///   真ん中の段: 木管楽器 (ピッコロ・フルート・オーボエ・クラリネット・バスクラリネット・ファゴット・コントラファゴット・サックス)。
+    ///   手前: 弦楽器 (左の手前に第1バイオリン・その奥に第2バイオリン、指揮者の前にビオラ、右の手前にチェロ・右の外側にコントラバス)。
+    ///   真ん中の段: 木管楽器 (内側の輪にピッコロ・フルート / オーボエ、外側の輪にクラリネット・バスクラリネット / ファゴット・コントラファゴット)。
     ///   その奥の段: 金管楽器 (ホルン・トランペット・ピッコロトランペット・トロンボーン・バストロンボーン・ユーフォニアム・チューバ)。
     ///   いちばん奥: 打楽器 (ティンパニ4つ・大太鼓・小太鼓・シンバル・ドラ・木琴・鉄琴・チューブラーベル)。
-    /// 同じ仲間の楽器は大きさを変えて作る (バイオリン < ビオラ < チェロ < コントラバス、アルト < テナー < バリトンサックスなど)。
+    /// 同じ仲間の楽器は大きさを変えて作る (バイオリン < ビオラ < チェロ < コントラバスなど)。並びはユーザーの配置図どおり (BuildOrchestra)。
     /// 楽器ごとに MusicInstrument を付け、根元の -Z がプレイヤーの方を向く
     /// </summary>
     public partial class GalleryBuilder
@@ -19,59 +19,75 @@ namespace ShootingGallery
             var orchestra = Group(hall, "Orchestra");
             var list = new List<MusicInstrument>();
 
+            // 角度 deg は指揮台から見た向き (0 = 真後ろの奥、マイナス = 客席から見て左、±90 = 真横)、r は指揮台からの距離 (m)。
+            // 客席から見た並び (ユーザーの配置図どおり):
+            //   左の手前 = 第1バイオリン、その奥 = 第2バイオリン、指揮者のすぐ前 = ビオラ、右の手前 = チェロ、右の外側 = コントラバス、
+            //   真ん中の内側の輪 = フルート (左)・オーボエ (右)、その外の輪 = クラリネット (左)・ファゴット (右)、
+            //   さらに外の輪 = ホルン・トランペット・トロンボーン・チューバ (左から)、いちばん奥 = 打楽器
+            const float RViola = 2.6f, RFlute = 4.6f, RClarinet = 6.1f, RBrass = 7.7f, RPerc = 9.6f; // ひな壇 (RiserR) の各段の真ん中あたり
+
             // ---- 弦楽器 ----
-            list.Add(BowedString(orchestra, "VIOLIN", -70f, 2.2f, 0.7f, 0, 500, 76));
-            list.Add(BowedString(orchestra, "VIOLIN", -52f, 2.2f, 0.7f, 0, 500, 74));
-            list.Add(BowedString(orchestra, "VIOLIN", -61f, 3.3f, 0.7f, 0, 500, 72));
-            list.Add(BowedString(orchestra, "VIOLIN", -34f, 2.2f, 0.7f, 0, 500, 71));
-            list.Add(BowedString(orchestra, "VIOLIN", -44f, 3.3f, 0.7f, 0, 500, 69));
-            list.Add(BowedString(orchestra, "VIOLIN", -26f, 3.3f, 0.7f, 0, 500, 67));
-            list.Add(BowedString(orchestra, "VIOLA", 20f, 2.2f, 0.82f, 1, 400, 62));
-            list.Add(BowedString(orchestra, "VIOLA", 37f, 2.2f, 0.82f, 1, 400, 60));
-            list.Add(BowedString(orchestra, "CELLO", 58f, 2.4f, 1.4f, 2, 300, 50));
-            list.Add(BowedString(orchestra, "CELLO", 76f, 2.4f, 1.4f, 2, 300, 48));
-            list.Add(BowedString(orchestra, "CELLO", 67f, 3.5f, 1.4f, 2, 300, 45));
-            list.Add(BowedString(orchestra, "CONTRABASS", 76f, 4.8f, 2.1f, 3, 200, 36));
-            list.Add(BowedString(orchestra, "CONTRABASS", 88f, 4.9f, 2.1f, 3, 200, 33));
-            list.Add(Harp(orchestra, new Vector3(-8.4f, StageTop, 9.4f)));
-            list.Add(GrandPiano(orchestra, new Vector3(-6.4f, StageTop, 6.3f)));
+            list.Add(BowedString(orchestra, "1ST VIOLIN", -81f, 2.3f, 0.7f, 0, 500, 79));
+            list.Add(BowedString(orchestra, "1ST VIOLIN", -85f, 3.7f, 0.7f, 0, 500, 76));
+            list.Add(BowedString(orchestra, "1ST VIOLIN", -77f, 5.1f, 0.7f, 0, 500, 74));
+            list.Add(BowedString(orchestra, "1ST VIOLIN", -85f, 6.5f, 0.7f, 0, 500, 72));
+            list.Add(BowedString(orchestra, "1ST VIOLIN", -76f, 7.6f, 0.7f, 0, 500, 71));
+            list.Add(BowedString(orchestra, "2ND VIOLIN", -62f, 2.9f, 0.7f, 0, 500, 69));
+            list.Add(BowedString(orchestra, "2ND VIOLIN", -71f, 4.4f, 0.7f, 0, 500, 67));
+            list.Add(BowedString(orchestra, "2ND VIOLIN", -54f, 4.4f, 0.7f, 0, 500, 66));
+            list.Add(BowedString(orchestra, "2ND VIOLIN", -69f, 6f, 0.7f, 0, 500, 64));
+            list.Add(BowedString(orchestra, "2ND VIOLIN", -55f, 6.1f, 0.7f, 0, 500, 62));
+            list.Add(BowedString(orchestra, "VIOLA", -30f, RViola, 0.82f, 1, 400, 62));
+            list.Add(BowedString(orchestra, "VIOLA", 0f, RViola, 0.82f, 1, 400, 60));
+            list.Add(BowedString(orchestra, "VIOLA", 30f, RViola, 0.82f, 1, 400, 57));
+            list.Add(BowedString(orchestra, "CELLO", 56f, 2.7f, 1.4f, 2, 300, 50));
+            list.Add(BowedString(orchestra, "CELLO", 84f, 2.7f, 1.4f, 2, 300, 48));
+            list.Add(BowedString(orchestra, "CELLO", 70f, 4.2f, 1.4f, 2, 300, 45));
+            list.Add(BowedString(orchestra, "CELLO", 59f, 5.7f, 1.4f, 2, 300, 43));
+            list.Add(BowedString(orchestra, "CELLO", 82f, 5.7f, 1.4f, 2, 300, 41));
+            list.Add(BowedString(orchestra, "CONTRABASS", 67f, 7.5f, 2.1f, 3, 200, 36));
+            list.Add(BowedString(orchestra, "CONTRABASS", 84f, 7.5f, 2.1f, 3, 200, 33));
+            list.Add(BowedString(orchestra, "CONTRABASS", 76f, 9.1f, 2.1f, 3, 200, 31));
 
-            // ---- 木管楽器 ----
-            list.Add(Flute(orchestra, "PICCOLO", -24f, 4.2f, 0.36f, 800, 86));
-            list.Add(Flute(orchestra, "FLUTE", -12f, 4.2f, 0.7f, 500, 74));
-            list.Add(Reed(orchestra, "OBOE", 2f, 4.2f, 0.65f, 0.034f, 500, 69, false));
-            list.Add(Reed(orchestra, "OBOE", 14f, 4.2f, 0.65f, 0.034f, 500, 67, false));
-            list.Add(Reed(orchestra, "CLARINET", -22f, 5.5f, 0.68f, 0.045f, 500, 62, true));
-            list.Add(BassClarinet(orchestra, -10f, 5.5f));
-            list.Add(Bassoon(orchestra, "BASSOON", 4f, 5.5f, 1f, 300, 46));
-            list.Add(Bassoon(orchestra, "CONTRABASSOON", 17f, 5.6f, 1.3f, 200, 34));
-            list.Add(Saxophone(orchestra, "ALTO SAX", -34f, 5.6f, 0.72f, 400, 61, 0));
-            list.Add(Saxophone(orchestra, "TENOR SAX", 30f, 5.6f, 0.9f, 400, 54, 1));
-            list.Add(Saxophone(orchestra, "BARITONE SAX", 42f, 5.7f, 1.2f, 300, 42, 2));
+            // ---- 木管楽器 (内側の輪: フルート | オーボエ、外側の輪: クラリネット | ファゴット) ----
+            list.Add(Flute(orchestra, "PICCOLO", -40f, RFlute, 0.36f, 800, 86));
+            list.Add(Flute(orchestra, "FLUTE", -25f, RFlute, 0.7f, 500, 76));
+            list.Add(Flute(orchestra, "FLUTE", -10f, RFlute, 0.7f, 500, 74));
+            list.Add(Reed(orchestra, "OBOE", 10f, RFlute, 0.65f, 0.034f, 500, 69, false));
+            list.Add(Reed(orchestra, "OBOE", 25f, RFlute, 0.65f, 0.034f, 500, 67, false));
+            list.Add(Reed(orchestra, "OBOE", 40f, RFlute, 0.65f, 0.034f, 500, 65, false));
+            list.Add(Reed(orchestra, "CLARINET", -44f, RClarinet, 0.68f, 0.045f, 500, 64, true));
+            list.Add(Reed(orchestra, "CLARINET", -31f, RClarinet, 0.68f, 0.045f, 500, 62, true));
+            list.Add(BassClarinet(orchestra, -17f, RClarinet));
+            list.Add(Bassoon(orchestra, "BASSOON", 9f, RClarinet, 1f, 300, 46));
+            list.Add(Bassoon(orchestra, "BASSOON", 22f, RClarinet, 1f, 300, 43));
+            list.Add(Bassoon(orchestra, "CONTRABASSOON", 36f, RClarinet, 1.3f, 200, 34));
 
-            // ---- 金管楽器 ----
-            list.Add(Horn(orchestra, -44f, 7.1f, 400, 55));
-            list.Add(Horn(orchestra, -34f, 7.1f, 400, 53));
-            list.Add(Trumpet(orchestra, "TRUMPET", -16f, 7.1f, 0.55f, 400, 67));
-            list.Add(Trumpet(orchestra, "TRUMPET", -6f, 7.1f, 0.55f, 400, 64));
-            list.Add(Trumpet(orchestra, "PICCOLO TRUMPET", 4f, 7.1f, 0.38f, 700, 76));
-            list.Add(Trombone(orchestra, "TROMBONE", 15f, 7.1f, 1f, 300, 53, false));
-            list.Add(Trombone(orchestra, "BASS TROMBONE", 26f, 7.1f, 1.15f, 300, 43, true));
-            list.Add(Tuba(orchestra, "EUPHONIUM", 37f, 7.2f, 0.72f, 300, 46));
-            list.Add(Tuba(orchestra, "TUBA", 48f, 7.4f, 1f, 200, 34));
+            // ---- 金管楽器 (左から ホルン | トランペット | トロンボーン | チューバ) ----
+            list.Add(Horn(orchestra, -54f, RBrass, 400, 57));
+            list.Add(Horn(orchestra, -44f, RBrass, 400, 55));
+            list.Add(Horn(orchestra, -34f, RBrass, 400, 53));
+            list.Add(Trumpet(orchestra, "TRUMPET", -22f, RBrass, 0.55f, 400, 67));
+            list.Add(Trumpet(orchestra, "TRUMPET", -12f, RBrass, 0.55f, 400, 64));
+            list.Add(Trumpet(orchestra, "PICCOLO TRUMPET", -3f, RBrass, 0.38f, 700, 76));
+            list.Add(Trombone(orchestra, "TROMBONE", 9f, RBrass, 1f, 300, 53, false));
+            list.Add(Trombone(orchestra, "TROMBONE", 20f, RBrass, 1f, 300, 50, false));
+            list.Add(Trombone(orchestra, "BASS TROMBONE", 31f, RBrass, 1.15f, 300, 43, true));
+            list.Add(Tuba(orchestra, "EUPHONIUM", 42f, RBrass, 0.72f, 300, 46));
+            list.Add(Tuba(orchestra, "TUBA", 53f, RBrass + 0.2f, 1f, 200, 34));
 
-            // ---- 打楽器 ----
-            float[] timpDeg = { -12f, -4f, 4f, 12f };
+            // ---- 打楽器 (いちばん奥の輪。真ん中にティンパニ) ----
+            list.Add(TubularBells(orchestra, -48f, RPerc));
+            list.Add(Xylophone(orchestra, -40f, RPerc, true));
+            list.Add(Xylophone(orchestra, -30f, RPerc, false));
+            float[] timpDeg = { -19f, -10f, -1f, 8f };
             float[] timpD = { 0.84f, 0.77f, 0.7f, 0.63f };
             int[] timpMidi = { 41, 43, 45, 48 };
-            for (int i = 0; i < 4; i++) list.Add(Timpani(orchestra, timpDeg[i], 9.1f, timpD[i], timpMidi[i]));
-            list.Add(BassDrum(orchestra, 25f, 9.4f));
-            list.Add(SnareDrum(orchestra, 33f, 8.6f));
-            list.Add(Cymbals(orchestra, 40f, 9.3f));
-            list.Add(Gong(orchestra, 49f, 9.6f));
-            list.Add(Xylophone(orchestra, -26f, 9f, false));
-            list.Add(Xylophone(orchestra, -36f, 8.4f, true));
-            list.Add(TubularBells(orchestra, -46f, 9.4f));
+            for (int i = 0; i < 4; i++) list.Add(Timpani(orchestra, timpDeg[i], RPerc, timpD[i], timpMidi[i]));
+            list.Add(BassDrum(orchestra, 18f, RPerc));
+            list.Add(SnareDrum(orchestra, 28f, RPerc - 0.3f));
+            list.Add(Cymbals(orchestra, 37f, RPerc));
+            list.Add(Gong(orchestra, 46f, RPerc + 0.2f));
             return list;
         }
 
@@ -79,8 +95,10 @@ namespace ShootingGallery
         // 共通
         // ------------------------------------------------------------------
 
-        Material InstBrass => Mat("Concert_Brass", new Color(1f, 0.8f, 0.32f), new Color(0.15f, 0.1f, 0.02f), false, 0.9f);
-        Material InstSilver => Mat("Concert_Silver", new Color(0.85f, 0.86f, 0.9f), new Color(0.05f, 0.05f, 0.06f), false, 0.9f);
+        const float InstrumentScale = 1.2f; // 楽器の大きさ (形は 1 の大きさで作り、根元ごと拡大する)
+
+        Material InstBrass => Mat("Concert_Brass", new Color(1f, 0.8f, 0.32f), new Color(0.24f, 0.16f, 0.035f), false, 0.9f);
+        Material InstSilver => Mat("Concert_Silver", new Color(0.85f, 0.86f, 0.9f), new Color(0.11f, 0.11f, 0.12f), false, 0.9f);
         Material InstBlack => Mat("Concert_InstBlack", new Color(0.05f, 0.05f, 0.06f), null, false, 0.75f);
         Material InstPearl => Mat("Concert_Pearl", new Color(0.97f, 0.95f, 0.9f), null, false, 0.8f);
 
@@ -93,6 +111,7 @@ namespace ShootingGallery
         {
             var root = Group(parent, displayName.Replace(' ', '_'));
             root.localPosition = pos;
+            root.localScale = Vector3.one * InstrumentScale; // 楽器・椅子・ソロの札をまとめて一回り大きく
             var flat = new Vector3(pos.x, 0f, pos.z + HallShiftZ); // プレイヤーは、ホールの原点から HallShiftZ だけ手前
             if (flat.sqrMagnitude > 0.01f) root.localRotation = Quaternion.LookRotation(flat.normalized); // 表 (-Z) がプレイヤーの方
 
@@ -105,9 +124,18 @@ namespace ShootingGallery
             var wobble = Group(root, "Wobble");
             target.visual = wobble;
             pivot = Group(wobble, "Pivot");
-            var hit = Prim(PrimitiveType.Cube, "Hit", pivot, hitCenter, hitSize, null);
+            var hit = Prim(PrimitiveType.Cube, "Hit", pivot, hitCenter, hitSize * 1.2f, null); // 見た目より少し大きめ (ソロの間はさらに MusicInstrument.soloHitScale 倍)
             HitOnly(hit);
             if (chair) InstrumentChair(root);
+
+            // 足元の光の輪: 暗いステージの上で、楽器の輪郭が1つずつくっきり浮かぶように (外ほど薄い3重の円で、ぼかして見せる)
+            float pool = Mathf.Clamp(Mathf.Max(hitSize.x, hitSize.z) * 0.6f, 0.45f, 0.8f);
+            var poolMat = TransparentMat("Concert_InstPool", new Color(1f, 0.85f, 0.55f, 0.13f));
+            for (int i = 0; i < 3; i++)
+            {
+                float r = pool * (1f - i * 0.25f);
+                Prim(PrimitiveType.Cylinder, "Pool", root, new Vector3(0f, 0.004f + i * 0.002f, 0f), new Vector3(r * 2f, 0.001f, r * 2f), poolMat, false);
+            }
 
             // ソロの印: まわりを回る光の粒と、点数の札
             var mark = Group(root, "SoloMark");
@@ -122,6 +150,42 @@ namespace ShootingGallery
             {
                 float a = i * Mathf.PI * 2f / 7f;
                 Prim(PrimitiveType.Sphere, "Sparkle", orbit, new Vector3(Mathf.Sin(a) * ring, Mathf.Sin(a * 3f) * 0.12f, Mathf.Cos(a) * ring), Vector3.one * 0.07f, glow, false);
+            }
+            // 輪の五線譜: 楽器のまわりをぐるりと囲む5本の線 (ゆるく波打つ)。その上で音符が拍に合わせて跳ねる (動きは MusicInstrument)
+            var soloStaff = Group(mark, "SoloStaff");
+            soloStaff.localPosition = Vector3.up * signY * 0.42f;
+            float staffR = ring + 0.25f;
+            const int LoopPts = 48;
+            const float SoloLineGap = 0.07f;
+            var soloLineMat = Mat("Solo_StaffLine", new Color(1f, 0.9f, 0.6f), null, true);
+            for (int k = 0; k < 5; k++)
+            {
+                var lr = StaffLine(soloStaff, $"SoloLine{k}", soloLineMat, 0.012f);
+                lr.loop = true;
+                lr.positionCount = LoopPts;
+                for (int i = 0; i < LoopPts; i++)
+                {
+                    float a = i * Mathf.PI * 2f / LoopPts;
+                    lr.SetPosition(i, new Vector3(Mathf.Sin(a) * staffR, (k - 2) * SoloLineGap + Mathf.Sin(a * 2f) * 0.08f, Mathf.Cos(a) * staffR));
+                }
+            }
+            var notePalette = NotePalette();
+            var soloNotes = new List<Transform>();
+            for (int i = 0; i < 4; i++)
+            {
+                float a = (i + 0.5f) * Mathf.PI * 0.5f;
+                var dir = new Vector3(Mathf.Sin(a), 0f, Mathf.Cos(a));
+                var at = Group(soloStaff, $"SoloNote{i}");
+                at.localPosition = dir * staffR + Vector3.up * ((i % 3 - 1) * SoloLineGap + Mathf.Sin(a * 2f) * 0.08f); // 線か間の上
+                at.localRotation = Quaternion.LookRotation(-dir); // 表 (-Z) が外側
+                var hop = Group(at, "Hop");
+                var noteMat = notePalette[(i * 2 + 1) % notePalette.Length];
+                var head = Prim(PrimitiveType.Sphere, "Head", hop, Vector3.zero, new Vector3(0.11f, 0.08f, 0.07f), noteMat, false);
+                head.transform.localRotation = Quaternion.Euler(0f, 0f, 22f);
+                Prim(PrimitiveType.Cylinder, "Stem", hop, new Vector3(0.048f, 0.11f, 0f), new Vector3(0.018f, 0.11f, 0.018f), noteMat, false);
+                if (i % 2 == 1) // 8分音符は旗つき
+                    Prim(PrimitiveType.Cube, "Flag", hop, new Vector3(0.075f, 0.18f, 0f), new Vector3(0.018f, 0.09f, 0.015f), noteMat, false).transform.localRotation = Quaternion.Euler(0f, 0f, 35f);
+                soloNotes.Add(hop);
             }
             var sign = Group(mark, "Sign");
             sign.localPosition = Vector3.up * signY;
@@ -141,9 +205,22 @@ namespace ShootingGallery
             inst.pivot = pivot;
             inst.soloMark = mark.gameObject;
             inst.soloLabel = label;
+            inst.soloStaff = soloStaff;
+            inst.soloNotes = soloNotes.ToArray();
+            inst.soloMaterials = SoloNeonMats();
+            inst.hitBox = hit.transform;
             inst.aimHeight = signY;
             inst.phaseBeats = Mathf.Repeat(pos.x * 0.09f, 2f) * 0.25f; // 横に並んだ楽器が、波のように少しずつずれて揺れる
             return inst;
+        }
+
+        // ソロの楽器の蛍光色 (拍ごとに入れ替わる)。形の陰影は残しつつ、強く自分で光らせて、暗いステージでもひと目で分かるように
+        Material[] SoloNeonMats()
+        {
+            var colors = new[] { new Color(1f, 1f, 0.15f), new Color(1f, 0.15f, 0.75f), new Color(0.1f, 1f, 1f), new Color(0.35f, 1f, 0.2f) };
+            var mats = new Material[colors.Length];
+            for (int i = 0; i < colors.Length; i++) mats[i] = Mat($"Solo_Neon{i}", colors[i], colors[i] * 1.2f, false, 0.8f);
+            return mats;
         }
 
         // 演奏者の椅子 (楽器の後ろ。黒い椅子)
@@ -212,8 +289,8 @@ namespace ShootingGallery
             Vector3 hitS = upright ? new Vector3(0.48f * L, 0.95f * L, 0.35f) : new Vector3(0.95f * L + 0.1f, 0.4f, 0.55f);
             var inst = NewInstrument(parent, name, spot, ConcertMusic.Voice.Strings, midi, points, signY, hitC, hitS, kind != 3, out var pivot);
 
-            var wood = kind <= 1 ? Mat("Concert_Violin", new Color(0.66f, 0.29f, 0.08f), new Color(0.05f, 0.02f, 0f), false, 0.75f)
-                                 : Mat("Concert_Cello", new Color(0.46f, 0.18f, 0.06f), new Color(0.04f, 0.01f, 0f), false, 0.75f);
+            var wood = kind <= 1 ? Mat("Concert_Violin", new Color(0.66f, 0.29f, 0.08f), new Color(0.11f, 0.045f, 0.008f), false, 0.75f)
+                                 : Mat("Concert_Cello", new Color(0.46f, 0.18f, 0.06f), new Color(0.09f, 0.035f, 0.008f), false, 0.75f);
             var body = Group(pivot, "Body");
             if (upright)
             {
@@ -266,78 +343,6 @@ namespace ShootingGallery
             foreach (float x in new[] { -0.085f, 0.085f })
                 Prim(PrimitiveType.Cube, "FHole", b, new Vector3(x * L, -0.08f * L, -0.044f * L), new Vector3(0.012f * L, 0.1f * L, 0.004f * L), ebony, false);
             if (pin > 0f) Pipe(b, "Endpin", new Vector3(0f, -0.27f * L, 0f), new Vector3(0f, -0.27f * L - pin - 0.03f, 0f), 0.014f * L, InstSilver);
-        }
-
-        // ハープ: 金の柱・斜めの共鳴胴・くねった首のあいだに、長さの違う弦がたくさん張ってある
-        MusicInstrument Harp(Transform parent, Vector3 pos)
-        {
-            var inst = NewInstrument(parent, "HARP", pos, ConcertMusic.Voice.Pluck, 64, 400, 2.5f, new Vector3(0f, 1f, 0f), new Vector3(1f, 1.9f, 0.4f), true, out var pivot);
-            var gold = Mat("Gold", new Color(1f, 0.78f, 0.25f), new Color(0.3f, 0.2f, 0f));
-            var wood = Mat("Concert_HarpWood", new Color(0.72f, 0.46f, 0.2f), null, false, 0.7f);
-            var h = Group(pivot, "Harp");
-            h.localPosition = new Vector3(0f, 0f, -0.15f);
-            Prim(PrimitiveType.Cube, "Base", h, new Vector3(0f, 0.07f, 0f), new Vector3(0.55f, 0.14f, 0.4f), wood, false);
-            Pipe(h, "Column", new Vector3(-0.4f, 0.12f, 0f), new Vector3(-0.4f, 1.85f, 0f), 0.08f, gold);
-            Prim(PrimitiveType.Sphere, "Crown", h, new Vector3(-0.4f, 1.92f, 0f), Vector3.one * 0.14f, gold, false);
-            Pipe(h, "Soundboard", new Vector3(-0.3f, 0.14f, 0f), new Vector3(0.44f, 1.45f, 0f), 0.17f, wood);
-            var neck = new[] { new Vector3(-0.4f, 1.84f, 0f), new Vector3(-0.12f, 1.7f, 0f), new Vector3(0.14f, 1.77f, 0f), new Vector3(0.44f, 1.5f, 0f) };
-            PipePath(h, "HarpNeck", neck, 0.07f, wood);
-            var red = Mat("Concert_HarpRed", new Color(0.85f, 0.15f, 0.12f));
-            const int N = 18;
-            for (int i = 0; i < N; i++)
-            {
-                float x = -0.3f + i * (0.66f / (N - 1));
-                float yb = 0.14f + (x + 0.3f) / 0.74f * 1.31f + 0.08f; // 共鳴胴の上
-                float yt = NeckY(neck, x) - 0.04f;                       // 首の下
-                Pipe(h, "HarpString", new Vector3(x, yb, 0f), new Vector3(x, yt, 0f), 0.007f, i % 7 == 0 ? red : InstPearl);
-            }
-            inst.swayAxis = Vector3.forward;
-            inst.swayDeg = 3f;
-            inst.swayBeats = 4f;
-            return inst;
-        }
-
-        static float NeckY(Vector3[] neck, float x)
-        {
-            for (int i = 0; i < neck.Length - 1; i++)
-                if (x >= neck[i].x && x <= neck[i + 1].x)
-                    return Mathf.Lerp(neck[i].y, neck[i + 1].y, (x - neck[i].x) / Mathf.Max(0.001f, neck[i + 1].x - neck[i].x));
-            return neck[neck.Length - 1].y;
-        }
-
-        // グランドピアノ: 黒い胴、白鍵と黒鍵、開いたふた (拍に合わせてぱたっと動く)、3本の脚と椅子
-        MusicInstrument GrandPiano(Transform parent, Vector3 pos)
-        {
-            var inst = NewInstrument(parent, "PIANO", pos, ConcertMusic.Voice.Piano, 60, 300, 2.3f, new Vector3(0.4f, 0.8f, 0f), new Vector3(2.4f, 1f, 1.6f), false, out var pivot);
-            var black = Mat("Concert_PianoBlack", new Color(0.03f, 0.03f, 0.035f), null, false, 0.92f);
-            var white = Mat("Concert_PianoWhite", new Color(0.96f, 0.95f, 0.9f));
-            var p = Group(pivot, "Piano");
-            Prim(PrimitiveType.Cube, "Body", p, new Vector3(0.55f, 0.85f, 0f), new Vector3(1.9f, 0.32f, 1.45f), black, false);
-            Prim(PrimitiveType.Cylinder, "Tail", p, new Vector3(1.4f, 0.85f, 0.1f), new Vector3(1.25f, 0.16f, 1.25f), black, false);
-            Prim(PrimitiveType.Cube, "Keybed", p, new Vector3(-0.56f, 0.79f, 0f), new Vector3(0.34f, 0.1f, 1.42f), black, false);
-            Prim(PrimitiveType.Cube, "WhiteKeys", p, new Vector3(-0.58f, 0.855f, 0f), new Vector3(0.24f, 0.035f, 1.3f), white, false);
-            for (int i = 0; i < 21; i++)
-            {
-                int n = i % 7;
-                if (n == 2 || n == 6) continue; // ミとファ、シとドの間には黒鍵がない
-                Prim(PrimitiveType.Cube, "BlackKey", p, new Vector3(-0.55f, 0.885f, -0.62f + i * 0.062f), new Vector3(0.14f, 0.03f, 0.032f), black, false);
-            }
-            var lid = Group(p, "Lid");
-            lid.localPosition = new Vector3(0.55f, 1.02f, 0.72f);
-            lid.localRotation = Quaternion.Euler(38f, 0f, 0f);
-            Prim(PrimitiveType.Cube, "LidBoard", lid, new Vector3(0f, 0f, -0.72f), new Vector3(1.9f, 0.03f, 1.45f), black, false);
-            Prim(PrimitiveType.Cube, "Strings", p, new Vector3(0.6f, 1.0f, 0f), new Vector3(1.6f, 0.01f, 1.2f), Mat("Concert_PianoGold", new Color(0.85f, 0.65f, 0.3f), null, false, 0.8f), false);
-            foreach (var leg in new[] { new Vector3(-0.3f, 0f, -0.6f), new Vector3(-0.3f, 0f, 0.6f), new Vector3(1.6f, 0f, 0.1f) })
-                Pipe(p, "Leg", leg + Vector3.up * 0.7f, leg + Vector3.up * 0.02f, 0.1f, black);
-            Prim(PrimitiveType.Cube, "Bench", p, new Vector3(-1.05f, 0.5f, 0f), new Vector3(0.38f, 0.06f, 0.8f), black, false);
-            Prim(PrimitiveType.Cube, "BenchLegs", p, new Vector3(-1.05f, 0.24f, 0f), new Vector3(0.3f, 0.46f, 0.7f), black, false);
-            inst.beaters = new[] { lid };
-            inst.beaterAxis = Vector3.right;
-            inst.beaterDeg = -7f;
-            inst.beaterEvery = 1f;
-            inst.swayAxis = Vector3.forward;
-            inst.swayDeg = 1.5f;
-            return inst;
         }
 
         // ------------------------------------------------------------------
@@ -423,60 +428,57 @@ namespace ShootingGallery
             return inst;
         }
 
-        // サックス (kind: 0 = アルト / 1 = テナー (首にこぶ) / 2 = バリトン (上に輪))。金色の J の形 (H = 高さ)
-        MusicInstrument Saxophone(Transform parent, string name, float deg, float r, float H, int points, int midi, int kind)
-        {
-            float cy = 0.5f + 0.38f * H;
-            var inst = NewInstrument(parent, name, OrchestraSpot(deg, r), ConcertMusic.Voice.Reed, midi, points, cy + 0.55f * H + 0.5f, new Vector3(0.05f * H, cy, -0.15f), new Vector3(0.35f * H + 0.1f, 0.95f * H, 0.35f), true, out var pivot);
-            var lacquer = Mat("Concert_Lacquer", new Color(1f, 0.75f, 0.28f), new Color(0.12f, 0.08f, 0.02f), false, 0.85f);
-            var c = Group(pivot, "Sax");
-            c.localPosition = new Vector3(0f, cy, -0.15f);
-            c.localRotation = Quaternion.Euler(0f, 0f, 10f);
-            // 本体 (上から下へ太くなる) → 下の U 字 → 上向きの太い管 → 朝顔
-            Flare(c, "Body", new Vector3(0f, 0.42f * H, 0f), Vector3.down, 0.022f * H, 0.055f * H, 0.64f * H, lacquer);
-            PipeArc(c, "Bow", new Vector3(0.075f * H, -0.22f * H, 0f), Vector3.forward, new Vector3(-0.075f * H, 0f, 0f), 0f, 180f, 8, 0.11f * H, lacquer);
-            Pipe(c, "Branch", new Vector3(0.15f * H, -0.22f * H, 0f), new Vector3(0.15f * H, 0.02f * H, 0f), 0.12f * H, lacquer);
-            Flare(c, "Bell", new Vector3(0.15f * H, 0.02f * H, 0f), new Vector3(0.2f, 1f, -0.35f), 0.06f * H, 0.13f * H, 0.13f * H, lacquer);
-            // 首とマウスピース
-            var neck = kind == 1
-                ? new[] { new Vector3(0f, 0.42f * H, 0f), new Vector3(0f, 0.53f * H, -0.01f * H), new Vector3(-0.01f * H, 0.57f * H, 0.04f * H), new Vector3(-0.02f * H, 0.56f * H, 0.1f * H) }
-                : new[] { new Vector3(0f, 0.42f * H, 0f), new Vector3(0f, 0.5f * H, 0.01f * H), new Vector3(-0.02f * H, 0.55f * H, 0.07f * H) };
-            if (kind == 2) PipeArc(c, "TopLoop", new Vector3(0f, 0.47f * H, 0.05f * H), Vector3.right, new Vector3(0f, 0f, -0.05f * H), 0f, 300f, 10, 0.035f * H, lacquer);
-            PipePath(c, "Neck", neck, 0.03f * H, lacquer);
-            var tip = neck[neck.Length - 1];
-            Pipe(c, "Mouthpiece", tip, tip + new Vector3(-0.005f, 0.01f, 0.06f * H), 0.035f * H, InstBlack);
-            // キー (真珠の玉) とガード
-            for (int i = 0; i < 4; i++)
-                Prim(PrimitiveType.Sphere, "Key", c, new Vector3(0f, (0.3f - i * 0.1f) * H, -0.035f * H), Vector3.one * 0.035f * H, InstPearl, false);
-            Prim(PrimitiveType.Cube, "KeyGuard", c, new Vector3(0f, -0.14f * H, -0.05f * H), new Vector3(0.06f * H, 0.09f * H, 0.02f * H), lacquer, false);
-            inst.swayAxis = Vector3.forward;
-            inst.swayDeg = 6f;
-            inst.bob = 0.03f;
-            return inst;
-        }
-
         // ------------------------------------------------------------------
         // 金管楽器
         // ------------------------------------------------------------------
 
-        // ホルン: ぐるぐる巻いた管と、後ろへ向いた大きな朝顔
+        // ホルン (フレンチホルン): 客席に輪の面を見せる。太い主管の二重の輪、輪の下から太くなって後ろ左へ大きく開く朝顔、
+        // 右寄りに縦に並ぶロータリーバルブ4つとレバー、上に並ぶU字のバルブ管、内側の小さな輪と横切る管、右上へ伸びる細い管とマウスピース
         MusicInstrument Horn(Transform parent, float deg, float r, int points, int midi)
         {
-            var inst = NewInstrument(parent, "HORN", OrchestraSpot(deg, r), ConcertMusic.Voice.Brass, midi, points, 2f, new Vector3(0.05f, 1.15f, -0.1f), new Vector3(0.6f, 0.5f, 0.5f), true, out var pivot);
+            var inst = NewInstrument(parent, "HORN", OrchestraSpot(deg, r), ConcertMusic.Voice.Brass, midi, points, 2f, new Vector3(-0.05f, 1.15f, -0.1f), new Vector3(0.75f, 0.6f, 0.5f), true, out var pivot);
             var c = Group(pivot, "Horn");
-            c.localPosition = new Vector3(0.05f, 1.15f, -0.1f);
-            c.localRotation = Quaternion.Euler(0f, -25f, 15f);
-            PipeArc(c, "Coil", Vector3.zero, Vector3.forward, new Vector3(0.17f, 0f, 0f), 0f, 340f, 18, 0.03f, InstBrass);
-            PipeArc(c, "InnerCoil", new Vector3(0f, 0f, 0.02f), Vector3.forward, new Vector3(0.12f, 0f, 0f), 20f, 380f, 14, 0.024f, InstBrass);
-            for (int i = 0; i < 3; i++)
+            c.localPosition = new Vector3(0f, 1.15f, -0.1f);
+            c.localRotation = Quaternion.Euler(0f, -15f, 0f);
+            var brass = InstBrass;
+            // 主管の輪 (二重) と、内側の小さな輪
+            PipeArc(c, "Hoop", Vector3.zero, Vector3.forward, new Vector3(0.21f, 0f, 0f), 0f, 360f, 32, 0.034f, brass);
+            PipeArc(c, "Hoop2", new Vector3(0f, 0f, 0.025f), Vector3.forward, new Vector3(0.18f, 0f, 0f), 0f, 360f, 28, 0.026f, brass);
+            PipeArc(c, "InnerLoop", new Vector3(-0.08f, 0.04f, -0.015f), Vector3.forward, new Vector3(0.075f, 0f, 0f), 0f, 360f, 18, 0.02f, brass);
+            PipeArc(c, "LowerLoop", new Vector3(0.02f, -0.11f, -0.015f), Vector3.forward, new Vector3(0.08f, 0f, 0f), 180f, 360f, 12, 0.02f, brass);
+            // 輪を横切る管
+            Pipe(c, "CrossTube", new Vector3(-0.17f, 0.035f, -0.01f), new Vector3(0.18f, 0.035f, -0.01f), 0.018f, brass);
+            Pipe(c, "CrossTube", new Vector3(-0.14f, -0.04f, -0.01f), new Vector3(0.18f, -0.04f, -0.01f), 0.018f, brass);
+            // 上に並ぶU字のバルブ管
+            float[] loopX = { -0.02f, 0.06f, 0.13f };
+            for (int i = 0; i < loopX.Length; i++)
             {
-                float x = -0.05f + i * 0.045f;
-                Pipe(c, "Valve", new Vector3(x, 0.04f, -0.03f), new Vector3(x, 0.15f, -0.03f), 0.035f, InstSilver);
-                Prim(PrimitiveType.Sphere, "ValveCap", c, new Vector3(x, 0.16f, -0.03f), Vector3.one * 0.03f, InstPearl, false);
+                float lr = 0.035f + i * 0.004f, top = 0.15f + i * 0.012f;
+                PipeArc(c, "ValveSlide", new Vector3(loopX[i], top, -0.02f), Vector3.forward, new Vector3(lr, 0f, 0f), 0f, 180f, 8, 0.016f, brass);
+                foreach (float e in new[] { -1f, 1f })
+                    Pipe(c, "SlideLeg", new Vector3(loopX[i] + e * lr, top, -0.02f), new Vector3(loopX[i] + e * lr, 0.05f, -0.02f), 0.016f, brass);
             }
-            PipePath(c, "Leadpipe", new[] { new Vector3(-0.12f, 0.08f, 0f), new Vector3(-0.22f, 0.18f, 0.03f), new Vector3(-0.28f, 0.26f, 0.08f) }, 0.02f, InstBrass);
-            Pipe(c, "Mouthpiece", new Vector3(-0.28f, 0.26f, 0.08f), new Vector3(-0.3f, 0.29f, 0.13f), 0.022f, InstSilver);
-            Flare(c, "Bell", new Vector3(0.16f, -0.06f, 0f), new Vector3(0.5f, -0.35f, 0.8f), 0.03f, 0.16f, 0.32f, InstBrass);
+            // ロータリーバルブ4つ (金の丸い胴に銀の芯) と、右のレバー
+            for (int i = 0; i < 4; i++)
+            {
+                float y = 0.1f - i * 0.058f;
+                var rotor = Prim(PrimitiveType.Cylinder, "Rotor", c, new Vector3(0.085f, y, -0.03f), new Vector3(0.052f, 0.014f, 0.052f), brass, false);
+                rotor.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+                var cap = Prim(PrimitiveType.Cylinder, "RotorCap", c, new Vector3(0.085f, y, -0.045f), new Vector3(0.026f, 0.006f, 0.026f), InstSilver, false);
+                cap.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+                if (i < 3) Pipe(c, "Lever", new Vector3(0.11f, y, -0.04f), new Vector3(0.2f, y + 0.015f, -0.045f), 0.01f, InstSilver);
+            }
+            Pipe(c, "LeverBar", new Vector3(0.2f, 0.115f, -0.045f), new Vector3(0.2f, -0.03f, -0.045f), 0.008f, InstSilver);
+            // 右上へ伸びる細い管と、銀のマウスピース
+            Pipe(c, "Leadpipe", new Vector3(0.16f, 0.13f, 0f), new Vector3(0.25f, 0.34f, 0.01f), 0.016f, brass);
+            Pipe(c, "Mouthpiece", new Vector3(0.25f, 0.34f, 0.01f), new Vector3(0.265f, 0.39f, 0.012f), 0.02f, InstSilver);
+            Prim(PrimitiveType.Sphere, "MouthpieceCup", c, new Vector3(0.267f, 0.395f, 0.012f), new Vector3(0.03f, 0.016f, 0.03f), InstSilver, false);
+            // 朝顔: 輪の左下から太くなりながら出て、後ろ左へ大きく開く (根元から先までなめらかに広がる)
+            PipePath(c, "BellTail", new[] { new Vector3(0.02f, -0.21f, 0f), new Vector3(-0.08f, -0.2f, 0.01f), new Vector3(-0.15f, -0.17f, 0.03f) }, 0.036f, brass);
+            var bellDir = new Vector3(-0.75f, -0.1f, 0.65f).normalized;
+            var bell = MeshPart(c, "Bell", TrumpetBellMesh(0.018f, 0.17f, 0.42f), brass);
+            bell.localPosition = new Vector3(-0.15f, -0.17f, 0.03f);
+            bell.localRotation = Quaternion.LookRotation(bellDir);
             inst.swayAxis = Vector3.forward;
             inst.swayDeg = 5f;
             return inst;

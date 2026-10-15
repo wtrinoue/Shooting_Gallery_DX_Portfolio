@@ -356,24 +356,27 @@ namespace ShootingGallery
             GunPart(PrimitiveType.Cylinder, tpLoaded, new Vector3(0f, 0.025f, 0.188f), new Vector3(0.046f, 0.012f, 0.046f), tpBody, 90f);
             var tpMuzzle = Muzzle(tp, new Vector3(0f, 0.025f, 0.22f), Mat("Torpedo_Flash", new Color(0.75f, 0.95f, 1f), null, true));
 
-            // 18: トランペット (音楽モード専用。金色の管と3本のピストン、前を向いた朝顔から音符を吹き出す)
+            // 18: トランペット (音楽モード専用。管と3本のピストン、前を向いた朝顔から音符を吹き出す。右手は合奏団の金管と同じ金色、左手は白に近い灰色。どちらも1色)
             var tr = Group(gunGo.transform, "Model_Trumpet");
-            var trBrass = Mat("Concert_Brass", new Color(1f, 0.8f, 0.32f), new Color(0.15f, 0.1f, 0.02f), false, 0.9f);
-            var trSilver = Mat("Concert_Silver", new Color(0.85f, 0.86f, 0.9f), new Color(0.05f, 0.05f, 0.06f), false, 0.9f);
-            var trPearl = Mat("Concert_Pearl", new Color(0.97f, 0.95f, 0.9f), null, false, 0.8f);
-            GunPart(PrimitiveType.Cylinder, tr, new Vector3(0f, 0.035f, 0.02f), new Vector3(0.016f, 0.09f, 0.016f), trBrass, 90f);    // 上の管 (マウスピースから)
-            GunPart(PrimitiveType.Cylinder, tr, new Vector3(0f, 0.035f, -0.075f), new Vector3(0.012f, 0.012f, 0.012f), trSilver, 90f); // マウスピース
-            GunPart(PrimitiveType.Cylinder, tr, new Vector3(0f, -0.01f, 0.03f), new Vector3(0.014f, 0.07f, 0.014f), trBrass, 90f);    // 下の管
+            var trMetal = node == XRNode.LeftHand
+                ? Mat("Trumpet_PaleGray", new Color(0.88f, 0.88f, 0.9f), new Color(0.12f, 0.12f, 0.13f), false, 0.3f, matte: true) // 左手: 白に近い灰色1色
+                : Mat("Trumpet_Gold", new Color(1f, 0.8f, 0.32f), new Color(0.24f, 0.16f, 0.035f), false, 0.3f, matte: true); // 右手: 合奏団の金管と同じ色の金色1色
+            // どちらも映り込み・ハイライトなし (matte)。曲面の朝顔も、持つ所などの部品と同じ見た目になる
+            GunPart(PrimitiveType.Cylinder, tr, new Vector3(0f, 0.035f, 0.02f), new Vector3(0.016f, 0.09f, 0.016f), trMetal, 90f);    // 上の管 (マウスピースから)
+            GunPart(PrimitiveType.Cylinder, tr, new Vector3(0f, 0.035f, -0.075f), new Vector3(0.012f, 0.012f, 0.012f), trMetal, 90f); // マウスピース
+            GunPart(PrimitiveType.Cylinder, tr, new Vector3(0f, -0.01f, 0.03f), new Vector3(0.014f, 0.07f, 0.014f), trMetal, 90f);    // 下の管
             for (int i = 0; i < 3; i++)
             {
                 float z = 0.005f + i * 0.022f;
-                GunPart(PrimitiveType.Cylinder, tr, new Vector3(0f, 0.015f, z), new Vector3(0.018f, 0.035f, 0.018f), trSilver);       // ピストン
-                GunPart(PrimitiveType.Sphere, tr, new Vector3(0f, 0.055f, z), Vector3.one * 0.016f, trPearl);                          // ピストンのボタン
+                GunPart(PrimitiveType.Cylinder, tr, new Vector3(0f, 0.015f, z), new Vector3(0.018f, 0.035f, 0.018f), trMetal);       // ピストン
+                GunPart(PrimitiveType.Sphere, tr, new Vector3(0f, 0.055f, z), Vector3.one * 0.016f, trMetal);                          // ピストンのボタン
             }
-            GunPart(PrimitiveType.Cylinder, tr, new Vector3(0f, 0.035f, 0.13f), new Vector3(0.018f, 0.02f, 0.018f), trBrass, 90f);    // 朝顔の手前
-            var trBell = Flare(tr, "Bell", new Vector3(0f, 0.035f, 0.15f), Vector3.forward, 0.01f, 0.045f, 0.07f, trBrass);
-            trBell.GetComponent<Renderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            GunPart(PrimitiveType.Cube, tr, new Vector3(0f, -0.04f, 0.01f), new Vector3(0.024f, 0.06f, 0.03f), Mat("Concert_InstBlack", new Color(0.05f, 0.05f, 0.06f), null, false, 0.75f), 15f); // 握り
+            // 朝顔: ピストンのすぐ前 (z 0.05) から上の管にかぶさって始まり、根元からゆるやかに広がって先で大きく開く (胴体と一続きに見えるように)
+            var trBell = MeshPart(tr, "Bell", TrumpetBellMesh(0.0085f, 0.045f, 0.17f, 2.6f), trMetal);
+            trBell.localPosition = new Vector3(0f, 0.035f, 0.05f);
+            GunPart(PrimitiveType.Cylinder, tr, new Vector3(0f, 0.0125f, 0.095f), new Vector3(0.006f, 0.0225f, 0.006f), trMetal);   // 上の管と下の管をつなぐ支え
+            GunPart(PrimitiveType.Sphere, tr, new Vector3(0f, -0.01f, 0.1f), Vector3.one * 0.014f, trMetal);                     // 下の管の先を丸める
+            GunPart(PrimitiveType.Cube, tr, new Vector3(0f, -0.04f, 0.01f), new Vector3(0.024f, 0.06f, 0.03f), trMetal, 15f); // 握り
             var trMuzzle = Muzzle(tr, new Vector3(0f, 0.035f, 0.23f), Mat("Note_Spark", new Color(1f, 0.9f, 0.5f), new Color(2.4f, 2f, 0.9f), true));
 
             var laserMat = Mat("Laser", new Color(1f, 0.1f, 0.1f), null, true);
@@ -505,6 +508,54 @@ namespace ShootingGallery
             go.transform.localRotation = Quaternion.Euler(xRot, 0f, 0f);
             RemoveCollider(go);
             go.GetComponent<Renderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        }
+
+        /// <summary>
+        /// トランペットの朝顔 (ローカル +Z へ長さ len)。根元は管と同じ半径 r0 でまっすぐつながり (傾き 0)、先へ行くほど急に広がって半径 r1 になる。
+        /// power が大きいほど根元が細いまま長く続いて先でぱっと開き、小さいほど根元からゆるやかに広がる。
+        /// 外側と内側で頂点を分けて、どちらもなめらかに光る
+        /// </summary>
+        Mesh TrumpetBellMesh(float r0, float r1, float len, float power = 4f)
+        {
+            string name = $"TrumpetBell_{r0:0.000}_{r1:0.000}_{len:0.000}_{power:0.0}";
+            if (meshes.TryGetValue(name, out var cached)) return cached;
+            const int Sides = 24, Rings = 18;
+            var verts = new List<Vector3>();
+            var normals = new List<Vector3>();
+            var tris = new List<int>();
+            for (int side = 0; side < 2; side++) // 0 = 外側 / 1 = 内側
+            {
+                int start = verts.Count;
+                for (int i = 0; i <= Rings; i++)
+                {
+                    float t = i / (float)Rings;
+                    float r = r0 + (r1 - r0) * Mathf.Pow(t, power);
+                    float slope = (r1 - r0) * power * Mathf.Pow(t, power - 1f) / len; // dr/dz
+                    for (int s = 0; s <= Sides; s++)
+                    {
+                        float a = s * Mathf.PI * 2f / Sides;
+                        var dir = new Vector3(Mathf.Cos(a), Mathf.Sin(a), 0f);
+                        verts.Add(dir * r + Vector3.forward * (t * len));
+                        var n = (dir - Vector3.forward * slope).normalized;
+                        normals.Add(side == 0 ? n : -n);
+                    }
+                }
+                for (int i = 0; i < Rings; i++)
+                    for (int s = 0; s < Sides; s++)
+                    {
+                        int a0 = start + i * (Sides + 1) + s, a1 = a0 + 1, b0 = a0 + Sides + 1, b1 = b0 + 1;
+                        if (side == 0) tris.AddRange(new[] { a0, b0, b1, a0, b1, a1 });
+                        else tris.AddRange(new[] { a0, b1, b0, a0, a1, b1 });
+                    }
+            }
+            var mesh = new Mesh { name = name };
+            mesh.SetVertices(verts);
+            mesh.SetNormals(normals);
+            mesh.SetTriangles(tris, 0);
+            mesh.RecalculateBounds();
+            mesh = SaveMeshIfEditing(mesh, name);
+            meshes[name] = mesh;
+            return mesh;
         }
 
         Transform Muzzle(Transform parent, Vector3 pos, Material flashMat)

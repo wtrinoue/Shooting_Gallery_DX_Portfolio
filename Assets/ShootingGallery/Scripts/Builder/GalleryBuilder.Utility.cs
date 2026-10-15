@@ -98,14 +98,21 @@ namespace ShootingGallery
 
         Material LanternMat() => Mat("Lantern", new Color(1f, 0.55f, 0.2f), new Color(1.6f, 0.6f, 0.15f));
 
-        /// <summary>URP マテリアルを生成 (同じ名前なら使い回す)。</summary>
-        protected Material Mat(string name, Color color, Color? emission = null, bool unlit = false, float smoothness = 0.25f)
+        /// <summary>URP マテリアルを生成 (同じ名前なら使い回す)。matte = true なら、まわりの景色の映り込みとハイライトを切る (曲面でも、平らな部品と同じ見た目になる)</summary>
+        protected Material Mat(string name, Color color, Color? emission = null, bool unlit = false, float smoothness = 0.25f, bool matte = false)
         {
             if (mats.TryGetValue(name, out var cached)) return cached;
 
             var mat = new Material(unlit ? unlitShader : litShader) { name = name };
             mat.SetColor("_BaseColor", color);
             if (!unlit) mat.SetFloat("_Smoothness", smoothness);
+            if (!unlit && matte)
+            {
+                mat.SetFloat("_SpecularHighlights", 0f);
+                mat.EnableKeyword("_SPECULARHIGHLIGHTS_OFF");
+                mat.SetFloat("_EnvironmentReflections", 0f);
+                mat.EnableKeyword("_ENVIRONMENTREFLECTIONS_OFF");
+            }
             if (emission.HasValue)
             {
                 mat.EnableKeyword("_EMISSION");

@@ -55,9 +55,17 @@ namespace ShootingGallery
         public GameObject soloMark;
         public TextMesh soloLabel;
         public float soloLift = 0.3f;
+        [Tooltip("ソロの間、楽器のまわりを回る輪の五線譜と、その上で拍に合わせて跳ねる音符")]
+        public Transform soloStaff;
+        public Transform[] soloNotes;
+        [Tooltip("ソロの間、楽器の色を拍ごとに入れ替える蛍光色 (ほかの楽器よりずっと目立つように)")]
+        public Material[] soloMaterials;
+        [Tooltip("当たり判定の箱と、ソロの間に大きくする倍率 (ソロでない時は元の大きさ。隣のソロの楽器をさえぎらないように)")]
+        public Transform hitBox;
+        public float soloHitScale = 1.6f;
 
         public bool IsSolo { get; private set; }
-        public Vector3 AimPoint => (pivot != null ? pivot.position : transform.position) + Vector3.up * aimHeight * 0.5f;
+        public Vector3 AimPoint => (pivot != null ? pivot.position : transform.position) + Vector3.up * aimHeight * 0.5f * transform.lossyScale.y; // 根元ごと拡大しているぶんも掛ける
 
         ConcertHall hall;
         Vector3 pivotPos, bowPos, slidePos;
@@ -65,11 +73,34 @@ namespace ShootingGallery
         Quaternion[] beaterRot;
         Vector3[] clapPos;
         float lift, jumpStart = -10f, jumpHeight, jumpSpin;
+        Renderer[] bodyRenderers;   // 楽器の見た目 (pivot の下)
+        Material[] bodyMaterials;   // その元の色
+        int neonIndex = -1;
+        Vector3 hitBase;
+        Collider hitCollider;
+
+        /// <summary>当たり判定を出す / 消す (ソロの楽器のまわりや、ソロの楽器への視線をふさぐ楽器は消す。ConcertHall から)</summary>
+        public void SetHittable(bool on)
+        {
+            if (hitCollider != null) hitCollider.enabled = on;
+        }
 
         public void Init(ConcertHall owner)
         {
             hall = owner;
-            if (pivot != null) { pivotPos = pivot.localPosition; pivotRot = pivot.localRotation; }
+            if (pivot != null)
+            {
+                pivotPos = pivot.localPosition;
+                pivotRot = pivot.localRotation;
+                bodyRenderers = pivot.GetComponentsInChildren<Renderer>(true);
+                bodyMaterials = new Material[bodyRenderers.Length];
+                for (int i = 0; i < bodyRenderers.Length; i++) bodyMaterials[i] = bodyRenderers[i].sharedMaterial;
+            }
+            if (hitBox != null)
+            {
+                hitBase = hitBox.localScale;
+                hitCollider = hitBox.GetComponent<Collider>();
+            }
             if (bow != null) bowPos = bow.localPosition;
             if (slider != null) slidePos = slider.localPosition;
             beaterRot = new Quaternion[beaters != null ? beaters.Length : 0];
@@ -84,6 +115,20 @@ namespace ShootingGallery
             IsSolo = on;
             if (soloMark != null) soloMark.SetActive(on);
             if (soloLabel != null) soloLabel.text = points.ToString();
+            if (hitBox != null) hitBox.localScale = on ? hitBase * soloHitScale : hitBase;
+            if (!on) SetNeon(-1);
+        }
+
+        // 楽器の色を蛍光色 index にする (-1 で元の色に戻す)
+        void SetNeon(int index)
+        {
+            if (index == neonIndex || bodyRenderers == null) return;
+            neonIndex = index;
+            for (int i = 0; i < bodyRenderers.Length; i++)
+                if (bodyRenderers[i] != null)
+                    bodyRenderers[i].sharedMaterial = index < 0 || soloMaterials == null || soloMaterials.Length == 0
+                        ? bodyMaterials[i]
+                        : soloMaterials[index % soloMaterials.Length];
         }
 
         /// <summary>撃たれた: ぴょんと跳ねる (big = ソロの時。高く跳んで、くるっと1回転)</summary>
@@ -125,6 +170,23 @@ namespace ShootingGallery
                 float f = Frac((b + (i % 2) * every * 0.5f) / every);
                 float up = (1f - Mathf.Exp(-f * 7f)) * groove;
                 beaters[i].localRotation = beaterRot[i] * Quaternion.AngleAxis(beaterDeg * up, beaterAxis);
+            }
+            // ソロの間は、拍ごとに蛍光色が入れ替わる (黄 → ピンク → 水色 …)
+            if (IsSolo && soloMaterials != null && soloMaterials.Length > 0) SetNeon(Mathf.FloorToInt(beat) % soloMaterials.Length);
+            if (IsSolo && soloStaff != null)
+            {
+                // 輪の五線譜: 拍に合わせて回り (1小節で 1/4 周)、拍の頭でふわっとふくらむ。少し傾けて、立体の輪に見せる
+                soloStaff.localRotation = Quaternion.Euler(12f, beat * 22.5f, 0f);
+                soloStaff.localScale = Vector3.one * (1f + 0.08f * pulse);
+                // 輪の上の音符: 順番に、自分の拍で跳ね上がる (音を出している感じ)
+                if (soloNotes != null)
+                    for (int i = 0; i < soloNotes.Length; i++)
+                    {
+                        if (soloNotes[i] == null) continue;
+                        float f = Frac(b * 0.5f + i / (float)soloNotes.Length);
+                        float hop = Mathf.Sin(Mathf.Clamp01(f * 2f) * Mathf.PI) * 0.22f;
+                        soloNotes[i].localPosition = new Vector3(soloNotes[i].localPosition.x, hop, soloNotes[i].localPosition.z);
+                    }
             }
             if (clapPos.Length >= 2)
             {

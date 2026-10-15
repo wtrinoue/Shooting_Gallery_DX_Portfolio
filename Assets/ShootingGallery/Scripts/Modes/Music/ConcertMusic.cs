@@ -6,7 +6,9 @@ namespace ShootingGallery
 {
     /// <summary>
     /// 音楽モードの曲と楽器の音。効果音 (Sfx) と同じく、音素材なしで起動時にコードで波形を作る。
-    ///   曲: ハ長調 4/4 拍子・8小節のループ (弦の和音 + フルートの旋律 + ハープの分散和音 + 低音 + ティンパニ + 金管の合いの手 + シンバル)。
+    ///   曲: ニ短調 4/4 拍子・76BPM・16小節のループ (約50秒)。ロマン派の弦楽合奏ふう:
+    ///       バイオリンが歌う旋律、弦の和音、チェロとコントラバスの低音、後半はフルートが上で重なり、ホルンの和音とハープの分散和音が加わる。
+    ///       ティンパニは区切りだけ。最後にホールの残響 (Reverb) を足す。
     ///       ループの終わりからはみ出した音の余韻は頭に回して足すので、つなぎ目で途切れない。
     ///   楽器の音: 楽器の種類 (Voice) ごとに1つずつ作り、鳴らす時に AudioSource.pitch で高さを変える (大きい楽器ほど低く)。
     /// 作るのは数フレームに分けて (Build)。WebGL でも固まらないように
@@ -14,33 +16,39 @@ namespace ShootingGallery
     public static class ConcertMusic
     {
         public const int Rate = 32000;
-        public const float Bpm = 112f;
-        public const int Bars = 8;
+        public const float Bpm = 76f;
+        public const int Bars = 16;
         public static float BeatSeconds => 60f / Bpm;
         public static int LoopBeats => Bars * 4;
 
         /// <summary>楽器の音色</summary>
         public enum Voice { Strings, Flute, Reed, Brass, Pluck, Piano, Timpani, Bell, Mallet, Drum, Snare, Cymbal, Gong }
 
-        // 小節ごとの和音 (C - Am - F - G - C - F - G7 - C)
-        static readonly int[][] Chords =
-        {
-            new[] { 60, 64, 67 }, new[] { 57, 60, 64 }, new[] { 53, 57, 60 }, new[] { 55, 59, 62 },
-            new[] { 60, 64, 67 }, new[] { 53, 57, 60 }, new[] { 55, 59, 65 }, new[] { 60, 64, 67 },
-        };
-        static readonly int[] Roots = { 48, 45, 41, 43, 48, 41, 43, 48 };
+        // 小節ごとの和音 (Dm - Gm - A7 - Dm | F - C - B♭ - A | Dm - Gm - C7 - F | B♭ - Gm - A7 - Dm)
+        static readonly int[] Dm = { 62, 65, 69 }, Gm = { 62, 67, 70 }, A7 = { 61, 64, 67 }, F = { 60, 65, 69 },
+                                  C = { 60, 64, 67 }, Bb = { 62, 65, 70 }, A = { 61, 64, 69 }, C7 = { 60, 64, 70 };
+        static readonly int[][] Chords = { Dm, Gm, A7, Dm, F, C, Bb, A, Dm, Gm, C7, F, Bb, Gm, A7, Dm };
+        static readonly int[] Roots = { 50, 43, 45, 50, 41, 48, 46, 45, 50, 43, 48, 41, 46, 43, 45, 50 };
 
-        // 旋律 (音の高さ, 拍)。高さ 0 は休み
+        // 旋律 (音の高さ, 拍)。高さ 0 は休み。1小節 = 4拍
         static readonly (int midi, float beats)[] Melody =
         {
-            (76, 1f), (79, 1f), (84, 1f), (79, 1f),
-            (81, 1f), (79, 0.5f), (77, 0.5f), (76, 2f),
-            (77, 1f), (81, 1f), (84, 1f), (81, 1f),
-            (79, 2f), (77, 1f), (74, 1f),
-            (76, 0.5f), (77, 0.5f), (79, 1f), (84, 1f), (88, 1f),
-            (86, 1f), (84, 1f), (81, 1f), (77, 1f),
-            (79, 1f), (83, 1f), (86, 1f), (83, 1f),
-            (84, 3f), (0, 1f),
+            (69, 1.5f), (70, 0.5f), (69, 1f), (74, 1f),   // Dm
+            (74, 1.5f), (72, 0.5f), (70, 2f),             // Gm
+            (69, 1f), (67, 1f), (64, 1f), (73, 1f),       // A7
+            (74, 3f), (0, 1f),                            // Dm
+            (72, 1.5f), (74, 0.5f), (72, 1f), (69, 1f),   // F
+            (67, 1.5f), (69, 0.5f), (67, 1f), (64, 1f),   // C
+            (65, 1f), (67, 1f), (70, 1f), (74, 1f),       // B♭
+            (73, 2f), (76, 2f),                           // A
+            (77, 1.5f), (76, 0.5f), (74, 1f), (81, 1f),   // Dm (盛り上がる後半)
+            (79, 2f), (77, 0.5f), (76, 0.5f), (74, 1f),   // Gm
+            (76, 1.5f), (77, 0.5f), (79, 1f), (70, 1f),   // C7
+            (69, 3f), (72, 1f),                           // F
+            (74, 1.5f), (77, 0.5f), (74, 1f), (70, 1f),   // B♭
+            (70, 1f), (74, 1f), (79, 1.5f), (77, 0.5f),   // Gm
+            (76, 1f), (73, 1f), (69, 1f), (67, 1f),       // A7
+            (74, 3f), (0, 1f),                            // Dm
         };
 
         /// <summary>音の高さ (MIDI の番号。60 = 真ん中のド) の周波数</summary>
@@ -65,6 +73,22 @@ namespace ShootingGallery
                     if (d < bestDist) { bestDist = d; best = m; }
                 }
             return best;
+        }
+
+        /// <summary>
+        /// root (0 = ド 〜 11 = シ) の調の音階の音のうち、near にいちばん近い高さ (外の曲を BGM にした時、撃った音が曲と濁らないように)。
+        /// minor なら和声的短音階 (短調の曲で、導音 = 主音の半音下も使う)、そうでなければ長音階
+        /// </summary>
+        public static int ScaleToneNear(int root, bool minor, int near)
+        {
+            int[] steps = minor ? new[] { 0, 2, 3, 5, 7, 8, 11 } : new[] { 0, 2, 4, 5, 7, 9, 11 };
+            for (int d = 0; d <= 6; d++)
+                foreach (int m in new[] { near - d, near + d })
+                {
+                    int pc = ((m - root) % 12 + 12) % 12;
+                    if (System.Array.IndexOf(steps, pc) >= 0) return m;
+                }
+            return near;
         }
 
         /// <summary>楽器の音の、元の高さ (この高さで作り、pitch で上げ下げする)。高さのない打楽器は 0</summary>
@@ -98,9 +122,10 @@ namespace ShootingGallery
 
         /// <summary>作った曲 (なければ null) と楽器の音</summary>
         public static AudioClip Loop { get; private set; }
-        public static AudioClip Curtain { get; private set; }
+        public static AudioClip Curtain { get; private set; }     // カーテンが閉まる音 (閉まる秒数に合わせた長さ)
+        public static AudioClip CurtainOpen { get; private set; } // カーテンが開く音 (開く秒数に合わせた長さ)
         static readonly Dictionary<Voice, AudioClip> voices = new Dictionary<Voice, AudioClip>();
-        static bool building;
+        static bool building, built;
 
         public static AudioClip VoiceClip(Voice v) => voices.TryGetValue(v, out var c) ? c : null;
 
@@ -108,21 +133,22 @@ namespace ShootingGallery
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void ResetStatics()
         {
-            building = false;
+            building = built = false;
             voices.Clear();
             Loop = null;
             Curtain = null;
+            CurtainOpen = null;
         }
 
-        /// <summary>曲と楽器の音を作る (まだなら)。host のコルーチンで、1フレームあたり数ミリ秒ずつ</summary>
-        public static void Build(MonoBehaviour host)
+        /// <summary>曲と楽器の音を作る (まだなら)。host のコルーチンで、1フレームあたり数ミリ秒ずつ。withLoop = false なら曲は作らない (外の曲を BGM にする時)。closeSeconds / openSeconds = カーテンが閉まる / 開く秒数 (音の長さを合わせる)</summary>
+        public static void Build(MonoBehaviour host, bool withLoop = true, float closeSeconds = 2f, float openSeconds = 2f)
         {
-            if (building || Loop != null || host == null) return;
+            if (building || built || host == null) return;
             building = true;
-            host.StartCoroutine(BuildRoutine());
+            host.StartCoroutine(BuildRoutine(withLoop, closeSeconds, openSeconds));
         }
 
-        static IEnumerator BuildRoutine()
+        static IEnumerator BuildRoutine(bool withLoop, float closeSeconds, float openSeconds)
         {
             var watch = System.Diagnostics.Stopwatch.StartNew();
 
@@ -140,15 +166,17 @@ namespace ShootingGallery
                 if (watch.ElapsedMilliseconds > 4) { yield return null; watch.Restart(); }
             }
 
-            // カーテンが動く音 (シャーッという布の音と、レールのリングがカラカラ鳴る音)
+            // カーテンが動く音 (シャーッという布の音と、ランナーがレールをすべって回っていく音)
             if (Curtain == null)
             {
-                Curtain = CurtainSwish();
+                Curtain = CurtainSwish("Concert_Curtain", closeSeconds + 0.2f);
+                CurtainOpen = CurtainSwish("Concert_CurtainOpen", openSeconds + 0.2f);
                 yield return null;
                 watch.Restart();
             }
 
-            // 曲 (8小節のループ)
+            // 曲 (16小節のループ)。外の曲を BGM にする時は作らない
+            if (!withLoop) { building = false; built = true; yield break; }
             float beatSec = BeatSeconds;
             var buf = new float[Mathf.RoundToInt(LoopBeats * beatSec * Rate)];
             var notes = Score();
@@ -157,9 +185,11 @@ namespace ShootingGallery
                 Render(buf, Mathf.RoundToInt(n.beat * beatSec * Rate), n.midi > 0 ? Hz(n.midi) : 0f, n.beats * beatSec, n.voice, n.vol, wrap: true);
                 if (watch.ElapsedMilliseconds > 4) { yield return null; watch.Restart(); }
             }
+            yield return Reverb(buf, 0.45f, watch); // ホールの響き
             Normalize(buf, 0.8f);
             Loop = MakeClip("Concert_Loop", buf);
             building = false;
+            built = true;
         }
 
         struct Note
@@ -179,38 +209,37 @@ namespace ShootingGallery
                 float b0 = bar * 4f;
                 var chord = Chords[bar];
                 int root = Roots[bar];
-                // 弦の和音 (のばす)
-                foreach (int c in chord) list.Add(new Note(b0, 3.9f, c, Voice.Strings, 0.05f));
-                // 低音 (チェロ・コントラバス): 2分音符で根音と5度
-                list.Add(new Note(b0, 1.9f, root, Voice.Strings, 0.1f));
-                list.Add(new Note(b0 + 2f, 1.9f, bar % 2 == 0 ? root + 7 : root, Voice.Strings, 0.08f));
-                // ハープの分散和音 (8分音符で上がって下がる)
-                int[] arp = { chord[0], chord[1], chord[2], chord[0] + 12, chord[2] + 12, chord[0] + 12, chord[2], chord[1] };
-                for (int i = 0; i < 8; i++) list.Add(new Note(b0 + i * 0.5f, 0.5f, arp[i] + 12, Voice.Pluck, 0.045f));
-                // ティンパニ: 1拍目に根音、3拍目に軽く
-                list.Add(new Note(b0, 1f, root, Voice.Timpani, 0.22f));
-                list.Add(new Note(b0 + 2f, 1f, bar % 2 == 0 ? root + 7 : root, Voice.Timpani, 0.1f));
+                bool second = bar >= 8; // 後半 (9〜16小節) は厚くする
+                // 弦の和音 (ビオラ・第2バイオリン): 小節いっぱいにのばす。次の小節と少し重ねて、なめらかにつなぐ
+                foreach (int c in chord) list.Add(new Note(b0, 4.1f, c, Voice.Strings, second ? 0.04f : 0.034f));
+                // チェロ: 根音を2拍、5度 (または根音のオクターブ上) を2拍
+                list.Add(new Note(b0, 2.05f, root, Voice.Strings, 0.085f));
+                list.Add(new Note(b0 + 2f, 2.05f, bar % 2 == 0 ? root + 7 : root + 12, Voice.Strings, 0.065f));
+                // コントラバス: 1オクターブ下で根音をのばす
+                list.Add(new Note(b0, 4.1f, root - 12, Voice.Strings, 0.06f));
+                if (second)
+                {
+                    // ホルン: 和音を柔らかくのばす (1オクターブ下)
+                    foreach (int c in chord) list.Add(new Note(b0, 3.8f, c - 12, Voice.Brass, 0.022f));
+                    // ハープ: 4分音符でゆっくり上がる分散和音
+                    int[] arp = { root + 12, chord[0], chord[1], chord[2] };
+                    for (int i = 0; i < 4; i++) list.Add(new Note(b0 + i, 1f, arp[i], Voice.Pluck, 0.035f));
+                }
             }
-            // 金管の合いの手 (1・4・8小節目)
-            foreach (int bar in new[] { 0, 3, 7 })
-            {
-                var chord = Chords[bar];
-                float len = bar == 7 ? 1.9f : 0.9f;
-                foreach (int c in chord) list.Add(new Note(bar * 4f, len, c - 12, Voice.Brass, 0.06f));
-            }
-            list.Add(new Note(3 * 4f + 2f, 0.9f, 55, Voice.Brass, 0.06f));
-            list.Add(new Note(3 * 4f + 3f, 0.9f, 59, Voice.Brass, 0.06f));
-            // シンバル (1・5小節目の頭)
-            list.Add(new Note(0f, 1f, 0, Voice.Cymbal, 0.08f));
-            list.Add(new Note(16f, 1f, 0, Voice.Cymbal, 0.06f));
-            // 旋律: フルート。後半 (5〜8小節) はバイオリンが1オクターブ下で重なる
+            // ティンパニ: 区切り (1・9小節目の頭)と、終わりの小節へ向かう2拍
+            list.Add(new Note(0f, 1f, 50, Voice.Timpani, 0.16f));
+            list.Add(new Note(32f, 1f, 50, Voice.Timpani, 0.2f));
+            list.Add(new Note(58f, 1f, 45, Voice.Timpani, 0.12f));
+            list.Add(new Note(59f, 1f, 45, Voice.Timpani, 0.15f));
+            list.Add(new Note(60f, 1f, 50, Voice.Timpani, 0.2f));
+            // 旋律: 第1バイオリンが歌う。後半はフルートが1オクターブ上で重なる
             float beat = 0f;
             foreach (var (midi, beats) in Melody)
             {
                 if (midi > 0)
                 {
-                    list.Add(new Note(beat, beats * 0.92f, midi, Voice.Flute, 0.16f));
-                    if (beat >= 16f) list.Add(new Note(beat, beats * 0.95f, midi - 12, Voice.Strings, 0.06f));
+                    list.Add(new Note(beat, beats * 0.98f, midi, Voice.Strings, 0.13f));
+                    if (beat >= 32f) list.Add(new Note(beat, beats * 0.95f, midi + 12, Voice.Flute, 0.05f));
                 }
                 beat += beats;
             }
@@ -287,7 +316,7 @@ namespace ShootingGallery
                     case Voice.Reed:
                     case Voice.Brass:
                     {
-                        float attack = v == Voice.Strings ? 0.07f : v == Voice.Flute ? 0.05f : 0.03f;
+                        float attack = v == Voice.Strings ? 0.11f : v == Voice.Flute ? 0.06f : v == Voice.Brass ? 0.08f : 0.03f;
                         float env = Mathf.Min(1f, t / attack);
                         if (t > dur) env *= Mathf.Max(0f, 1f - (t - dur) / release);
                         else env *= 1f - 0.12f * (t / Mathf.Max(0.01f, dur));
@@ -301,6 +330,8 @@ namespace ShootingGallery
                             phase2 += hz * 1.004f * vib / Rate;
                             phase2 -= Mathf.Floor(phase2);
                             s = 0.6f * s + 0.6f * table[(int)(phase2 * TableSize) & (TableSize - 1)];
+                            lp += (s - lp) * 0.3f; // 高い倍音を少し丸めて、やわらかい弦の音に
+                            s = lp;
                         }
                         if (v == Voice.Flute) s += 0.04f * Noise(); // 息の音
                         if (v == Voice.Brass) s *= 0.7f + 0.3f * Mathf.Min(1f, t / 0.08f); // 吹き始めに明るくなる
@@ -381,31 +412,78 @@ namespace ShootingGallery
             }
         }
 
-        static AudioClip CurtainSwish()
+        // len = 音の長さ (秒。カーテンが動く秒数 + 少し)。動き始めと終わりはゆっくり、真ん中で速い
+        static AudioClip CurtainSwish(string clipName, float len)
         {
-            const float Len = 2.2f;
+            float Len = Mathf.Max(0.3f, len);
             var data = new float[(int)(Len * Rate)];
-            float lp = 0f;
+            float slow = 0f, fast = 0f;           // 布の音の帯域を作る2つのローパス
+            float svLow = 0f, svBand = 0f;        // レールの音 (細い帯域のバンドパス)
             for (int i = 0; i < data.Length; i++)
             {
                 float t = i / (float)Rate;
-                float env = Mathf.Sin(Mathf.PI * Mathf.Clamp01(t / Len)) * (0.75f + 0.25f * Mathf.Sin(t * 9f));
-                lp += (Noise() - lp) * 0.12f;
-                data[i] = lp * env * 0.9f;
-            }
-            // レールのリングがカラカラ鳴る
-            for (int k = 0; k < 28; k++)
-            {
-                int at = (int)((0.1f + k * 0.072f + (float)rng.NextDouble() * 0.03f) * Rate);
-                float hz = 2600f + (float)rng.NextDouble() * 900f;
-                for (int i = 0; i < Rate / 25 && at + i < data.Length; i++)
-                {
-                    float t = i / (float)Rate;
-                    data[at + i] += 0.12f * Mathf.Sin(2f * Mathf.PI * hz * t) * Mathf.Exp(-t * 90f);
-                }
+                float u = Mathf.Clamp01(t / Len);
+                float speed = Mathf.Sin(Mathf.PI * u);                     // 引き始めと終わりはゆっくり、真ん中で速い
+                float nz = Noise();
+                // シャー: 低い所と高すぎる所を削った布のこすれる音。ひだが揺れるように少し波打つ
+                slow += (nz - slow) * 0.04f;
+                fast += (nz - fast) * 0.45f;
+                float swish = (fast - slow) * speed * (0.85f + 0.15f * Mathf.Sin(t * 13f));
+                // レールをめぐる音: ランナーが金属のレールをすべって回っていく、なめらかな「シュー」。速いほど少し高くなる
+                float fc = 1500f + 500f * speed;
+                float f = 2f * Mathf.Sin(Mathf.PI * fc / Rate);
+                float high = nz - svLow - 0.12f * svBand;
+                svBand += f * high;
+                svLow += f * svBand;
+                float rail = svBand * 0.08f * speed;
+                data[i] = swish + rail;
             }
             Normalize(data, 0.7f);
-            return MakeClip("Concert_Curtain", data);
+            return MakeClip(clipName, data);
+        }
+
+        /// <summary>
+        /// ホールの残響 (約2秒) を buf に足す。並列のくし形フィルター4つ + 直列のオールパス2つ (よくある簡単なリバーブ)。
+        /// ループの曲なので2周回して、2周目の出力を使う (頭の部分にも、終わりからの響きが残るように)。数フレームに分けて計算する
+        /// </summary>
+        static IEnumerator Reverb(float[] buf, float wet, System.Diagnostics.Stopwatch watch)
+        {
+            int n = buf.Length;
+            int[] combLen = { 1543, 1677, 1818, 1993 };
+            int[] apLen = { 405, 321 };
+            const float Feedback = 0.84f, Damp = 0.3f, ApGain = 0.5f;
+            var combs = new float[combLen.Length][];
+            var combIdx = new int[combLen.Length];
+            var combLp = new float[combLen.Length];
+            for (int k = 0; k < combLen.Length; k++) combs[k] = new float[combLen[k]];
+            var aps = new float[apLen.Length][];
+            var apIdx = new int[apLen.Length];
+            for (int k = 0; k < apLen.Length; k++) aps[k] = new float[apLen[k]];
+            var wetBuf = new float[n];
+            for (int i = 0; i < 2 * n; i++)
+            {
+                float x = buf[i % n];
+                float y = 0f;
+                for (int k = 0; k < combs.Length; k++)
+                {
+                    float d = combs[k][combIdx[k]];
+                    combLp[k] = d * (1f - Damp) + combLp[k] * Damp; // 高い音ほど早く消える
+                    combs[k][combIdx[k]] = x + combLp[k] * Feedback;
+                    if (++combIdx[k] >= combLen[k]) combIdx[k] = 0;
+                    y += d;
+                }
+                y *= 0.25f;
+                for (int k = 0; k < aps.Length; k++)
+                {
+                    float d = aps[k][apIdx[k]];
+                    aps[k][apIdx[k]] = y + d * ApGain;
+                    y = d - y;
+                    if (++apIdx[k] >= apLen[k]) apIdx[k] = 0;
+                }
+                if (i >= n) wetBuf[i - n] = y;
+                if ((i & 4095) == 0 && watch.ElapsedMilliseconds > 4) { yield return null; watch.Restart(); }
+            }
+            for (int i = 0; i < n; i++) buf[i] += wetBuf[i] * wet;
         }
 
         static void Normalize(float[] data, float peakTo)

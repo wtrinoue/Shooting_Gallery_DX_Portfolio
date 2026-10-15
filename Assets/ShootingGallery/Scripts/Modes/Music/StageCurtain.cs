@@ -6,8 +6,8 @@ namespace ShootingGallery
     /// <summary>
     /// 音楽モードの、プレイヤーを囲む丸いカーテン。
     /// 頭の少し上に濃い灰色の円い天井と、そのふちに丸いレール (金色) と上飾りの布がある。上から降りてきて、終わると上へ去っていく。
-    /// 赤いビロードのカーテンは、的を撃った時の視線の右 (startDeg) から時計回りにぐるりと一周引かれて閉まり (SetCover 0 → 1)、
-    /// 開く時は反時計回りに戻っていく (SetCover 1 → 0)。開いている時は始まりの所に布がたぐり寄せられて、ひだが深くなる。
+    /// 赤いビロードのカーテンは左右の2枚。開いている時はどちらもプレイヤーの真後ろにたぐり寄せてあり (ひだが深い)、
+    /// 閉まる時は2枚が左右に分かれてレールをぐるりと回り、正面 (的を撃った時に見ていた方) で合わさる (SetCover 0 → 1)。開く時は逆に真後ろへ戻る。
     /// 布のメッシュは実行中に作り、動いている間だけ毎フレーム作り直す (頂点は 600 ほど)
     /// </summary>
     public class StageCurtain : MonoBehaviour
@@ -21,13 +21,11 @@ namespace ShootingGallery
         public float radius = 2f;
         [Tooltip("レールの高さ (カーテンの上端)")]
         public float height = 2.35f;
-        [Tooltip("ひだの数 / ひだの深さ (m)")]
+        [Tooltip("ひだの数 (2枚の合計) / ひだの深さ (m)")]
         public int pleats = 64;
         public float pleatDepth = 0.06f;
         [Tooltip("上飾りの高さ (m)")]
         public float valanceHeight = 0.28f;
-        [Tooltip("カーテンを引き始める向き (度。0 = 的を撃った時に見ていた方、90 = その右)。ここから時計回りに閉まり、開く時は反時計回りに戻る")]
-        public float startDeg = 90f;
         [Tooltip("天井とカーテンが降りてくる高さ (m。定位置からこれだけ上から)")]
         public float dropHeight = 6f;
 
@@ -44,21 +42,27 @@ namespace ShootingGallery
         public void Init()
         {
             if (mesh != null) return;
-            columns = pleats * 2 + 1;
-            verts = new Vector3[columns * 4];
+            columns = Mathf.Max(2, pleats) + 1; // 1枚あたりの列の数
+            verts = new Vector3[columns * 4 * 2];
             mesh = new Mesh { name = "CurtainFabric" };
             mesh.MarkDynamic();
-            var tris = new int[(columns - 1) * 12];
+            var tris = new int[(columns - 1) * 12 * 2];
             int k = 0;
-            for (int j = 0; j < columns - 1; j++)
+            for (int p = 0; p < 2; p++)
             {
-                // 表 (内側から見える面) と裏 (外側から見える面) を別の頂点で作る (法線がそれぞれの向きになるように)
-                int a = j * 2, b = a + 1, c = a + 2, d = a + 3;
-                tris[k++] = a; tris[k++] = c; tris[k++] = b;
-                tris[k++] = b; tris[k++] = c; tris[k++] = d;
-                int o = columns * 2;
-                tris[k++] = o + a; tris[k++] = o + b; tris[k++] = o + c;
-                tris[k++] = o + b; tris[k++] = o + d; tris[k++] = o + c;
+                int baseV = p * columns * 4;
+                for (int j = 0; j < columns - 1; j++)
+                {
+                    // 表 (内側から見える面) と裏 (外側から見える面) を別の頂点で作る (法線がそれぞれの向きになるように)。
+                    // 2枚目は列が逆回りに並ぶので、面の向きを入れ替える
+                    int a = baseV + j * 2, b = a + 1, c = a + 2, d = a + 3;
+                    int o = columns * 2;
+                    bool flip = p == 1;
+                    if (!flip) { tris[k++] = a; tris[k++] = c; tris[k++] = b; tris[k++] = b; tris[k++] = c; tris[k++] = d; }
+                    else { tris[k++] = a; tris[k++] = b; tris[k++] = c; tris[k++] = b; tris[k++] = d; tris[k++] = c; }
+                    if (!flip) { tris[k++] = o + a; tris[k++] = o + b; tris[k++] = o + c; tris[k++] = o + b; tris[k++] = o + d; tris[k++] = o + c; }
+                    else { tris[k++] = o + a; tris[k++] = o + c; tris[k++] = o + b; tris[k++] = o + b; tris[k++] = o + c; tris[k++] = o + d; }
+                }
             }
             Build(0.001f, 0f);
             mesh.vertices = verts;
@@ -70,7 +74,7 @@ namespace ShootingGallery
             if (lamp != null) lampIntensity = lamp.intensity;
         }
 
-        /// <summary>カーテンの閉まり具合 (0 = 0 度の所にたぐり寄せてある 〜 1 = ぐるりと一周閉まっている)</summary>
+        /// <summary>カーテンの閉まり具合 (0 = 2枚とも真後ろにたぐり寄せてある 〜 1 = 2枚が正面で合わさって、ぐるりと閉まっている)</summary>
         public void SetCover(float k)
         {
             Init();
@@ -81,26 +85,32 @@ namespace ShootingGallery
             mesh.RecalculateBounds();
         }
 
-        // 布の頂点: 列 j ごとに上と下の2つ。角度は 0 度から sweep まで。ひだは列ごとに外・内へ交互に
+        // 布の頂点: 2枚それぞれ、列 j ごとに上と下の2つ。角度は真後ろ (180 度) から、1枚目は左回り・2枚目は右回りに sweep まで
+        // (閉まりきると正面で少し重なる)。ひだは列ごとに外・内へ交互に
         void Build(float k, float time)
         {
-            float sweep = Mathf.Lerp(4f, 360f, k) * Mathf.Deg2Rad;
+            float sweep = Mathf.Lerp(2f, 182f, k) * Mathf.Deg2Rad;
             float depth = pleatDepth * (1f + 2.5f * (1f - k)); // たぐり寄せてあるほど、ひだが深い
             int half = columns * 2;
-            for (int j = 0; j < columns; j++)
+            for (int p = 0; p < 2; p++)
             {
-                float u = j / (float)(columns - 1);
-                float a = startDeg * Mathf.Deg2Rad + u * sweep; // 上から見て時計回り
-                float r = radius + depth * (j % 2 == 0 ? 1f : -1f);
-                var dir = new Vector3(Mathf.Sin(a), 0f, Mathf.Cos(a));
-                // 裾が少し揺れる (動いている先の方ほど大きく)
-                float sway = 0.03f * Mathf.Sin(time * 5f + u * 12f) * u;
-                var top = dir * r + Vector3.up * height;
-                var bottom = dir * (r + sway) + Vector3.up * 0.02f;
-                verts[j * 2] = top;
-                verts[j * 2 + 1] = bottom;
-                verts[half + j * 2] = top;
-                verts[half + j * 2 + 1] = bottom;
+                int baseV = p * columns * 4;
+                float sign = p == 0 ? 1f : -1f; // 1枚目: 真後ろから左を回って正面へ / 2枚目: 右を回って正面へ
+                for (int j = 0; j < columns; j++)
+                {
+                    float u = j / (float)(columns - 1);
+                    float a = Mathf.PI + sign * u * sweep;
+                    float r = radius + depth * (j % 2 == 0 ? 1f : -1f) + (p == 0 ? 0.01f : 0f); // 正面で重なる所がちらつかないように、1枚目を少し外に
+                    var dir = new Vector3(Mathf.Sin(a), 0f, Mathf.Cos(a));
+                    // 裾が少し揺れる (動いている先の方ほど大きく)
+                    float sway = 0.03f * Mathf.Sin(time * 5f + u * 12f + p * 2f) * u;
+                    var top = dir * r + Vector3.up * height;
+                    var bottom = dir * (r + sway) + Vector3.up * 0.02f;
+                    verts[baseV + j * 2] = top;
+                    verts[baseV + j * 2 + 1] = bottom;
+                    verts[baseV + half + j * 2] = top;
+                    verts[baseV + half + j * 2 + 1] = bottom;
+                }
             }
         }
 
