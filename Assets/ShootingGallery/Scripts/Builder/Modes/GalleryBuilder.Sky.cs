@@ -91,6 +91,61 @@ namespace ShootingGallery
             return battle;
         }
 
+        /// <summary>
+        /// 空中ステージの帰りに屋台を降ろすパラシュートの見本 (赤と白の縦じまの傘と、屋根の4すみへ伸びるロープ)。隠しておき、GameManager が屋台ごとに複製する。
+        /// 原点が屋台の屋根の真ん中 (幅 3m の屋台の大きさ。屋台の幅に合わせて拡大される)
+        /// </summary>
+        GameObject BuildParachute()
+        {
+            var root = Group(world, "ParachuteTemplate");
+            const float R = 1.7f, Dome = 1.1f, Y = 4.4f, Gores = 12;
+            var canopy = Group(root, "Canopy");
+            canopy.localPosition = Vector3.up * Y;
+            MeshPart(canopy, "CanopyRed", ChuteMesh(R, Dome, (int)Gores, 0), Mat("Chute_Red", new Color(0.9f, 0.18f, 0.15f), null, false, 0.2f));
+            MeshPart(canopy, "CanopyWhite", ChuteMesh(R, Dome, (int)Gores, 1), Mat("Chute_White", new Color(0.96f, 0.95f, 0.92f), null, false, 0.2f));
+            Prim(PrimitiveType.Sphere, "CanopyTop", canopy, Vector3.up * Dome, new Vector3(0.3f, 0.08f, 0.3f), Mat("Chute_Red", new Color(0.9f, 0.18f, 0.15f)), false);
+            // ロープ: 傘のふちから屋根の4すみへ
+            var rope = Mat("Rope", new Color(0.85f, 0.8f, 0.65f));
+            for (int i = 0; i < Gores; i++)
+            {
+                float a = i * Mathf.PI * 2f / Gores;
+                var rim = new Vector3(Mathf.Cos(a) * R, Y, Mathf.Sin(a) * R);
+                var corner = new Vector3(Mathf.Sign(Mathf.Cos(a)) * 1.1f, 0.05f, Mathf.Sign(Mathf.Sin(a) + 0.0001f) * 0.6f);
+                DomeLine(root, "ChuteLine", rim, corner, 0.018f, rope);
+            }
+            root.gameObject.SetActive(false);
+            return root.gameObject;
+        }
+
+        /// <summary>パラシュートの傘 (半径 r・高さ h のふくらんだ屋根。gores 枚の布のうち、parity と同じ偶奇の布だけ。表裏とも見える)。原点がふちの真ん中</summary>
+        Mesh ChuteMesh(float r, float h, int gores, int parity)
+        {
+            string name = $"Chute_Canopy_{parity}";
+            if (meshes.TryGetValue(name, out var cached)) return cached;
+            const int Rings = 6;
+            var verts = new List<Vector3>();
+            var tris = new List<int>();
+            Vector3 P(int g, int k)
+            {
+                float ph = g * Mathf.PI * 2f / gores, th = k * Mathf.PI / 2f / Rings; // th: 0 = てっぺん 〜 π/2 = ふち
+                float bulge = 1f + 0.06f * Mathf.Sin(th * 2f); // 布の間がふくらむ
+                return new Vector3(Mathf.Sin(th) * Mathf.Cos(ph) * r * bulge, Mathf.Cos(th) * h, Mathf.Sin(th) * Mathf.Sin(ph) * r * bulge);
+            }
+            for (int g = 0; g < gores; g++)
+            {
+                if (g % 2 != parity) continue;
+                for (int k = 0; k < Rings; k++)
+                {
+                    Vector3 a = P(g, k), b = P(g + 1, k), c = P(g + 1, k + 1), d = P(g, k + 1);
+                    var outward = (a + c) / 2f;
+                    if (k > 0) { AddTri(verts, tris, a, b, c, outward); AddTri(verts, tris, a, b, c, -outward); }
+                    AddTri(verts, tris, a, c, d, outward);
+                    AddTri(verts, tris, a, c, d, -outward);
+                }
+            }
+            return FinishMesh(name, verts, tris);
+        }
+
         /// <summary>もこもこの雲 (当たり判定なし)。いくつかの白い球を重ねる</summary>
         Transform CloudPuff(Transform parent, string name, Vector3 pos, float size, Material mat)
         {

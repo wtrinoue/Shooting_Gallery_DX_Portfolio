@@ -14,7 +14,7 @@ namespace ShootingGallery
         const float SubDepth = 20f;      // 地上から、海の底でプレイヤーの足元が止まる所までの深さ
         const float SandRadius = 12f;    // 足元から広がる砂の床の半径 (屋台の足元まで覆う)
         const float SubHatch = 1.6f;     // 砂の床の真ん中の、潜水艦が通るハッチの半径 (潜水艦の半径 1m より大きく)
-        const float SeaRadius = 70f;     // 一気に広がる海の水面の半径
+        const float SeaRadius = 150f;    // 一気に広がる海の水面の半径 (海の底が遠くまで続いて見えるように、広く)
         const float SeaFloor = -1.2f;    // 海の底 (海のローカル。プレイヤーの足元が止まる所が 0。潜水艦の下はしは 0.6 の高さ)
         const float PodRadius = 1f;      // 潜水艦の球の半径 (頭が真ん中)
         const float PodWindowDeg = 52f;  // 窓の大きさ (正面からの角度)
@@ -80,9 +80,9 @@ namespace ShootingGallery
             shown.Add(sea.gameObject);
             float surfaceY = SubDepth; // 海のローカルでの水面の高さ
             var rayMat = TransparentMat("Sea_LightRay", new Color(0.75f, 0.95f, 1f, 0.05f));
-            for (int i = 0; i < 12; i++) // 水面から斜めに差しこむ光の筋
+            for (int i = 0; i < 18; i++) // 水面から斜めに差しこむ光の筋 (遠くの筋は霧にかすんで、奥行きが分かる)
             {
-                float a = (i * 30f + Random.Range(-10f, 10f)) * Mathf.Deg2Rad, r = Random.Range(4f, 26f);
+                float a = (i * 20f + Random.Range(-8f, 8f)) * Mathf.Deg2Rad, r = i < 12 ? Random.Range(4f, 26f) : Random.Range(32f, 55f);
                 var ray = new GameObject("LightRay");
                 ray.transform.SetParent(sea, false);
                 ray.transform.localPosition = new Vector3(Mathf.Sin(a) * r, surfaceY, Mathf.Cos(a) * r);
@@ -95,6 +95,7 @@ namespace ShootingGallery
 
             // ---- 4. 海の底 ----
             BuildSeaFloor(sea, sand, sandDark);
+            BuildFarWhales(sea);
             var vents = BuildSeaVents(sea);
             BuildCoralReef(sea);
             BuildKelpForest(sea);
@@ -470,10 +471,10 @@ namespace ShootingGallery
         void BuildSeaFloor(Transform sea, Material sand, Material sandDark)
         {
             // 砂地 (魚雷が当たって爆発するように当たり判定あり)
-            Prim(PrimitiveType.Cylinder, "Seabed", sea, new Vector3(0f, SeaFloor - 0.05f, 0f), new Vector3(140f, 0.05f, 140f), sand);
-            for (int i = 0; i < 40; i++) // ゆるやかな砂の丘
+            Prim(PrimitiveType.Cylinder, "Seabed", sea, new Vector3(0f, SeaFloor - 0.05f, 0f), new Vector3(320f, 0.05f, 320f), sand);
+            for (int i = 0; i < 56; i++) // ゆるやかな砂の丘 (遠くまで続く)
             {
-                var p = Polar(Random.Range(0f, 360f), Random.Range(5f, 34f), SeaFloor - 0.1f);
+                var p = Polar(Random.Range(0f, 360f), i < 40 ? Random.Range(5f, 34f) : Random.Range(34f, 70f), SeaFloor - 0.1f);
                 Prim(PrimitiveType.Sphere, "Dune", sea, p, new Vector3(Random.Range(3f, 7f), Random.Range(0.3f, 0.8f), Random.Range(3f, 6f)), i % 3 == 0 ? sandDark : sand, false)
                     .transform.localRotation = Quaternion.Euler(0f, Random.Range(0f, 360f), 0f);
             }
@@ -485,10 +486,21 @@ namespace ShootingGallery
                 float s = Random.Range(0.6f, 2.4f);
                 Rock("SeaRock", sea, p, new Vector3(s * Random.Range(0.8f, 1.4f), s * Random.Range(0.5f, 1f), s), i % 3 == 0 ? rockDark : rock);
             }
-            for (int i = 0; i < 26; i++) // まわりを囲む大きな崖 (霧の向こうにかすむ)
+            // 遠くの景色を何段にも重ねて、海がずっと広がっているように見せる (遠いほど霧にかすむ):
+            //   1. 中くらいの所に、ぽつぽつと立つ岩の塔 (すき間から、その奥が見える)
+            for (int i = 0; i < 14; i++)
             {
-                var p = Polar(i * 360f / 26f + Random.Range(-5f, 5f), Random.Range(34f, 41f), SeaFloor + Random.Range(0f, 3f));
-                Rock("Cliff", sea, p, new Vector3(Random.Range(7f, 12f), Random.Range(9f, 18f), Random.Range(6f, 10f)), rockDark);
+                var p = Polar(i * 360f / 14f + Random.Range(-10f, 10f), Random.Range(36f, 50f), SeaFloor);
+                float h = Random.Range(6f, 16f);
+                Rock("Pinnacle", sea, p, new Vector3(Random.Range(2.5f, 4.5f), h, Random.Range(2.5f, 4.5f)), rockDark);
+                Rock("PinnacleBase", sea, p + new Vector3(Random.Range(-1.5f, 1.5f), 0f, Random.Range(-1.5f, 1.5f)), new Vector3(Random.Range(4f, 7f), Random.Range(2f, 4f), Random.Range(4f, 7f)), rock);
+            }
+            //   2. ずっと遠くの、大きな海底の山なみ (霧の向こうに影だけ見える。すき間をあけて、さらに奥へ続いているように)
+            for (int i = 0; i < 18; i++)
+            {
+                if (i % 6 == 2) continue; // 山なみの切れ目 (その先は果てしない青)
+                var p = Polar(i * 360f / 18f + Random.Range(-6f, 6f), Random.Range(72f, 90f), SeaFloor + Random.Range(-2f, 2f));
+                Rock("FarRidge", sea, p, new Vector3(Random.Range(16f, 26f), Random.Range(14f, 30f), Random.Range(12f, 18f)), rockDark);
             }
             // 足元 (潜水艦の真下) の小さな岩とサンゴ (下をのぞくと見える)
             var corals = CoralMaterials();
@@ -523,6 +535,36 @@ namespace ShootingGallery
                         for (int k = 0; k < 8; k++)
                             Prim(PrimitiveType.Cube, "Spine", g, new Vector3(0f, 0.08f, 0f), new Vector3(0.012f, 0.32f, 0.012f), urchin, false).transform.localRotation = Random.rotation;
                         break;
+                }
+            }
+        }
+
+        /// <summary>
+        /// 遠くをゆっくり泳ぐ大きなクジラの影 (霧にかすんで、影だけが見える)。海の広さと深さを感じさせる。
+        /// 真ん中を中心にゆっくり回る台 (Rotator) の先に置くだけなので軽い。的ではない (当たり判定なし)
+        /// </summary>
+        void BuildFarWhales(Transform sea)
+        {
+            var dark = Mat("Sea_WhaleShadow", new Color(0.12f, 0.2f, 0.28f), null, false, 0.3f);
+            var belly = Mat("Sea_WhaleShadowBelly", new Color(0.25f, 0.35f, 0.42f), null, false, 0.3f);
+            foreach (var (radius, height, size, speed, start) in new[] { (48f, 9f, 1f, 2.2f, 30f), (62f, 15f, 1.4f, -1.6f, 200f) })
+            {
+                var pivot = Group(sea, "FarWhalePivot");
+                pivot.localRotation = Quaternion.Euler(0f, start, 0f);
+                var spin = pivot.gameObject.AddComponent<Rotator>();
+                spin.axis = Vector3.up;
+                spin.speed = speed; // 度/秒 (とてもゆっくり)
+                var w = Group(pivot, "FarWhale");
+                w.localPosition = new Vector3(0f, SeaFloor + height, radius);
+                w.localRotation = Quaternion.Euler(0f, speed > 0f ? 90f : -90f, 0f); // 回る向きに頭 (+Z) を向ける
+                w.localScale = Vector3.one * size;
+                Prim(PrimitiveType.Sphere, "Body", w, Vector3.zero, new Vector3(2.4f, 2f, 9f), dark, false);
+                Prim(PrimitiveType.Sphere, "Belly", w, new Vector3(0f, -0.45f, 0.6f), new Vector3(2f, 1.3f, 7f), belly, false);
+                Prim(PrimitiveType.Capsule, "Tail", w, new Vector3(0f, 0.1f, -5f), new Vector3(1f, 1.6f, 1f), dark, false).transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+                foreach (float s in new[] { -1f, 1f })
+                {
+                    Prim(PrimitiveType.Sphere, "Fluke", w, new Vector3(s * 1f, 0.1f, -6.4f), new Vector3(2.2f, 0.15f, 0.9f), dark, false).transform.localRotation = Quaternion.Euler(0f, s * 25f, 0f);
+                    Prim(PrimitiveType.Sphere, "Flipper", w, new Vector3(s * 1.5f, -0.6f, 1.5f), new Vector3(3f, 0.15f, 0.7f), dark, false).transform.localRotation = Quaternion.Euler(0f, -s * 30f, s * 20f);
                 }
             }
         }

@@ -4,7 +4,8 @@ using UnityEngine;
 namespace ShootingGallery
 {
     /// <summary>
-    /// 空中ステージの舞台。屋台が沈んだあと地面が遠くへ落ちていき (床がなくなる)、プレイヤーの足元にプロペラ機がせり上がる (プレイヤーは胴体の真ん中の上に立つ)。
+    /// 空中ステージの舞台。床 (地面・穴のふち) がその場で消えて一面の空になり (屋台はばらばらに空から落ちていく。GameManager)、プレイヤーの足元にプロペラ機がせり上がる (プレイヤーは胴体の真ん中の上に立つ)。
+    /// 帰りは足元から床が広がって戻り、屋台はパラシュートで降りてくる (GameManager)。
     /// まわりの空を気球や敵のプロペラ機が次々に飛び、マシンガンで何発か当てると撃墜できる (大きく書かれた点数が入る)。反撃はない。
     /// 屋台の出し入れ・点数・終わる時間の判断は GameManager が行い、ここは見た目と敵の出し方だけを受け持つ。
     ///
@@ -16,10 +17,8 @@ namespace ShootingGallery
         [Tooltip("自分のプロペラ機 (翼・胴体・エンジン)。下からせり上がる")]
         public Transform plane;
         public float planeHiddenDepth = 6f;
-        [Tooltip("空中ステージの間は遠くへ落としておく地面の部品 (地面・穴のふち・足元の目印・ボーナスステージ)")]
+        [Tooltip("空中ステージの間は消しておく床の部品 (地面・穴のふち)")]
         public Transform[] groundParts;
-        [Tooltip("地面が落ちていく深さ (m)。霧で見えなくなる所まで")]
-        public float groundDropDepth = 35f;
         [Tooltip("後ろへ流す景色 (雲・風の筋)。ConveyorBelt のローカル X が後ろ向きになるように置く")]
         public ConveyorBelt[] scenery;
         [Tooltip("それぞれの景色の流れる速さの倍率 (scenery と同じ順)")]
@@ -39,11 +38,11 @@ namespace ShootingGallery
         public float stopLaunchBefore = 2f;
 
         [Header("Timing")]
-        [Tooltip("始まってから終わるまでの秒数 (屋台が沈む・地面が落ちる時間も含む)")]
+        [Tooltip("始まってから終わるまでの秒数 (屋台が落ちる時間も含む)")]
         public float duration = 18f;
-        [Tooltip("始まってから地面が落ち始めるまでの秒数 (屋台が沈み終わるのを待つ)")]
+        [Tooltip("始まってから翼がせり上がり始めるまでの秒数")]
         public float dropDelay = 1.2f;
-        [Tooltip("翼がせり上がり、地面が落ちていく (戻る) 秒数")]
+        [Tooltip("翼がせり上がる (沈む) 秒数")]
         public float riseTime = 2.5f;
 
         public bool IsActive { get; private set; }
@@ -54,6 +53,7 @@ namespace ShootingGallery
         public event System.Action<SkyEnemy> EnemyDown;
 
         float startTime;
+        readonly System.Collections.Generic.List<SkyEnemy> free = new System.Collections.Generic.List<SkyEnemy>(); // 空いている敵 (使い回す)
         float nextLaunchTime;
         float lastAngle;
         Coroutine anim;
@@ -67,7 +67,12 @@ namespace ShootingGallery
             planeRest = plane.localPosition;
             groundRest = new Vector3[groundParts.Length];
             groundWasActive = new bool[groundParts.Length];
-            for (int i = 0; i < groundParts.Length; i++) groundRest[i] = groundParts[i].localPosition;
+            groundScale = new Vector3[groundParts.Length];
+            for (int i = 0; i < groundParts.Length; i++)
+            {
+                groundRest[i] = groundParts[i].localPosition;
+                groundScale[i] = groundParts[i].localScale;
+            }
             SetRise(0f);
             SetStageVisible(false);
         }
@@ -84,19 +89,49 @@ namespace ShootingGallery
             lastAngle = Random.Range(0f, 360f);
             for (int i = 0; i < scenery.Length; i++)
                 scenery[i].speed = scrollSpeed * (sceneryFactors != null && i < sceneryFactors.Length ? sceneryFactors[i] : 1f);
-            for (int i = 0; i < groundParts.Length; i++) groundWasActive[i] = groundParts[i].gameObject.activeSelf;
+            // 床 (地面・穴のふち) はその場できれいさっぱり消す。下は一面の空と雲の海 (屋台は GameManager が空中から落とす)
+            for (int i = 0; i < groundParts.Length; i++)
+            {
+                groundWasActive[i] = groundParts[i].gameObject.activeSelf;
+                groundParts[i].gameObject.SetActive(false);
+            }
+            SetStageVisible(true);
             Play(Rise(1f, dropDelay));
         }
 
-        /// <summary>空中ステージを終える。残っている敵は去り、地面が戻ってきて翼が沈む</summary>
+        /// <summary>空中ステージを終える。残っている敵は去り、足元から床が広がって戻り、翼が沈む (屋台は GameManager がパラシュートで降ろす)</summary>
         public void End()
         {
             if (!IsActive) return;
             IsActive = false;
             foreach (var e in enemies) e.Retreat();
-            for (int i = 0; i < groundParts.Length; i++)
-                if (groundWasActive[i]) groundParts[i].gameObject.SetActive(true);
+            if (groundRoutine != null) StopCoroutine(groundRoutine);
+            groundRoutine = StartCoroutine(GrowGround());
             Play(Rise(0f, 0f));
+        }
+
+        [Tooltip("帰りに床が足元から広がって戻る秒数")]
+        public float groundGrowTime = 0.6f;
+        Coroutine groundRoutine;
+        Vector3[] groundScale;
+
+        // 床が足元 (原点) から外へ広がって戻る
+        IEnumerator GrowGround()
+        {
+            for (int i = 0; i < groundParts.Length; i++)
+            {
+                groundParts[i].localPosition = groundRest[i];
+                if (groundWasActive[i]) groundParts[i].gameObject.SetActive(true);
+            }
+            for (float t = 0f; t < 1f; t += Time.deltaTime / Mathf.Max(0.01f, groundGrowTime))
+            {
+                float e = 1f - (1f - t) * (1f - t);
+                for (int i = 0; i < groundParts.Length; i++)
+                    groundParts[i].localScale = new Vector3(groundScale[i].x * Mathf.Max(0.001f, e), groundScale[i].y, groundScale[i].z * Mathf.Max(0.001f, e));
+                yield return null;
+            }
+            for (int i = 0; i < groundParts.Length; i++) groundParts[i].localScale = groundScale[i];
+            groundRoutine = null;
         }
 
         void Update()
@@ -106,7 +141,7 @@ namespace ShootingGallery
             nextLaunchTime = Time.time + Random.Range(launchInterval.x, launchInterval.y);
 
             int flying = 0;
-            var free = new System.Collections.Generic.List<SkyEnemy>();
+            free.Clear();
             foreach (var e in enemies)
             {
                 if (e.IsFlying) flying++;
@@ -136,20 +171,16 @@ namespace ShootingGallery
             }
             SetRise(to);
             if (to <= 0f) SetStageVisible(false);
-            else // 落ちきった地面は隠す (霧の向こう)
-                foreach (var g in groundParts) g.gameObject.SetActive(false);
             anim = null;
         }
 
         void SetRise(float k)
         {
             currentRise = k;
-            // 翼は前半でせり上がり、地面は後半ほど速く落ちていく
+            // 翼は前半でせり上がる (床はもう消えているので動かさない)
             float wing = Mathf.Clamp01(k / 0.5f);
             wing = wing * wing * (3f - 2f * wing);
             plane.localPosition = planeRest + Vector3.down * (planeHiddenDepth * (1f - wing));
-            for (int i = 0; i < groundParts.Length; i++)
-                groundParts[i].localPosition = groundRest[i] + Vector3.down * (groundDropDepth * k * k);
         }
 
         void SetStageVisible(bool visible)

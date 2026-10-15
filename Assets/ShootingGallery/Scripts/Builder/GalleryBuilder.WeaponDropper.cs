@@ -18,7 +18,7 @@ namespace ShootingGallery
 
             // 武器の的の見た目 (箱 + 文字)。普通の的の「顔」と付け替えて使い回す。同時に出るのは最大2個
             var looks = new List<GameObject>();
-            foreach (var kind in new[] { TargetKind.MachineGun, TargetKind.Shotgun, TargetKind.Bomb, TargetKind.Explosive, TargetKind.BlueOrb, TargetKind.Sniper, TargetKind.MachineGunChallenge, TargetKind.Deluxe, TargetKind.Naval, TargetKind.Sky, TargetKind.Ninja, TargetKind.Kaiju, TargetKind.Casino, TargetKind.Western, TargetKind.Space, TargetKind.Ghost, TargetKind.Mine, TargetKind.Festival, TargetKind.Submarine, TargetKind.Music })
+            foreach (var kind in new[] { TargetKind.MachineGun, TargetKind.Shotgun, TargetKind.Bomb, TargetKind.Explosive, TargetKind.BlueOrb, TargetKind.Sniper, TargetKind.MachineGunChallenge, TargetKind.Deluxe, TargetKind.Naval, TargetKind.Sky, TargetKind.Ninja, TargetKind.Kaiju, TargetKind.Casino, TargetKind.Western, TargetKind.Space, TargetKind.Ghost, TargetKind.Mine, TargetKind.Festival, TargetKind.Submarine, TargetKind.Music, TargetKind.Museum, TargetKind.GateBack })
                 for (int i = 0; i < 2; i++)
                     looks.Add(WeaponLook(go.transform, kind));
 
@@ -44,6 +44,8 @@ namespace ShootingGallery
             if (kind == TargetKind.Mine) return MineLook(look);
             if (kind == TargetKind.Submarine) return SubmarineLook(look);
             if (kind == TargetKind.Music) return MusicLook(look);
+            if (kind == TargetKind.Museum) return MuseumLook(look);
+            if (kind == TargetKind.GateBack) return GateBackLook(look);
             if (kind == TargetKind.Festival) return FestivalLook(look);
 
             if (kind == TargetKind.BlueOrb)

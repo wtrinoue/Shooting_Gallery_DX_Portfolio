@@ -28,6 +28,7 @@ namespace ShootingGallery
             if (submarineDive == null || ChallengeActive || DeluxeActive || (bonusStage != null && bonusStage.IsBusy)) return;
             stageStalls.Clear();
             SetShownStallTargets(false);
+            ResetView(true); // もぐる前に、いつもの視点にそろえる (そこからの深さで動かすので)
             submarineDive.Begin(player.transform, player.head.transform);
             player.GiveWeapon(WeaponType.Torpedo, submarineDive.duration);
             Sfx.Play("stageup");
@@ -47,8 +48,8 @@ namespace ShootingGallery
         // 頭が水にもぐった: 水の中の青い色と濃い霧 (遠くが青くかすむ)
         void OnSubUnderwater()
         {
-            RenderSettings.fogStartDistance = 1f;
-            RenderSettings.fogEndDistance = 38f;
+            RenderSettings.fogStartDistance = 3f;  // 近くはすっきり見え、遠くへ行くほどゆっくり青くかすむ (海がずっと広がって見えるように)
+            RenderSettings.fogEndDistance = 85f;
             FadeAmbience(subFogColor, subAmbient, subSkyColor, 1.2f);
             FadeSun(sunIntensity * 0.45f, 1.2f);
             if (State == GameState.Playing && SubmarineActive)

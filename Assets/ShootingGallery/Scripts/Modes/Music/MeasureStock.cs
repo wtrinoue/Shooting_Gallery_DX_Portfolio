@@ -21,6 +21,7 @@ namespace ShootingGallery
             public int kind;
             public int length;
             public float width;
+            public bool isRest; // 休符 (2分休符・4分休符・8分休符)。音の鳴る音符がない小節は全休符にする
         }
 
         const int MaxTries = 30; // 小節の幅に入りきらない並びを引き直す回数の上限 (越えたら最後の並びを使い、MusicStaff が縮めて並べる)
@@ -126,7 +127,7 @@ namespace ShootingGallery
                 picked.Clear();
                 int remaining = length;
                 float width = 0f;
-                bool ok = true;
+                bool ok = true, sounds = false;
                 while (remaining > 0)
                 {
                     // 残りの長さ以下の音符だけを候補にして、その中からランダムに選ぶ
@@ -138,8 +139,16 @@ namespace ShootingGallery
                     picked.Add(c.kind);
                     remaining -= c.length;
                     width += c.width;
+                    if (!c.isRest) sounds = true;
                 }
                 if (!ok) continue;
+                // 休符だけの小節 (2分休符2つなど) は、楽譜ではふつう全休符1つで書く。2分休符などは、ほかに音の鳴る音符がある小節だけで使う
+                if (!sounds && wholeRest != null)
+                {
+                    result.Clear();
+                    result.Add(wholeRest.Value.kind);
+                    return;
+                }
                 found = true;
                 result.Clear();
                 result.AddRange(picked);

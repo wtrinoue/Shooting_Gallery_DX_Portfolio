@@ -17,11 +17,12 @@ namespace ShootingGallery
         /// <summary>WORLD GATE の間か</summary>
         public bool GateMode { get; private set; }
 
-        // 並べる別の世界の的 (この順に、輪の正面の屋台から右回りに詰める)
+        // 並べる的 (この順に、輪の正面の屋台から右回りに詰める)。最初の BACK は正面の屋台の左端 (撃つとタイトル = 一番初めの状態に戻る)
         static readonly TargetKind[] GateWorlds =
         {
+            TargetKind.GateBack,
             TargetKind.Naval, TargetKind.Sky, TargetKind.Ninja, TargetKind.Kaiju, TargetKind.Casino, TargetKind.Western,
-            TargetKind.Space, TargetKind.Ghost, TargetKind.Mine, TargetKind.Festival, TargetKind.Submarine, TargetKind.Music,
+            TargetKind.Space, TargetKind.Ghost, TargetKind.Mine, TargetKind.Festival, TargetKind.Submarine, TargetKind.Music, TargetKind.Museum,
         };
 
         /// <summary>WORLD GATE を始める (タイトルの WORLD GATE の的を撃った時)</summary>
@@ -45,7 +46,7 @@ namespace ShootingGallery
 
             StartFever(); // 6軒の輪 (正面の屋台は隠れたまま輪の場所へ。メイン屋台が沈みきってからせり上がる)
             StartCoroutine(RiseGateMainAfter(stallMoveDuration));
-            ShowMessage("WORLD GATE\nCHOOSE YOUR WORLD!\nHOLD A : QUIT", 3.5f, new Color(0.7f, 0.6f, 1f));
+            ShowMessage("WORLD GATE\nCHOOSE YOUR WORLD!\nSHOOT BACK : QUIT", 3.5f, new Color(0.7f, 0.6f, 1f));
         }
 
         IEnumerator RiseGateMainAfter(float delay)
@@ -89,6 +90,7 @@ namespace ShootingGallery
             int start = 0;
             for (int i = 0; i < index; i++) start += ring[i].targets != null ? ring[i].targets.Length : 0;
             int count = Mathf.Clamp(GateWorlds.Length - start, 0, stall.targets != null ? stall.targets.Length : 0);
+            if (count == 0) return System.Array.Empty<TargetKind>(); // 世界の的を並べ終えた後の屋台 (start が配列の外になるので、コピーしない)
             var kinds = new TargetKind[count];
             System.Array.Copy(GateWorlds, start, kinds, 0, count);
             return kinds;

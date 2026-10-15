@@ -236,6 +236,7 @@ namespace ShootingGallery
             var mineCave = BuildMine();
             var submarineDive = BuildSubmarine();
             var concertHall = BuildConcertHall();
+            var artMuseum = BuildMuseum();
             var festivalStage = BuildFestival();
             LogStep("武器の的 / UFO", step);
 
@@ -254,6 +255,7 @@ namespace ShootingGallery
             gm.machineGunChallenge = machineGunChallenge;
             gm.navalBattle = navalBattle;
             gm.skyBattle = skyBattle;
+            gm.parachuteTemplate = BuildParachute(); // 空中ステージの帰りに屋台を降ろすパラシュート
             gm.ninjaDojo = ninjaDojo;
             gm.kaijuCity = kaijuCity;
             gm.casinoHall = casinoHall;
@@ -263,6 +265,7 @@ namespace ShootingGallery
             gm.mineCave = mineCave;
             gm.submarineDive = submarineDive;
             gm.concertHall = concertHall;
+            gm.artMuseum = artMuseum;
             gm.festivalStage = festivalStage;
             BuildMoneyPanel(hudText.transform.parent, gm); // 夏祭りモードのお金と残り時間の表示 (HUD の上の方)
             gm.deluxeMainStall = deluxeMain;

@@ -129,16 +129,10 @@ namespace ShootingGallery
             GunPart(PrimitiveType.Cube, sr, new Vector3(0f, -0.06f, -0.02f), new Vector3(0.03f, 0.09f, 0.04f), grip, 15f);
             var srMuzzle = Muzzle(sr, new Vector3(0f, 0.01f, 0.53f), flashMat);
 
-            // 5: バズーカ (海戦モード専用。肩にかつぐ長い筒 + 照準 + 前後の握り)
+            // 5: 大砲 (海戦モード専用。WeaponType.Bazooka。帆船の大砲: 黒っぽい青銅の砲身が、車輪の付いた木の台に載っている。台の後ろの下に握り)
             var bz = Group(gunGo.transform, "Model_Bazooka");
-            var olive = Mat("Gun_Bazooka", new Color(0.3f, 0.36f, 0.2f));
-            GunPart(PrimitiveType.Cylinder, bz, new Vector3(0f, 0.04f, 0.1f), new Vector3(0.09f, 0.3f, 0.09f), olive, 90f);            // 筒
-            GunPart(PrimitiveType.Cylinder, bz, new Vector3(0f, 0.04f, 0.4f), new Vector3(0.11f, 0.03f, 0.11f), metal, 90f);          // 筒先
-            GunPart(PrimitiveType.Cylinder, bz, new Vector3(0f, 0.04f, -0.2f), new Vector3(0.105f, 0.025f, 0.105f), metal, 90f);       // 後ろ
-            GunPart(PrimitiveType.Cube, bz, new Vector3(0.06f, 0.09f, 0.12f), new Vector3(0.02f, 0.04f, 0.06f), metal);                 // 照準
-            GunPart(PrimitiveType.Cube, bz, new Vector3(0f, -0.04f, -0.01f), new Vector3(0.03f, 0.09f, 0.04f), grip, 15f);
-            GunPart(PrimitiveType.Cube, bz, new Vector3(0f, -0.03f, 0.2f), new Vector3(0.03f, 0.07f, 0.035f), grip, 10f);
-            var bzMuzzle = Muzzle(bz, new Vector3(0f, 0.04f, 0.42f), flashMat);
+            BuildCannonModel(bz, grip);
+            var bzMuzzle = Muzzle(bz, new Vector3(0f, 0.075f, 0.43f), flashMat);
 
             // 6: 手裏剣 (忍者モード専用。手のひらの先に1枚持っている。投げると消えて、少しして次の1枚が出る)
             var sk = Group(gunGo.transform, "Model_Shuriken");
@@ -379,6 +373,44 @@ namespace ShootingGallery
             GunPart(PrimitiveType.Cube, tr, new Vector3(0f, -0.04f, 0.01f), new Vector3(0.024f, 0.06f, 0.03f), trMetal, 15f); // 握り
             var trMuzzle = Muzzle(tr, new Vector3(0f, 0.035f, 0.23f), Mat("Note_Spark", new Color(1f, 0.9f, 0.5f), new Color(2.4f, 2f, 0.9f), true));
 
+            // 19: イマジネーション (美術館モード専用。手のひらの上に浮かぶ光る玉。まわりを虹色の粒と細い輪が回る。持ち手は白い絵筆の柄)
+            var im = Group(gunGo.transform, "Model_Imagination");
+            var imColors = new[]
+            {
+                Mat("Imagine_Pink", new Color(1f, 0.45f, 0.65f), new Color(2.2f, 0.8f, 1.2f), true),
+                Mat("Imagine_Yellow", new Color(1f, 0.9f, 0.35f), new Color(2.2f, 1.9f, 0.6f), true),
+                Mat("Imagine_Green", new Color(0.45f, 1f, 0.55f), new Color(0.8f, 2.2f, 1f), true),
+                Mat("Imagine_Blue", new Color(0.4f, 0.75f, 1f), new Color(0.7f, 1.4f, 2.4f), true),
+                Mat("Imagine_Violet", new Color(0.8f, 0.5f, 1f), new Color(1.6f, 0.9f, 2.4f), true),
+            };
+            var imCore = Mat("Imagine_Core", new Color(1f, 0.97f, 0.92f), new Color(2.5f, 2.4f, 2.2f), true);
+            GunPart(PrimitiveType.Cylinder, im, new Vector3(0f, -0.03f, -0.02f), new Vector3(0.022f, 0.06f, 0.022f), Mat("Imagine_Handle", new Color(0.95f, 0.93f, 0.88f), null, false, 0.6f), 15f); // 握り (白い柄)
+            GunPart(PrimitiveType.Cylinder, im, new Vector3(0f, 0.025f, 0.01f), new Vector3(0.03f, 0.008f, 0.03f), Mat("Gold", new Color(1f, 0.78f, 0.25f), new Color(0.3f, 0.2f, 0f)), 15f); // 金の口金
+            GunPart(PrimitiveType.Sphere, im, new Vector3(0f, 0.065f, 0.03f), Vector3.one * 0.05f, imCore); // 光る玉
+            var imOrbit = Group(im, "Orbit");
+            imOrbit.localPosition = new Vector3(0f, 0.065f, 0.03f);
+            var imSpin = imOrbit.gameObject.AddComponent<Rotator>();
+            imSpin.axis = new Vector3(0.3f, 1f, 0.2f);
+            imSpin.speed = 200f;
+            for (int i = 0; i < imColors.Length; i++)
+            {
+                float a = i * Mathf.PI * 2f / imColors.Length;
+                GunPart(PrimitiveType.Sphere, imOrbit, new Vector3(Mathf.Cos(a), 0.3f * Mathf.Sin(a * 2f), Mathf.Sin(a)) * 0.045f, Vector3.one * 0.012f, imColors[i]);
+            }
+            var imRing = Group(im, "Ring");
+            imRing.localPosition = new Vector3(0f, 0.065f, 0.03f);
+            imRing.localRotation = Quaternion.Euler(70f, 0f, 0f);
+            RingSegments(imRing, "Halo", 0.04f, 16, 0.004f, imColors[1], imColors[3]);
+            var imMuzzle = Muzzle(im, new Vector3(0f, 0.065f, 0.07f), imColors[1]);
+            gun.imaginationMaterials = imColors;
+            gun.imaginationTrailMaterial = VertexColorMat("Imagine_Trail", new Color(1f, 1f, 1f, 0.8f)); // 虹色は TrailRenderer の色で付ける
+            gun.imaginationSparkMaterial = TransparentMat("Imagine_Spark", new Color(1f, 0.92f, 0.75f, 0.8f));
+
+            // 20: 機関銃 (空中ステージ専用。昔の飛行機の水冷式の機関銃: 太い冷却筒・機関部・後ろの2本の握り・真ちゅうの弾帯)
+            var am = Group(gunGo.transform, "Model_AirMachineGun");
+            BuildAirMachineGunModel(am, grip);
+            var amMuzzle = Muzzle(am, new Vector3(0f, 0.03f, 0.47f), flashMat);
+
             var laserMat = Mat("Laser", new Color(1f, 0.1f, 0.1f), null, true);
             var laserGo = new GameObject("Laser");
             laserGo.transform.SetParent(gunGo.transform, false);
@@ -404,8 +436,8 @@ namespace ShootingGallery
             gun.bombMaterial = Mat("Bomb", new Color(0.12f, 0.12f, 0.14f), new Color(0.5f, 0.15f, 0f));
             gun.explosionMaterial = TransparentMat("Explosion", new Color(1f, 0.55f, 0.15f, 0.8f));
             gun.models = new[] { hg.gameObject, mg.gameObject, sg.gameObject, bm.gameObject, sr.gameObject, bz.gameObject, sk.gameObject, kj.gameObject, dt.gameObject, rv.gameObject, ms.gameObject, fl.gameObject, px.gameObject,
-                                 rt.gameObject, cg.gameObject, po.gameObject, cn.gameObject, tp.gameObject, tr.gameObject };
-            gun.muzzles = new[] { hgMuzzle, mgMuzzle, sgMuzzle, bmMuzzle, srMuzzle, bzMuzzle, skMuzzle, kjMuzzle, dtMuzzle, rvMuzzle, msMuzzle, flMuzzle, pxMuzzle, rtMuzzle, cgMuzzle, poMuzzle, cnMuzzle, tpMuzzle, trMuzzle };
+                                 rt.gameObject, cg.gameObject, po.gameObject, cn.gameObject, tp.gameObject, tr.gameObject, im.gameObject, am.gameObject };
+            gun.muzzles = new[] { hgMuzzle, mgMuzzle, sgMuzzle, bmMuzzle, srMuzzle, bzMuzzle, skMuzzle, kjMuzzle, dtMuzzle, rvMuzzle, msMuzzle, flMuzzle, pxMuzzle, rtMuzzle, cgMuzzle, poMuzzle, cnMuzzle, tpMuzzle, trMuzzle, imMuzzle, amMuzzle };
             gun.ringMesh = ringMesh;
             gun.ringMaterials = ringMats;
             gun.corkMaterial = cork;
@@ -500,6 +532,112 @@ namespace ShootingGallery
             gun.batteryRedMaterial = Mat("Battery_Red", new Color(1f, 0.25f, 0.2f), null, true);
             gun.batteryEmptyMaterial = cellEmpty;
             return gun;
+        }
+
+        /// <summary>
+        /// 大砲の見た目 (手で持つ大きさ。前が +Z)。
+        /// 黒っぽい青銅の砲身 (後ろが太く、前へ細くなる。補強の輪・砲口のふくらみ・後ろの丸いつまみ)、
+        /// 木の台 (左右の板・前後の車軸・4つの木の車輪)、鉄の輪と金具、台の後ろの下の握り
+        /// </summary>
+        void BuildCannonModel(Transform m, Material grip)
+        {
+            var bronze = Mat("Cannon_Bronze", new Color(0.28f, 0.2f, 0.15f), null, false, 0.75f);
+            var bronzeDark = Mat("Cannon_BronzeDark", new Color(0.18f, 0.13f, 0.1f), null, false, 0.7f);
+            var wood = Mat("Cannon_Wood", new Color(0.72f, 0.5f, 0.3f), null, false, 0.3f);
+            var woodDark = Mat("Cannon_WoodDark", new Color(0.5f, 0.32f, 0.18f), null, false, 0.3f);
+            var iron = Mat("Cannon_Iron", new Color(0.12f, 0.12f, 0.14f), null, false, 0.6f);
+            const float Y = 0.075f; // 砲身の高さ
+            // 砲身 (後ろから前へ、少しずつ細く)
+            GunPart(PrimitiveType.Sphere, m, new Vector3(0f, Y, -0.115f), Vector3.one * 0.03f, bronze);                                   // 後ろの丸いつまみ
+            GunPart(PrimitiveType.Cylinder, m, new Vector3(0f, Y, -0.09f), new Vector3(0.022f, 0.02f, 0.022f), bronze, 90f);             // つまみの首
+            GunPart(PrimitiveType.Sphere, m, new Vector3(0f, Y, -0.065f), new Vector3(0.085f, 0.085f, 0.05f), bronze);                    // 後ろの丸み
+            GunPart(PrimitiveType.Cylinder, m, new Vector3(0f, Y, 0.0f), new Vector3(0.085f, 0.065f, 0.085f), bronze, 90f);               // 太い後ろ
+            GunPart(PrimitiveType.Cylinder, m, new Vector3(0f, Y, 0.14f), new Vector3(0.072f, 0.08f, 0.072f), bronze, 90f);               // 真ん中
+            GunPart(PrimitiveType.Cylinder, m, new Vector3(0f, Y, 0.3f), new Vector3(0.062f, 0.09f, 0.062f), bronze, 90f);                // 前
+            foreach (float z in new[] { -0.04f, 0.065f, 0.21f })                                                                          // 補強の輪
+                GunPart(PrimitiveType.Cylinder, m, new Vector3(0f, Y, z), new Vector3(0.093f - z * 0.08f, 0.007f, 0.093f - z * 0.08f), bronzeDark, 90f);
+            GunPart(PrimitiveType.Cylinder, m, new Vector3(0f, Y, 0.4f), new Vector3(0.075f, 0.018f, 0.075f), bronzeDark, 90f);           // 砲口のふくらみ
+            GunPart(PrimitiveType.Cylinder, m, new Vector3(0f, Y, 0.412f), new Vector3(0.04f, 0.008f, 0.04f), iron, 90f);                 // 砲口の穴 (暗く)
+            foreach (float s in new[] { -1f, 1f })                                                                                        // 砲耳 (台に載せる軸)
+            {
+                var t = Prim(PrimitiveType.Cylinder, "Trunnion", m, new Vector3(s * 0.05f, Y - 0.01f, 0.07f), new Vector3(0.022f, 0.012f, 0.022f), bronzeDark, false);
+                t.transform.localRotation = Quaternion.Euler(0f, 0f, 90f);
+                t.GetComponent<Renderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            }
+            // 木の台: 左右の板 (後ろが段々に高い)・前後の車軸・横木
+            foreach (float s in new[] { -1f, 1f })
+            {
+                GunPart(PrimitiveType.Cube, m, new Vector3(s * 0.05f, 0.025f, 0.08f), new Vector3(0.016f, 0.045f, 0.26f), wood);          // 板
+                GunPart(PrimitiveType.Cube, m, new Vector3(s * 0.05f, 0.05f, 0.0f), new Vector3(0.016f, 0.03f, 0.1f), wood);              // 後ろの段
+                GunPart(PrimitiveType.Cylinder, m, new Vector3(s * 0.06f, 0.06f, 0.07f), new Vector3(0.012f, 0.004f, 0.012f), iron, 0f); // 金具の輪
+                // 車輪 (前後に2つずつ。木の輪に、鉄の外輪)
+                foreach (float z in new[] { -0.02f, 0.18f })
+                {
+                    var w = Prim(PrimitiveType.Cylinder, "Wheel", m, new Vector3(s * 0.068f, 0.0f, z), new Vector3(0.05f, 0.008f, 0.05f), woodDark, false);
+                    w.transform.localRotation = Quaternion.Euler(0f, 0f, 90f);
+                    w.GetComponent<Renderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                    var r = Prim(PrimitiveType.Cylinder, "WheelHub", m, new Vector3(s * 0.074f, 0.0f, z), new Vector3(0.02f, 0.004f, 0.02f), iron, false);
+                    r.transform.localRotation = Quaternion.Euler(0f, 0f, 90f);
+                    r.GetComponent<Renderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                }
+            }
+            foreach (float z in new[] { -0.02f, 0.18f })                                                                                  // 車軸
+            {
+                var axle = Prim(PrimitiveType.Cylinder, "Axle", m, new Vector3(0f, 0.0f, z), new Vector3(0.016f, 0.07f, 0.016f), woodDark, false);
+                axle.transform.localRotation = Quaternion.Euler(0f, 0f, 90f);
+                axle.GetComponent<Renderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            }
+            GunPart(PrimitiveType.Cube, m, new Vector3(0f, 0.015f, 0.08f), new Vector3(0.09f, 0.012f, 0.05f), wood);                     // 横木
+            GunPart(PrimitiveType.Cube, m, new Vector3(0f, 0.04f, -0.05f), new Vector3(0.07f, 0.02f, 0.05f), woodDark);                   // 角度を決めるくさび
+            // 握り (台の後ろの下。手で持つ所)
+            GunPart(PrimitiveType.Cube, m, new Vector3(0f, -0.05f, -0.03f), new Vector3(0.03f, 0.09f, 0.04f), grip, 15f);
+        }
+
+        /// <summary>
+        /// 昔の飛行機の水冷式の機関銃の見た目 (手で持つ大きさ。前が +Z)。
+        /// 太い冷却筒 (縦のすじ)・その先の細い銃口と円すいの消炎器・機関部の箱・照門・後ろの2本の握りと引き金・左から下がる真ちゅうの弾帯
+        /// </summary>
+        void BuildAirMachineGunModel(Transform m, Material grip)
+        {
+            var gunmetal = Mat("Vickers_Metal", new Color(0.22f, 0.23f, 0.25f), null, false, 0.55f);
+            var dark = Mat("Vickers_Dark", new Color(0.1f, 0.1f, 0.11f), null, false, 0.5f);
+            var brass = Mat("Vickers_Brass", new Color(0.85f, 0.65f, 0.3f), null, false, 0.8f);
+            var belt = Mat("Vickers_Belt", new Color(0.6f, 0.45f, 0.3f), null, false, 0.2f);
+            const float Y = 0.03f;
+            // 冷却筒と、表面の縦のすじ
+            GunPart(PrimitiveType.Cylinder, m, new Vector3(0f, Y, 0.2f), new Vector3(0.07f, 0.15f, 0.07f), gunmetal, 90f);
+            for (int k = 0; k < 8; k++)
+            {
+                float a = k * Mathf.PI * 2f / 8f;
+                GunPart(PrimitiveType.Cube, m, new Vector3(Mathf.Cos(a) * 0.036f, Y + Mathf.Sin(a) * 0.036f, 0.2f), new Vector3(0.008f, 0.008f, 0.28f), dark);
+            }
+            GunPart(PrimitiveType.Cylinder, m, new Vector3(0f, Y, 0.055f), new Vector3(0.076f, 0.008f, 0.076f), dark, 90f);   // 冷却筒の後ろの輪
+            GunPart(PrimitiveType.Cylinder, m, new Vector3(0f, Y, 0.345f), new Vector3(0.076f, 0.008f, 0.076f), dark, 90f);   // 前の輪
+            // 銃口と円すいの消炎器
+            GunPart(PrimitiveType.Cylinder, m, new Vector3(0f, Y, 0.39f), new Vector3(0.022f, 0.04f, 0.022f), dark, 90f);
+            GunPart(PrimitiveType.Cylinder, m, new Vector3(0f, Y, 0.44f), new Vector3(0.036f, 0.025f, 0.036f), gunmetal, 90f);
+            // 機関部の箱と、上の照門・ふた
+            GunPart(PrimitiveType.Cube, m, new Vector3(0f, Y, -0.02f), new Vector3(0.06f, 0.07f, 0.15f), gunmetal);
+            GunPart(PrimitiveType.Cube, m, new Vector3(0f, Y + 0.04f, -0.02f), new Vector3(0.05f, 0.012f, 0.13f), dark);
+            GunPart(PrimitiveType.Cube, m, new Vector3(0f, Y + 0.06f, 0.33f), new Vector3(0.008f, 0.03f, 0.008f), dark);      // 前の照星
+            GunPart(PrimitiveType.Cube, m, new Vector3(0f, Y + 0.055f, -0.06f), new Vector3(0.03f, 0.02f, 0.008f), dark);     // 後ろの照門
+            // 後ろの2本の握りと、その間の引き金
+            GunPart(PrimitiveType.Cube, m, new Vector3(0f, Y, -0.105f), new Vector3(0.07f, 0.02f, 0.02f), gunmetal);
+            foreach (float s in new[] { -1f, 1f })
+                GunPart(PrimitiveType.Cylinder, m, new Vector3(s * 0.035f, Y - 0.03f, -0.115f), new Vector3(0.018f, 0.035f, 0.018f), grip, 0f);
+            GunPart(PrimitiveType.Cube, m, new Vector3(0f, Y - 0.02f, -0.11f), new Vector3(0.02f, 0.025f, 0.01f), brass);
+            // 下の握り (手で持つ所)
+            GunPart(PrimitiveType.Cube, m, new Vector3(0f, -0.05f, -0.03f), new Vector3(0.03f, 0.09f, 0.04f), grip, 15f);
+            // 左から下がる弾帯 (布の帯に、真ちゅうの弾がずらりと並ぶ)
+            for (int k = 0; k < 9; k++)
+            {
+                float t = k / 8f;
+                var p = new Vector3(-0.04f - Mathf.Sin(t * 1.2f) * 0.03f, Y - t * 0.13f, 0.0f - t * 0.02f);
+                GunPart(PrimitiveType.Cube, m, p, new Vector3(0.012f, 0.014f, 0.05f), belt);
+                var round = Prim(PrimitiveType.Cylinder, "Round", m, p + new Vector3(-0.004f, 0f, 0f), new Vector3(0.009f, 0.028f, 0.009f), brass, false);
+                round.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+                round.GetComponent<Renderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            }
         }
 
         void GunPart(PrimitiveType type, Transform parent, Vector3 pos, Vector3 scale, Material mat, float xRot = 0f)

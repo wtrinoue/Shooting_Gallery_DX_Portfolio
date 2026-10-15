@@ -32,6 +32,7 @@ namespace ShootingGallery
             mineStallsAway = false;
             stageStalls.Clear();
             SetShownStallTargets(false);
+            ResetView(true); // 下へ降りる前に、いつもの視点にそろえる (そこからの深さで動かすので)
             mineCave.Begin(player.transform);
             player.GiveWeapon(WeaponType.Pickaxe, mineCave.duration); // つるはしを回しながら投げる
             // 縦穴を降りる間に、だんだん暗くなる

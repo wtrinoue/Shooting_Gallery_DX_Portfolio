@@ -127,9 +127,10 @@ namespace ShootingGallery
 
             // ---- 的: カウボーイ・悪党・馬車 ----
             var riders = new List<WesternRider>();
-            for (int i = 0; i < 8; i++) riders.Add(BuildCowboy(root, $"Cowboy_{i}", false, i));
-            for (int i = 0; i < 4; i++) riders.Add(BuildCowboy(root, $"Bandit_{i}", true, i));
+            for (int i = 0; i < 11; i++) riders.Add(BuildCowboy(root, $"Cowboy_{i}", false, i));
+            for (int i = 0; i < 6; i++) riders.Add(BuildCowboy(root, $"Bandit_{i}", true, i));
             for (int i = 0; i < 2; i++) riders.Add(BuildStagecoach(root, i));
+            for (int i = 0; i < 3; i++) riders.Add(BuildModelT(root, i)); // ちょっと時代が違うけれど、古い自動車も荒野を走る
 
             var western = go.AddComponent<WesternTrain>();
             western.train = train;
@@ -149,8 +150,8 @@ namespace ShootingGallery
             western.smokeMaterial = TransparentMat("Smoke_Train", new Color(0.85f, 0.85f, 0.85f, 0.45f));
             western.sandMaterial = TransparentMat("Western_Sand", new Color(0.84f, 0.68f, 0.44f, 0.55f)); // 砂嵐の砂粒
             western.riders = riders.ToArray();
-            western.maxRunning = 9;
-            western.launchInterval = new Vector2(0.45f, 0.9f);
+            western.maxRunning = 13;
+            western.launchInterval = new Vector2(0.3f, 0.6f);
             // 西部劇モードの時だけ出る (シーンに生成した時も隠しておく)
             train.gameObject.SetActive(false);
             desert.SetActive(false);
@@ -550,7 +551,7 @@ namespace ShootingGallery
             var poleMat = Mat("Rider_Pole", new Color(0.35f, 0.3f, 0.25f), null, false, 0.6f);
             Prim(PrimitiveType.Cylinder, "Pole", body, new Vector3(0f, PoleH / 2f, 0f), new Vector3(0.06f, PoleH / 2f, 0.06f), poleMat, false);
             Prim(PrimitiveType.Cylinder, "PoleFoot", body, new Vector3(0f, 0.03f, 0f), new Vector3(0.4f, 0.03f, 0.4f), poleMat, false);
-            labels.Add(PointSign(body, new Vector3(0f, PoleH * 0.5f, 0f), 0.55f));
+            labels.Add(PointSign(body, new Vector3(0f, PoleH * 0.5f, 0f), 0.68f)); // 遠くからでも読める大きさ
 
             var mount = Group(body, "Mount");
             mount.localPosition = new Vector3(0f, PoleH, 0f);
@@ -602,7 +603,7 @@ namespace ShootingGallery
                 Prim(PrimitiveType.Cylinder, "Pole", body, new Vector3(0f, PoleH / 2f, z), new Vector3(0.07f, PoleH / 2f, 0.07f), poleMat, false);
                 Prim(PrimitiveType.Cylinder, "PoleFoot", body, new Vector3(0f, 0.03f, z), new Vector3(0.45f, 0.03f, 0.45f), poleMat, false);
             }
-            var labels = new List<TextMesh> { PointSign(body, new Vector3(0f, PoleH * 0.5f, 0.4f), 0.75f) };
+            var labels = new List<TextMesh> { PointSign(body, new Vector3(0f, PoleH * 0.5f, 0.4f), 0.9f) };
 
             var mount = Group(body, "Mount");
             mount.localPosition = new Vector3(0f, PoleH, 0f);
@@ -647,6 +648,110 @@ namespace ShootingGallery
             rider.gallopHeight = 0.04f;
             rider.routeChoices = new[] { WesternRider.Route.Overtake, WesternRider.Route.FallBehind };
             return rider;
+        }
+
+        /// <summary>
+        /// 古い自動車 (フォード・モデル T 風): 黒い車体と長いボンネット、真ちゅうのラジエーターとヘッドライト、黒い幌の屋根、木のスポークの細い車輪、
+        /// 運転席のカウボーイ。ほかの的と同じく2本の棒の上に乗って、でこぼこ道を跳ねながら速く走る。
+        /// 点数の札は屋根の上に高く掲げる (屋根の上から見下ろしても、車に隠れずに読める)。当てると車ごと後ろへ倒れる
+        /// </summary>
+        WesternRider BuildModelT(Transform parent, int index)
+        {
+            var root = Group(parent, $"ModelT_{index}");
+            root.gameObject.SetActive(false);
+            var body = Group(root, "Body");
+            const float PoleH = 2.0f;
+            var poleMat = Mat("Rider_Pole", new Color(0.35f, 0.3f, 0.25f), null, false, 0.6f);
+            foreach (float z in new[] { -0.7f, 0.7f })
+            {
+                Prim(PrimitiveType.Cylinder, "Pole", body, new Vector3(0f, PoleH / 2f, z), new Vector3(0.07f, PoleH / 2f, 0.07f), poleMat, false);
+                Prim(PrimitiveType.Cylinder, "PoleFoot", body, new Vector3(0f, 0.03f, z), new Vector3(0.45f, 0.03f, 0.45f), poleMat, false);
+            }
+
+            var mount = Group(body, "Mount");
+            mount.localPosition = new Vector3(0f, PoleH, 0f);
+            var figure = Group(mount, "Figure");
+            var black = Mat("ModelT_Black", new Color(0.05f, 0.05f, 0.06f), null, false, 0.75f);
+            var brass = Mat("Revolver_Brass", new Color(0.9f, 0.7f, 0.3f), null, false, 0.7f);
+            var leather = Mat("ModelT_Leather", new Color(0.35f, 0.18f, 0.1f), null, false, 0.4f);
+            var tire = Mat("ModelT_Tire", new Color(0.12f, 0.11f, 0.1f));
+            var spokeWood = Mat("ModelT_Spoke", new Color(0.7f, 0.5f, 0.28f));
+            var glass = Mat("ModelT_Glass", new Color(0.7f, 0.85f, 0.95f), new Color(0.1f, 0.15f, 0.2f), false, 0.9f);
+            var lampGlow = Mat("ModelT_Lamp", new Color(1f, 0.9f, 0.6f), new Color(1.5f, 1.2f, 0.6f));
+            // 車台・ボンネット・ラジエーター
+            Prim(PrimitiveType.Cube, "Chassis", figure, new Vector3(0f, 0.3f, 0f), new Vector3(1.0f, 0.12f, 2.6f), black);
+            Prim(PrimitiveType.Cube, "Hood", figure, new Vector3(0f, 0.55f, 0.85f), new Vector3(0.75f, 0.42f, 0.9f), black);
+            Prim(PrimitiveType.Cube, "Radiator", figure, new Vector3(0f, 0.58f, 1.32f), new Vector3(0.7f, 0.55f, 0.08f), brass, false);
+            Prim(PrimitiveType.Cube, "RadiatorGrill", figure, new Vector3(0f, 0.56f, 1.365f), new Vector3(0.52f, 0.4f, 0.01f), black, false);
+            // 客席 (後ろが高い箱) と座席
+            Prim(PrimitiveType.Cube, "Tub", figure, new Vector3(0f, 0.62f, -0.45f), new Vector3(1.05f, 0.55f, 1.4f), black);
+            Prim(PrimitiveType.Cube, "Seat", figure, new Vector3(0f, 0.85f, -0.55f), new Vector3(0.95f, 0.12f, 0.9f), leather, false);
+            Prim(PrimitiveType.Cube, "SeatBack", figure, new Vector3(0f, 1.1f, -1.05f), new Vector3(0.95f, 0.5f, 0.12f), leather, false);
+            // 窓ガラス・幌の屋根と柱
+            var shield = Prim(PrimitiveType.Cube, "Windshield", figure, new Vector3(0f, 1.12f, 0.32f), new Vector3(0.95f, 0.5f, 0.02f), glass, false);
+            shield.transform.localRotation = Quaternion.Euler(-8f, 0f, 0f);
+            Prim(PrimitiveType.Cube, "Top", figure, new Vector3(0f, 1.75f, -0.4f), new Vector3(1.1f, 0.05f, 1.6f), black, false);
+            foreach (float x in new[] { -0.5f, 0.5f })
+                foreach (float z in new[] { 0.3f, -1.1f })
+                    Prim(PrimitiveType.Cylinder, "TopPost", figure, new Vector3(x, 1.3f, z), new Vector3(0.04f, 0.45f, 0.04f), black, false);
+            // 泥よけとステップ
+            foreach (float s in new[] { -1f, 1f })
+            {
+                Prim(PrimitiveType.Cube, "RunningBoard", figure, new Vector3(s * 0.62f, 0.3f, 0.05f), new Vector3(0.22f, 0.04f, 1.3f), black, false);
+                foreach (float z in new[] { 0.95f, -0.85f })
+                {
+                    var fender = Prim(PrimitiveType.Cube, "Fender", figure, new Vector3(s * 0.62f, 0.48f, z), new Vector3(0.26f, 0.04f, 0.75f), black, false);
+                    fender.transform.localRotation = Quaternion.Euler(z > 0f ? -18f : 18f, 0f, 0f);
+                    ModelTWheel(figure, new Vector3(s * 0.62f, 0.12f, z), tire, spokeWood, brass);
+                }
+                Prim(PrimitiveType.Cylinder, "Headlamp", figure, new Vector3(s * 0.42f, 0.78f, 1.25f), new Vector3(0.16f, 0.06f, 0.16f), brass, false).transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+                Prim(PrimitiveType.Sphere, "HeadlampGlass", figure, new Vector3(s * 0.42f, 0.78f, 1.31f), new Vector3(0.12f, 0.12f, 0.04f), lampGlow, false);
+            }
+            // ハンドルと運転手
+            var wheel = Group(figure, "SteeringWheel");
+            wheel.localPosition = new Vector3(-0.22f, 1.05f, 0.05f);
+            wheel.localRotation = Quaternion.Euler(-55f, 0f, 0f);
+            RingSegments(wheel, "Steer", 0.14f, 10, 0.025f, black);
+            Rider(figure, new Vector3(-0.22f, 0.9f, -0.45f), index % 2 == 1, index + 2);
+
+            // 点数の札は屋根の上に高く掲げる
+            Prim(PrimitiveType.Cylinder, "SignPost", body, new Vector3(0f, PoleH + 2.15f, -0.4f), new Vector3(0.05f, 0.25f, 0.05f), poleMat, false);
+            var labels = new List<TextMesh> { PointSign(body, new Vector3(0f, PoleH + 2.75f, -0.4f), 0.8f) };
+
+            var target = mount.gameObject.AddComponent<Target>();
+            target.kind = TargetKind.Rider;
+            target.manualControl = true;
+            target.visual = figure;
+            target.SetAvailable(false);
+
+            var rider = root.gameObject.AddComponent<WesternRider>();
+            rider.displayName = "MODEL T";
+            rider.body = body;
+            rider.hitTarget = target;
+            rider.pointLabels = labels.ToArray();
+            rider.groundY = DesertY;
+            rider.pointChoices = new[] { 500, 800 };
+            rider.speed = 4.2f;                 // 馬より速く、列車を追い越したり置いていかれたり
+            rider.distance = new Vector2(7f, 11f);
+            rider.gallopHeight = 0.05f;          // でこぼこ道で小刻みに跳ねる
+            rider.gallopSpeed = 16f;
+            rider.routeChoices = new[] { WesternRider.Route.Overtake, WesternRider.Route.FallBehind, WesternRider.Route.Approach };
+            return rider;
+        }
+
+        // 木のスポークの細い車輪 (黒いタイヤ・真ちゅうのハブ)。横を向けて置く
+        void ModelTWheel(Transform parent, Vector3 pos, Material tire, Material spoke, Material hub)
+        {
+            var w = Group(parent, "Wheel");
+            w.localPosition = pos;
+            w.localRotation = Quaternion.Euler(0f, 90f, 0f); // 輪の面が車の横を向く
+            RingSegments(w, "Tire", 0.3f, 14, 0.06f, tire);
+            for (int k = 0; k < 6; k++)
+            {
+                var sp = Prim(PrimitiveType.Cube, "Spoke", w, Vector3.zero, new Vector3(0.025f, 0.58f, 0.025f), spoke, false);
+                sp.transform.localRotation = Quaternion.Euler(0f, 0f, k * 30f);
+            }
+            Prim(PrimitiveType.Cylinder, "Hub", w, Vector3.zero, new Vector3(0.09f, 0.03f, 0.09f), hub, false).transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
         }
 
         // 点数の札 (棒に付いていて、いつもプレイヤーの方を向く)

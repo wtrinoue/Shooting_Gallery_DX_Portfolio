@@ -64,6 +64,7 @@ namespace ShootingGallery
         public event System.Action Arrived, Left;
 
         float startTime, nextLaunchTime;
+        readonly System.Collections.Generic.List<WesternRider> free = new System.Collections.Generic.List<WesternRider>(); // 空いている的 (使い回す)
         bool lastLeft;
         Coroutine anim;
         bool onTrain;
@@ -115,7 +116,7 @@ namespace ShootingGallery
             nextLaunchTime = Time.time + Random.Range(launchInterval.x, launchInterval.y);
 
             int running = 0;
-            var free = new System.Collections.Generic.List<WesternRider>();
+            free.Clear();
             foreach (var r in riders)
             {
                 if (r.IsRunning) running++;

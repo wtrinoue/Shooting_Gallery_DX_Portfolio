@@ -60,6 +60,7 @@ namespace ShootingGallery
             CaptureRestPos();
             CaptureScale();
             if (moveRoutine != null) StopCoroutine(moveRoutine);
+            HideChute();
             moveRoutine = null;
             worldScaling = false;
             enableTargetsOnArrive = false;
@@ -76,6 +77,7 @@ namespace ShootingGallery
             CaptureRestPos();
             CaptureScale();
             SetTargetsAvailable(false);
+            HideChute();
             transform.localScale = restScale;
             transform.localPosition = restPos + Vector3.down * hiddenDepth;
             gameObject.SetActive(false);
@@ -85,6 +87,7 @@ namespace ShootingGallery
         public void PlaceAt(Vector3 localPos, Quaternion localRot)
         {
             if (moveRoutine != null) StopCoroutine(moveRoutine);
+            HideChute();
             moveRoutine = null;
             CaptureScale();
             transform.localScale = restScale;
@@ -118,6 +121,7 @@ namespace ShootingGallery
             enableTargetsOnArrive = false;
             SetTargetsAvailable(false);
             if (moveRoutine != null) StopCoroutine(moveRoutine);
+            HideChute();
             worldScaling = false;
             transform.localScale = restScale;
             buryTilt = RandomTilt();
@@ -130,6 +134,7 @@ namespace ShootingGallery
             CaptureRestPos();
             CaptureScale();
             if (moveRoutine != null) StopCoroutine(moveRoutine);
+            HideChute();
             worldScaling = false;
             transform.localScale = restScale;
             buryTilt = RandomTilt();
@@ -190,6 +195,166 @@ namespace ShootingGallery
             }
         }
 
+        // ---- 空中ステージ: 床が消えた空中から、ばらばらに落ちていく / 帰りはパラシュートで真上から降りてくる ----
+
+        /// <summary>
+        /// 空中ステージ: 床がなくなった空中から、ばらばらの向きに回りながら落ちていく (少し跳ね上がってから、プレイヤーから離れる向きへ流れて落ちる)。
+        /// delay 秒待ってから始める (屋台ごとにずらす)。落ちきったら隠す (いつもの隠れた姿勢に戻しておく)
+        /// </summary>
+        public void FallAway(float duration, float delay)
+        {
+            if (!gameObject.activeInHierarchy) return;
+            CaptureRestPos();
+            CaptureScale();
+            enableTargetsOnArrive = false;
+            SetTargetsAvailable(false);
+            if (moveRoutine != null) StopCoroutine(moveRoutine);
+            HideChute();
+            worldScaling = false;
+            transform.localScale = restScale;
+            moveRoutine = StartCoroutine(FallRoutine(duration, delay));
+        }
+
+        IEnumerator FallRoutine(float duration, float delay)
+        {
+            if (delay > 0f) yield return new WaitForSeconds(delay);
+            Vector3 start = transform.localPosition;
+            Quaternion startRot = transform.localRotation;
+            // プレイヤー (親の原点) から離れる向きへ、横にもずれながら。最初は少し跳ね上がる
+            Vector3 away = new Vector3(start.x, 0f, start.z);
+            away = away.sqrMagnitude > 0.01f ? away.normalized : Random.insideUnitSphere;
+            away.y = 0f;
+            Vector3 side = Vector3.Cross(Vector3.up, away);
+            Vector3 vel = away * Random.Range(1.5f, 3.5f) + side * Random.Range(-1.5f, 1.5f) + Vector3.up * Random.Range(0.8f, 2.2f);
+            Vector3 spinAxis = (Random.onUnitSphere + away * 0.5f).normalized;
+            float spin = Random.Range(45f, 120f) * (Random.value < 0.5f ? -1f : 1f);
+            const float Gravity = 7f; // 本当より少しゆっくり (落ちていく様子が見えるように)
+            for (float t = 0f; t < duration; t += Time.deltaTime)
+            {
+                transform.localPosition = start + vel * t + Vector3.down * (0.5f * Gravity * t * t);
+                transform.localRotation = Quaternion.AngleAxis(spin * t, spinAxis) * startRot;
+                yield return null;
+            }
+            moveRoutine = null;
+            transform.localRotation = restRot;
+            transform.localPosition = restPos + Vector3.down * hiddenDepth;
+            gameObject.SetActive(false);
+        }
+
+        Transform parachute;   // パラシュート (GameManager が見本を渡して、始める前に作っておく)
+        Vector3 chuteScale;
+
+        // 降りてくる途中でほかの動きに切り替わった時は、パラシュートをしまう
+        void HideChute()
+        {
+            if (parachute == null || !parachute.gameObject.activeSelf) return;
+            parachute.gameObject.SetActive(false);
+            parachute.localScale = chuteScale;
+            parachute.localRotation = Quaternion.identity;
+        }
+
+        /// <summary>パラシュートを用意しておく (見本を複製して、屋台の屋根の上に隠しておく)。遊んでいる最中に作らないように、始める前に呼ぶ</summary>
+        public void PrepareParachute(GameObject template)
+        {
+            if (parachute != null || template == null) return;
+            CaptureRestPos();
+            // 屋台の屋根の高さと幅 (見た目の大きさ) を、部品のメッシュから測って (隠れていても測れるように)、屋根の上に載せる
+            float top = 3f, width = 3f;
+            bool any = false;
+            Vector3 min = Vector3.zero, max = Vector3.zero;
+            var toLocal = transform.worldToLocalMatrix;
+            foreach (var mf in GetComponentsInChildren<MeshFilter>(true))
+            {
+                if (mf.sharedMesh == null) continue;
+                var m = toLocal * mf.transform.localToWorldMatrix;
+                var bb = mf.sharedMesh.bounds;
+                for (int c = 0; c < 8; c++)
+                {
+                    var p = m.MultiplyPoint3x4(bb.center + Vector3.Scale(bb.extents, new Vector3((c & 1) == 0 ? -1 : 1, (c & 2) == 0 ? -1 : 1, (c & 4) == 0 ? -1 : 1)));
+                    if (!any) { min = max = p; any = true; }
+                    else { min = Vector3.Min(min, p); max = Vector3.Max(max, p); }
+                }
+            }
+            if (any)
+            {
+                top = Mathf.Max(1f, max.y);
+                width = Mathf.Clamp(Mathf.Max(max.x - min.x, max.z - min.z), 1.5f, 6f);
+            }
+            var go = Instantiate(template, transform);
+            go.name = "Parachute";
+            parachute = go.transform;
+            parachute.localPosition = Vector3.up * top;
+            parachute.localRotation = Quaternion.identity;
+            chuteScale = template.transform.localScale * (width / 3f);
+            parachute.localScale = chuteScale;
+            go.SetActive(false);
+        }
+
+        /// <summary>
+        /// 空中ステージの帰り: 止まる場所の真上 height (m) から、パラシュートでまっすぐ降りてくる (ゆらゆら揺れながら、着く前にゆっくりになる)。
+        /// 着いたらパラシュートがしぼんで消え、enableTargets なら的を出す。delay 秒待ってから始める
+        /// </summary>
+        public void ParachuteIn(float duration, float delay, float height, bool enableTargets)
+        {
+            CaptureRestPos();
+            CaptureScale();
+            if (moveRoutine != null) StopCoroutine(moveRoutine);
+            HideChute();
+            worldScaling = false;
+            transform.localScale = restScale;
+            gameObject.SetActive(true);
+            SetTargetsAvailable(false);
+            enableTargetsOnArrive = enableTargets;
+            transform.localPosition = restPos + Vector3.up * height;
+            transform.localRotation = restRot;
+            moveRoutine = StartCoroutine(ParachuteRoutine(duration, delay, height));
+        }
+
+        IEnumerator ParachuteRoutine(float duration, float delay, float height)
+        {
+            if (parachute != null)
+            {
+                parachute.gameObject.SetActive(true);
+                parachute.localScale = chuteScale;
+                parachute.localRotation = Quaternion.identity;
+            }
+            if (delay > 0f) yield return new WaitForSeconds(delay);
+            float seed = Random.value * 10f;
+            for (float t = 0f; t < 1f; t += Time.deltaTime / duration)
+            {
+                float e = 1f - (1f - t) * (1f - t); // 着く前にゆっくりになる
+                float sway = (1f - t) * 5f;          // ゆらゆら (着くころには止まる)
+                float w = Time.time * 1.6f + seed;
+                transform.localPosition = restPos + Vector3.up * (height * (1f - e));
+                transform.localRotation = restRot * Quaternion.Euler(Mathf.Sin(w) * sway, 0f, Mathf.Sin(w * 0.8f + 1f) * sway);
+                if (parachute != null) parachute.localRotation = Quaternion.Euler(Mathf.Sin(w + 0.6f) * sway * 0.6f, 0f, Mathf.Sin(w * 0.8f + 1.6f) * sway * 0.6f);
+                yield return null;
+            }
+            transform.localPosition = restPos;
+            transform.localRotation = restRot;
+            if (enableTargetsOnArrive)
+            {
+                enableTargetsOnArrive = false;
+                SetTargetsAvailable(true);
+            }
+            moveRoutine = null;
+            // パラシュートがしぼんで横へ倒れ、消える
+            if (parachute != null)
+            {
+                float lean = Random.value < 0.5f ? -1f : 1f;
+                for (float t = 0f; t < 1f; t += Time.deltaTime / 0.7f)
+                {
+                    if (parachute == null) yield break;
+                    parachute.localScale = new Vector3(chuteScale.x * (1f + 0.15f * t), chuteScale.y * Mathf.Max(0.05f, 1f - t), chuteScale.z * (1f + 0.15f * t));
+                    parachute.localRotation = Quaternion.Euler(0f, 0f, lean * 70f * t * t);
+                    yield return null;
+                }
+                parachute.gameObject.SetActive(false);
+                parachute.localScale = chuteScale;
+                parachute.localRotation = Quaternion.identity;
+            }
+        }
+
         public void Sink(float duration)
         {
             if (!gameObject.activeInHierarchy) return;
@@ -228,6 +393,7 @@ namespace ShootingGallery
             enableTargetsOnArrive = false;
             SetTargetsAvailable(false);
             if (moveRoutine != null) StopCoroutine(moveRoutine);
+            HideChute();
             moveRoutine = StartCoroutine(Squash(1f, 0f, duration, () =>
             {
                 transform.localScale = restScale;
@@ -242,6 +408,7 @@ namespace ShootingGallery
             CaptureRestPos();
             CaptureScale();
             if (moveRoutine != null) StopCoroutine(moveRoutine);
+            HideChute();
             moveRoutine = null;
             gameObject.SetActive(true);
             transform.localPosition = restPos;
@@ -281,6 +448,7 @@ namespace ShootingGallery
             CaptureRestPos();
             CaptureScale();
             if (moveRoutine != null) StopCoroutine(moveRoutine);
+            HideChute();
             moveRoutine = null;
             worldScaling = true;
             if (growing)
@@ -333,6 +501,7 @@ namespace ShootingGallery
         void Move(Vector3 toPos, Quaternion toRot, float duration, System.Action onDone)
         {
             if (moveRoutine != null) StopCoroutine(moveRoutine);
+            HideChute();
             CaptureScale();
             transform.localScale = restScale; // 入れ替えの途中で止められても元の大きさに戻す
             worldScaling = false;

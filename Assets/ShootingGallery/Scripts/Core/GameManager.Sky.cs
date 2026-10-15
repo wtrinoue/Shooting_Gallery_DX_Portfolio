@@ -18,36 +18,43 @@ namespace ShootingGallery
             if (ChallengeActive || DeluxeActive || (bonusStage != null && bonusStage.IsBusy)) return false;
             var stall = target.GetComponentInParent<Stall>();
             if (stall == null || !stall.IsSettled) return false;
-            return timeLeft > lifetime + skyBattle.duration + skyBattle.riseTime + 2f;
+            return timeLeft > lifetime + skyBattle.duration + parachuteTime + 2f; // 帰りのパラシュートが降りきるまで
         }
 
-        /// <summary>プロペラの的を撃った: 出ている屋台を全部沈め、地面を落として足元にプロペラ機を出し、気球や敵機を飛ばす。yaw = 撃った的の向き (機首をこちらへ)</summary>
+        /// <summary>
+        /// プロペラの的を撃った: 床とハッチがその場できれいさっぱり消えて一面の空になり、出ている屋台はばらばらに回りながら下の地上へ落ちていく。
+        /// 足元にはプロペラ機がせり上がり、気球や敵機が飛ぶ。yaw = 撃った的の向き (機首をこちらへ)
+        /// </summary>
         void StartSky(float yaw)
         {
             if (DebugClearFor(() => StartSky(yaw))) return;
             if (skyBattle == null || ChallengeActive || DeluxeActive || (bonusStage != null && bonusStage.IsBusy)) return;
-            HideHatch(); // 床下のハッチはすぐに小さくなって消える
+            HideHatch(true); // 床下のハッチも床といっしょに、その場で消す
             skyStalls.Clear();
             skyStalls.Add(mainStall);
             if (IsFever) skyStalls.AddRange(activeFeverStalls);
-            foreach (var s in skyStalls) s.Sink(stallMoveDuration);
+            for (int i = 0; i < skyStalls.Count; i++)
+                skyStalls[i].FallAway(skyFallTime, i == 0 ? 0.1f : Random.Range(0.05f, 0.5f)); // 屋台ごとに少しずつずらして、ばらばらに
 
-            skyBattle.dropDelay = StallsAwayTime; // 屋台が沈みきってから地面が落ちる
+            skyBattle.dropDelay = 0.3f; // 床が消えたら、すぐに足元へプロペラ機がせり上がってくる
             skyBattle.Begin(yaw); // 機首を撃った的の方へ
-            player.GiveWeapon(WeaponType.MachineGun, skyBattle.duration + skyBattle.riseTime); // 空中ステージの間はずっとマシンガン
-            StartCoroutine(WhileActiveAfter(StallsAwayTime, () => SkyActive, () => FadeAmbience(skyFogColor, skyAmbient, skySkyColor))); // 屋台が沈みきってから、夜から昼の青空へ
+            player.GiveWeapon(WeaponType.AirMachineGun, skyBattle.duration + skyBattle.riseTime); // 空中ステージの間はずっと機関銃 (昔の飛行機の水冷式。性能はマシンガンと同じ)
+            FadeAmbience(skyFogColor, skyAmbient, skySkyColor, 0.4f); // 床が消えると同時に、夜から昼の青空へ
             Sfx.Play("stageup");
             ShowMessage("SKY BATTLE!!\nSHOOT DOWN THE BALLOONS & PLANES!", 3f, new Color(0.55f, 0.85f, 1f));
         }
 
-        /// <summary>空中ステージの時間切れ: 地面を戻して翼を沈め、沈めた屋台を元の場所に戻す (地面が戻ってから)</summary>
+        /// <summary>空中ステージの時間切れ: 足元から床とハッチが戻って翼が沈み、屋台は元の場所の真上からパラシュートでまっすぐ降りてくる</summary>
         void EndSky()
         {
             if (!SkyActive) return;
             int downed = skyBattle.Downed;
             skyBattle.End();
-            if (player.Weapon == WeaponType.MachineGun) player.ResetWeapon();
-            StartCoroutine(RiseStallsAfter(new List<Stall>(skyStalls), skyBattle.riseTime + 0.1f));
+            if (player.Weapon == WeaponType.AirMachineGun) player.ResetWeapon();
+            bool playing = State == GameState.Playing;
+            StartCoroutine(RiseStallsAfter(new List<Stall>(skyStalls), skyBattle.groundGrowTime,
+                (s, i) => s.ParachuteIn(parachuteTime, i == 0 ? 0f : Random.Range(0.1f, 0.7f), parachuteHeight, playing),
+                parachuteTime + 0.8f + 0.7f));
             skyStalls.Clear();
             FadeAmbience(normalFogColor, normalAmbient, normalSkyColor); // 夜に戻す
             if (State == GameState.Playing)

@@ -27,7 +27,7 @@ namespace ShootingGallery
         static bool IsModeKind(TargetKind kind) =>
             kind == TargetKind.Sniper || kind == TargetKind.MachineGunChallenge || kind == TargetKind.Deluxe ||
             kind == TargetKind.Naval || kind == TargetKind.Sky || kind == TargetKind.Ninja || kind == TargetKind.Kaiju ||
-            kind == TargetKind.Casino || kind == TargetKind.Western || kind == TargetKind.Space || kind == TargetKind.Ghost || kind == TargetKind.Mine || kind == TargetKind.Festival || kind == TargetKind.Submarine || kind == TargetKind.Music;
+            kind == TargetKind.Casino || kind == TargetKind.Western || kind == TargetKind.Space || kind == TargetKind.Ghost || kind == TargetKind.Mine || kind == TargetKind.Festival || kind == TargetKind.Submarine || kind == TargetKind.Music || kind == TargetKind.Museum;
 
         /// <summary>モードの的を撃った: すぐに始める (同時に撃った2番目以降は取り消す)</summary>
         void RequestMode(Target target)
@@ -77,7 +77,7 @@ namespace ShootingGallery
             if (SniperActive) { EndSniper(false, null); wait = Mathf.Max(wait, stallMoveDuration); }
             if (MachineGunChallengeActive) { EndMachineGunChallenge(); wait = Mathf.Max(wait, machineGunChallenge.SwapBackDelay + stallMoveDuration); }
             if (NavalActive) { EndNaval(); wait = Mathf.Max(wait, navalBattle.riseTime * 0.6f + stallMoveDuration); }
-            if (SkyActive) { EndSky(); wait = Mathf.Max(wait, skyBattle.riseTime + 0.1f + stallMoveDuration); }
+            if (SkyActive) { EndSky(); wait = Mathf.Max(wait, skyBattle.groundGrowTime + parachuteTime + 1.5f); } // パラシュートで降りきるまで
             if (NinjaActive) { EndNinja(); wait = Mathf.Max(wait, ninjaDojo.CloseTime + 0.1f + stallMoveDuration); }
             if (KaijuActive) { EndKaiju(); wait = Mathf.Max(wait, kaijuCity.CloseTime + KaijuGrowTime + 0.3f); }
             if (CasinoActive) { EndCasino(); wait = Mathf.Max(wait, casinoHall.CloseTime + 0.1f + stallMoveDuration); }
@@ -87,6 +87,7 @@ namespace ShootingGallery
             if (MineActive) { EndMine(); wait = Mathf.Max(wait, mineCave.CloseTime + 0.1f); }
             if (SubmarineActive) { EndSubmarine(); wait = Mathf.Max(wait, submarineDive.CloseTime + 0.1f); }
             if (MusicActive) { EndMusic(); wait = Mathf.Max(wait, concertHall.CloseTime + 0.1f); }
+            if (MuseumActive) { EndMuseum(); wait = Mathf.Max(wait, artMuseum.CloseTime + 0.1f); }
             if (FestivalActive) { EndFestival(); wait = Mathf.Max(wait, festivalStage.CloseTime + stallMoveDuration); }
             if (DeluxeActive && !keepDeluxe) { EndDeluxe(); wait = Mathf.Max(wait, swapOutTime + swapInTime); }
             if (bonusStage != null && bonusStage.IsBusy) { bonusStage.Close(); wait = Mathf.Max(wait, bonusStage.slideTime + 0.3f); }
@@ -114,6 +115,7 @@ namespace ShootingGallery
                 case TargetKind.Mine: StartMine(); break;
                 case TargetKind.Submarine: StartSubmarine(); break;
                 case TargetKind.Music: StartMusic(p.yaw); break;
+                case TargetKind.Museum: StartMuseum(p.yaw); break;
                 case TargetKind.Festival: StartFestival(p.yaw); break;
             }
         }

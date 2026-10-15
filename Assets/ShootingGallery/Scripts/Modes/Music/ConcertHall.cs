@@ -102,7 +102,7 @@ namespace ShootingGallery
         [Range(0f, 1f), Tooltip("演奏の始まりの BGM の音量。introFadeSeconds かけて musicVolume (いつもの音量) へ下げていく")]
         public float introVolume = 0.9f;
         public float introFadeSeconds = 10f;
-        [Tooltip("BGM の曲 (空ならコードで作った曲を流す)。今は 魔王魂 の曲 (Assets/Source/music_stage.mp3。クレジットは Resources/THIRD_PARTY_NOTICES.txt)")]
+        [Tooltip("BGM の曲 (空ならコードで作った曲を流す)。今は 魔王魂 の曲 (Assets/Source/music_stage/music_stage.mp3。クレジットは Resources/THIRD_PARTY_NOTICES.txt)")]
         public AudioClip bgmClip;
         [Tooltip("BGM の曲のテンポ (BPM) / 最初の拍の時刻 (秒)。楽器の揺れ・指揮棒をこの拍に合わせる")]
         public float bgmTempo = 133.975f;    // 曲の打点を1拍ずつ測って求めた値 (前は bgmBpm 135 で、70秒で 0.4秒ずれていた)。名前を変えて、シーンに保存された前の値を使わない
@@ -132,12 +132,17 @@ namespace ShootingGallery
 
         // ---- 拍の表 (人が曲に合わせて打った拍。time,bar,beat の CSV) ----
         // 表があれば、曲の時刻 ⇔ 拍を表から求める (テンポが途中で変わっても、指揮棒・楽器が曲についていく)。なければ bgmTempo / bgmBeatOffset の一定のテンポ。
-        // 拍の番号 = (小節 - 1) × 4 + (拍 - 1)。0 が 1小節目の1拍目。打った時刻は人の手の揺れ (±数十 ms) があるので、前後 beatMapSmooth 拍ずつの直線に当てはめてならす。
-        // 表の外は、表の最初 / 最後の8拍のテンポのまま延ばす
-        [Tooltip("曲に合わせて人が打った拍の表 (time,bar,beat の CSV。Assets/Source/music_stage.csv)。空なら bgmTempo の一定のテンポ")]
+        // 拍の番号 = (小節 - 1) × 4 + (拍 - 1)。0 が 1小節目の1拍目。指揮棒の「たたく」瞬間は表の時刻そのもの (ならさない。
+        // 前は前後3拍の直線でならしていたが、テンポが急に変わる所 (17小節の頭・33小節からのゆっくりになる所) で拍が前後にずれた)。
+        // 表の外は、表全体のふつうの1拍の長さ (間隔のまん中の値) で延ばす (最後のゆっくりになる所のテンポで延ばさない)
+        [Tooltip("曲に合わせて人が打った拍の表 (time,bar,beat の CSV。Assets/Source/music_stage/music_stage.csv)。空なら bgmTempo の一定のテンポ")]
         public TextAsset beatMap;
-        [Tooltip("拍の表の、手の揺れをならす幅 (前後何拍ずつ)")]
-        public int beatMapSmooth = 3;
+        [Tooltip("拍の表の、手の揺れをならす幅 (前後何拍ずつ。0 = 表の時刻そのまま)")]
+        public int beatMapSmoothBeats = 0; // 名前を変えて、シーンに保存された前の値 (beatMapSmooth 3) を使わない
+        [Tooltip("指揮棒・楽器の拍を、音よりこの秒数だけ遅らせる (+) / 早める (-)。ヘッドセットや Bluetooth の音の遅れを合わせる時に")]
+        public float beatOffsetSeconds = 0f;
+        [Tooltip("確認用: 演奏中、拍の表の拍ごとにカチッと鳴らす (拍の表と曲が合っているか、指揮棒と音が合っているかを耳で確かめる)")]
+        public bool clickOnBeats = false;
         float[] mapBeats, mapTimes;
         float mapHeadSlope, mapTailSlope; // 表の外を延ばすテンポ (秒 / 拍)
         bool HasBeatMap => UseBgmClip && mapTimes != null && mapTimes.Length >= 2;
@@ -164,17 +169,19 @@ namespace ShootingGallery
             int n = beats.Count;
             mapBeats = beats.ToArray();
             mapTimes = new float[n];
-            // 手の揺れをならす: 前後 beatMapSmooth 拍の (拍, 時刻) に直線を当てはめ、その拍の所の時刻にする
+            // 表の時刻をそのまま使う (beatMapSmoothBeats > 0 の時だけ、前後その拍数の直線に当てはめてならす)
             for (int k = 0; k < n; k++)
             {
-                FitLine(beats, times, Mathf.Max(0, k - beatMapSmooth), Mathf.Min(n - 1, k + beatMapSmooth), out float a, out float s);
+                if (beatMapSmoothBeats <= 0) { mapTimes[k] = times[k]; continue; }
+                FitLine(beats, times, Mathf.Max(0, k - beatMapSmoothBeats), Mathf.Min(n - 1, k + beatMapSmoothBeats), out float a, out float s);
                 mapTimes[k] = a + s * mapBeats[k];
             }
             for (int k = 1; k < n; k++) mapTimes[k] = Mathf.Max(mapTimes[k], mapTimes[k - 1] + 0.05f); // 念のため、時刻は必ず進む
-            FitLine(beats, times, 0, Mathf.Min(n - 1, 7), out _, out mapHeadSlope);
-            FitLine(beats, times, Mathf.Max(0, n - 8), n - 1, out _, out mapTailSlope);
-            mapHeadSlope = Mathf.Max(0.1f, mapHeadSlope);
-            mapTailSlope = Mathf.Max(0.1f, mapTailSlope);
+            // 表の外を延ばすテンポ: 1拍あたりの間隔のまん中の値 (ゆっくりになる所や、打ちそこねた所に引っぱられない)
+            var gaps = new List<float>(n - 1);
+            for (int k = 1; k < n; k++) gaps.Add((mapTimes[k] - mapTimes[k - 1]) / Mathf.Max(1f, mapBeats[k] - mapBeats[k - 1]));
+            gaps.Sort();
+            mapHeadSlope = mapTailSlope = Mathf.Max(0.1f, gaps[gaps.Count / 2]);
         }
 
         // i0〜i1 の点に直線 time = a + s × beat を当てはめる (最小二乗)
@@ -323,6 +330,8 @@ namespace ShootingGallery
             startTime = Time.time;
             Hits = 0;
             transform.localRotation = Quaternion.Euler(0f, yaw, 0f);
+            // 曲を今のうちに読み込んでおく (演奏が始まる時には、すぐ正確な位置から流せるように)
+            if (bgmClip != null && bgmClip.loadState == AudioDataLoadState.Unloaded) bgmClip.LoadAudioData();
             Play(Enter());
         }
 
@@ -484,6 +493,12 @@ namespace ShootingGallery
             var clip = CurrentBgm;
             if (!bgm || music == null || clip == null || music.isPlaying) return;
             if (music.clip == clip && Time.realtimeSinceStartup - songPlayCalled < 2f) return; // WebGL では Play() の直後しばらく isPlaying が false のことがある。毎フレーム頭から流し直さない
+            // 音の時計で予約する時は、曲が読み込み終わってから (読み込み中に予約すると、時計だけ進んで音が遅れて出る)。それまでは拍をテンポどおりに進めて待つ
+            if (UseDspClock && clip.loadState != AudioDataLoadState.Loaded)
+            {
+                if (clip.loadState == AudioDataLoadState.Unloaded) clip.LoadAudioData();
+                if (clip.loadState != AudioDataLoadState.Failed) return;
+            }
             music.clip = clip;
             music.volume = CurrentMusicVolume();
             float loopBeats = LoopBeats(clip);
@@ -494,7 +509,13 @@ namespace ShootingGallery
             // WebGL (unityroom) では曲の読み込みが終わるまで frequency / samples が 0 のことがあるので、その時は秒で指定する
             if (clip.frequency > 0 && clip.samples > 0) music.timeSamples = Mathf.Clamp(Mathf.RoundToInt(time * clip.frequency), 0, clip.samples - 1);
             else music.time = Mathf.Max(0f, time);
-            music.Play();
+            if (UseDspClock)
+            {
+                // 少し先の、音の時計の決まった時刻に鳴り始めるよう予約する (その時刻から、曲の time 秒目が鳴る)
+                songDspStart = AudioSettings.dspTime + DspLead;
+                music.PlayScheduled(songDspStart);
+            }
+            else music.Play();
             songStartPos = time;
             songLastPos = -1f;
             songHeard = false;
@@ -508,8 +529,30 @@ namespace ShootingGallery
         // 再生位置が取れない間 (フレームの合間など) は、最後に合わせた所から実時間で進める。いつまでも進まない時 (1.5秒) は実時間だけで進める
         float songStartPos, songLastPos, songSyncPos, songSyncAt, songPlayCalled = -10f;
         bool songHeard;
-        float SongTime(AudioClip clip)
+        double songDspStart;
+        const double DspLead = 0.05; // 予約してから鳴り始めるまで (読み込み済みの曲をほどき始める時間。指揮棒の「1」とほとんど同時)
+
+        // パソコン・Quest (エディターも): 音の時計 (AudioSettings.dspTime) で曲の位置を数える。
+        // 実際に鳴っている音と同じ時計なので、フレームの揺れや、再生位置の読み取りのずれがない。WebGL は音の時計が当てにならないので、前のやり方
+#if UNITY_WEBGL && !UNITY_EDITOR
+        static bool UseDspClock => false;
+#else
+        static bool UseDspClock => true;
+#endif
+
+        // 曲の今の位置 (秒。拍の表と同じ、曲の頭からの時刻)。beatOffsetSeconds の分だけ、拍を音より遅らせる / 早める
+        float SongTime(AudioClip clip) => SongPosition(clip) - beatOffsetSeconds;
+
+        float SongPosition(AudioClip clip)
         {
+            if (UseDspClock)
+            {
+                double since = AudioSettings.dspTime - songDspStart;
+                if (since < 0.0) return songStartPos; // まだ鳴り始めていない: 流し始める所で待つ
+                float pos = songStartPos + (float)since;
+                float length = clip.length;
+                return length > 0.1f && IsFinite(length) ? Mathf.Repeat(pos, length) : pos;
+            }
             float now = Time.realtimeSinceStartup;
             float a = clip.frequency > 0 ? music.timeSamples / (float)clip.frequency : music.time;
             bool valid = IsFinite(a) && a >= 0f;
@@ -899,7 +942,11 @@ namespace ShootingGallery
                 if (raw < lastRawBeat - 1f) loops++; // 曲の頭に戻った
                 lastRawBeat = raw;
                 float beat = loops * LoopBeats(music.clip) + raw;
-                if (IsFinite(beat)) Beat = idleBeatClock = beat; // 念のため、おかしな値の時は前の拍のまま
+                if (IsFinite(beat))
+                {
+                    if (clickOnBeats && playing && Mathf.Floor(beat) > Mathf.Floor(Beat)) Sfx.Play("click", 1.5f); // 確認用: 拍ごとにカチッ
+                    Beat = idleBeatClock = beat; // 念のため、おかしな値の時は前の拍のまま
+                }
             }
             else
             {

@@ -7,10 +7,10 @@ namespace ShootingGallery
     /// <summary>1丁の銃。見た目の切り替えと発射(レイキャスト)を担当する。</summary>
     public class GunController : MonoBehaviour
     {
-        [Tooltip("WeaponType の順 (Handgun, MachineGun, Shotgun, Bomb, Sniper, Bazooka, Shuriken, FireBall, Dart, Revolver, Missile, Flashlight, Pickaxe, RingToss, CorkGun, Poi, Coin, Torpedo, Trumpet) に並べた見た目")]
-        public GameObject[] models = new GameObject[19];
+        [Tooltip("WeaponType の順 (Handgun, MachineGun, Shotgun, Bomb, Sniper, Bazooka, Shuriken, FireBall, Dart, Revolver, Missile, Flashlight, Pickaxe, RingToss, CorkGun, Poi, Coin, Torpedo, Trumpet, Imagination, AirMachineGun) に並べた見た目")]
+        public GameObject[] models = new GameObject[21];
         [Tooltip("各見た目の銃口。最初の子をマズルフラッシュとして使う")]
-        public Transform[] muzzles = new Transform[19];
+        public Transform[] muzzles = new Transform[21];
         [Header("夏祭り (輪投げの輪 / コルク / ポイ / お金)")]
         [Tooltip("輪の形 (ドーナツ形のメッシュ) と、投げるたびに選ぶ輪の色")]
         public Mesh ringMesh;
@@ -59,6 +59,11 @@ namespace ShootingGallery
         public Material noteLineMaterial;
         public Material noteHoleMaterial;
         public Material noteSparkMaterial;
+        [Header("美術館 (イマジネーション)")]
+        [Tooltip("放つ玉の色 (撃つたびにランダム) / 後ろに引く虹色の光の筋 / 当たった時にはじける光")]
+        public Material[] imaginationMaterials;
+        public Material imaginationTrailMaterial;
+        public Material imaginationSparkMaterial;
         [Header("Sniper / Shuriken")]
         [Tooltip("レーザーポインター (銃口から当たる所まで伸びる)。スナイパーは赤、手裏剣は白")]
         public LineRenderer laser;
@@ -524,6 +529,8 @@ namespace ShootingGallery
                     reloadRoutine = isActiveAndEnabled ? StartCoroutine(Reload(def.fireInterval * 0.9f, missileLoaded)) : null;
                 }
             }
+            else if (current == WeaponType.Imagination)
+                ImaginationShot.Spawn(origin, muzzle.forward, def.projectileSpeed, imaginationMaterials, imaginationTrailMaterial, imaginationSparkMaterial);
             else if (current == WeaponType.Trumpet)
                 NoteShot.Spawn(origin, muzzle.forward, def.projectileSpeed, noteShotMaterials, noteLineMaterial, noteHoleMaterial, noteSparkMaterial);
             else if (current == WeaponType.Torpedo)
