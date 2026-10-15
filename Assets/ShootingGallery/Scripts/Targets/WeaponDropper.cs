@@ -158,7 +158,9 @@ namespace ShootingGallery
         public StageOffer submarineOffer = new StageOffer { kind = TargetKind.Submarine, startDelay = new Vector2(30f, 60f) };
         public StageOffer festivalOffer = new StageOffer { kind = TargetKind.Festival, startDelay = new Vector2(30f, 60f) };
         public StageOffer musicOffer = new StageOffer { kind = TargetKind.Music, startDelay = new Vector2(30f, 60f) };
-        StageOffer[] Offers => new[] { kaijuOffer, casinoOffer, westernOffer, spaceOffer, ghostOffer, mineOffer, festivalOffer, submarineOffer, musicOffer };
+        public StageOffer museumOffer = new StageOffer { kind = TargetKind.Museum, startDelay = new Vector2(30f, 60f) };
+        StageOffer[] offers; // (呼ぶたびに配列を作らないように、初めの1回だけ作る)
+        StageOffer[] Offers => offers ??= new[] { kaijuOffer, casinoOffer, westernOffer, spaceOffer, ghostOffer, mineOffer, festivalOffer, submarineOffer, musicOffer, museumOffer };
         bool wasStageMode;
 
         bool wasPlaying, wasFever, challengeWasBusy;
@@ -211,7 +213,7 @@ namespace ShootingGallery
             bool sky = gm != null && gm.SkyActive;
             bool ninja = gm != null && gm.NinjaActive;
             // 海戦・空中ステージ・忍者モードが続けて来すぎないように、どれかが終わったら全部の間隔をあける
-            bool stageMode = naval || sky || ninja || (gm != null && (gm.KaijuActive || gm.CasinoActive || gm.WesternActive || gm.SpaceActive || gm.GhostActive || gm.MineActive || gm.FestivalActive || gm.SubmarineActive || gm.MusicActive));
+            bool stageMode = naval || sky || ninja || (gm != null && (gm.KaijuActive || gm.CasinoActive || gm.WesternActive || gm.SpaceActive || gm.GhostActive || gm.MineActive || gm.FestivalActive || gm.SubmarineActive || gm.MusicActive || gm.MuseumActive));
             if (wasStageMode && !stageMode)
             {
                 foreach (var o in Offers) o.next = Mathf.Max(o.next, Time.time + Random.Range(o.gap.x, o.gap.y));
@@ -377,7 +379,7 @@ namespace ShootingGallery
         [Range(0f, 1f)] public float stageMainStallWeight = 0.3f;
 
         static readonly TargetKind[] StageKinds =
-            { TargetKind.Naval, TargetKind.Sky, TargetKind.Ninja, TargetKind.Kaiju, TargetKind.Casino, TargetKind.Western, TargetKind.Space, TargetKind.Ghost, TargetKind.Mine, TargetKind.Festival, TargetKind.Submarine, TargetKind.Music };
+            { TargetKind.Naval, TargetKind.Sky, TargetKind.Ninja, TargetKind.Kaiju, TargetKind.Casino, TargetKind.Western, TargetKind.Space, TargetKind.Ghost, TargetKind.Mine, TargetKind.Festival, TargetKind.Submarine, TargetKind.Music, TargetKind.Museum };
 
         /// <summary>出す予定の、別の世界へ飛ぶモードの的 1つ分</summary>
         class StageSpawn
@@ -595,7 +597,7 @@ namespace ShootingGallery
             }
 
             // 青い玉: フィーバー中だけ、メイン以外の屋台に1つまで (撃たれずに消えたらまた出る)
-            if (gm.IsFever && !gm.NavalActive && !gm.SkyActive && !gm.NinjaActive && !gm.KaijuActive && !gm.CasinoActive && !gm.WesternActive && !gm.SpaceActive && !gm.GhostActive && !gm.MineActive && !gm.FestivalActive && !gm.SubmarineActive && !gm.MusicActive && !gm.BonusUsedThisFever && (gm.bonusStage == null || !gm.bonusStage.IsBusy)
+            if (gm.IsFever && !gm.NavalActive && !gm.SkyActive && !gm.NinjaActive && !gm.KaijuActive && !gm.CasinoActive && !gm.WesternActive && !gm.SpaceActive && !gm.GhostActive && !gm.MineActive && !gm.FestivalActive && !gm.SubmarineActive && !gm.MusicActive && !gm.MuseumActive && !gm.BonusUsedThisFever && (gm.bonusStage == null || !gm.bonusStage.IsBusy)
                 && Count(TargetKind.BlueOrb) == 0 && Time.time >= nextBlueOrbTime
                 && target.GetComponentInParent<Stall>() != gm.mainStall && Random.value < blueOrbChance)
             {
@@ -659,6 +661,7 @@ namespace ShootingGallery
             TargetKind.Mine => mineOffer.lifetime,
             TargetKind.Submarine => submarineOffer.lifetime,
             TargetKind.Music => musicOffer.lifetime,
+            TargetKind.Museum => museumOffer.lifetime,
             TargetKind.Festival => festivalOffer.lifetime,
             _ => lifetime
         };
@@ -679,6 +682,7 @@ namespace ShootingGallery
                 TargetKind.Mine => gm.CanOfferMine(target, lifetime),
                 TargetKind.Submarine => gm.CanOfferSubmarine(target, lifetime),
                 TargetKind.Music => gm.CanOfferMusic(target, lifetime),
+                TargetKind.Museum => gm.CanOfferMuseum(target, lifetime),
                 TargetKind.Festival => gm.CanOfferFestival(target, lifetime),
                 _ => false
             };
@@ -702,6 +706,8 @@ namespace ShootingGallery
             TargetKind.Mine => mineOffer.points,
             TargetKind.Submarine => submarineOffer.points,
             TargetKind.Music => musicOffer.points,
+            TargetKind.Museum => museumOffer.points,
+            TargetKind.GateBack => 0, // WORLD GATE の BACK (点数なし)
             TargetKind.Festival => festivalOffer.points,
             _ => weaponPoints
         };

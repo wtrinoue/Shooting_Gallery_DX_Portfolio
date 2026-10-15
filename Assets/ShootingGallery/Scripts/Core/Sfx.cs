@@ -42,6 +42,12 @@ namespace ShootingGallery
         public AudioClip corkPop, splash, rip, taiko;
         [Header("潜水艦モード (魚雷を撃つボシュッという音 / ゴボゴボと水に沈む泡の音 / 潜水艦が閉じるガチャン)")]
         public AudioClip torpedo, bubbles, hatchClose;
+        [Tooltip("美術館モード: 筆でキャンバスを塗る音 (サッ、サッ…) / ノミをトンカチでたたいて石を彫る音 (カン、カン、ぱらぱら)")]
+        public AudioClip paintBrush, chisel;
+        [Tooltip("美術館モード: 白い閃光に包まれる音 (シュワーッと高まって、パァーンと光る)")]
+        public AudioClip flash;
+        [Tooltip("美術館モード: 粘土がぺちゃっとくっついて、むにゅっと押しつけられる音")]
+        public AudioClip clay;
         [Header("同時に鳴る音の抑え方")]
         [Tooltip("同じ種類の音がこの秒数以内に続いたら、2回目以降は鳴らさない (複数の的を同時に倒した時など)")]
         public float sameSoundGap = 0.07f;
@@ -117,6 +123,10 @@ namespace ShootingGallery
                 () => { if (torpedo == null) torpedo = TorpedoLaunch(); }, // ボシュッ…ぶくぶく
                 () => { if (bubbles == null) bubbles = Bubbles("Bubbles", 2.2f, 38f, 11); }, // ゴボゴボゴボ…
                 () => { if (hatchClose == null) hatchClose = HatchClose(); }, // ガチャン (金属のふたが閉まる)
+                () => { if (paintBrush == null) paintBrush = BrushStrokes(); }, // サッ、サッ、サッ、サッ (筆で塗る)
+                () => { if (chisel == null) chisel = Chisel(); }, // カン、カン、ぱらぱら (石を彫る)
+                () => { if (flash == null) flash = Flash(); }, // シュワーッ…パァーン (白い閃光)
+                () => { if (clay == null) clay = Clay(); }, // ぺちゃっ…むにゅ (粘土)
 
                 () => { if (blackout == null) blackout = Blackout(); }, // バツン
                 () => { if (drumroll == null) drumroll = Drumroll(3.6f); }, // ドロロロロ…
@@ -161,7 +171,8 @@ namespace ShootingGallery
             if (instance == null) return;
             // トランペット: 撃っても音は鳴らさない (ユーザーの指定)
             if (type == WeaponType.Trumpet) return;
-            var clip = type == WeaponType.MachineGun ? instance.machineGunShot
+            if (type == WeaponType.Imagination) return; // イマジネーション: 撃っても音は鳴らさない (当たった時に、塗る / 彫る音が鳴る)
+            var clip = type == WeaponType.MachineGun || type == WeaponType.AirMachineGun ? instance.machineGunShot
                      : type == WeaponType.Shotgun ? instance.shotgunShot
                      : type == WeaponType.Bomb || type == WeaponType.Bazooka || type == WeaponType.FireBall ? instance.bombShot
                      : type == WeaponType.Missile ? instance.missile
@@ -214,7 +225,7 @@ namespace ShootingGallery
             }
             // 的に当たった音 (hit / bonus) は同じ種類として扱い、同時に倒しても1回だけ鳴らす
             string group = name == "bonus" ? "hit" : name;
-            bool limited = name == "hit" || name == "bonus" || name == "explosion" || name == "pickup" || name == "ufo" || name == "thunk" || name == "fusuma" || name == "coin" || name == "reelstop" || name == "ghostpop" || name == "splash" || name == "rip";
+            bool limited = name == "hit" || name == "bonus" || name == "explosion" || name == "pickup" || name == "ufo" || name == "thunk" || name == "fusuma" || name == "coin" || name == "reelstop" || name == "ghostpop" || name == "splash" || name == "rip" || name == "paint" || name == "chisel" || name == "clay";
             AudioClip clip = name switch
             {
                 "stageup" => instance.stageUp,
@@ -258,6 +269,10 @@ namespace ShootingGallery
                 "torpedo" => instance.torpedo,
                 "bubbles" => instance.bubbles,
                 "hatchclose" => instance.hatchClose,
+                "paint" => instance.paintBrush,
+                "chisel" => instance.chisel,
+                "flash" => instance.flash,
+                "clay" => instance.clay,
                 "warpin" => instance.warpIn,
                 "warpout" => instance.warpOut,
                 _ => null
@@ -943,6 +958,140 @@ namespace ShootingGallery
                 data[i] = Mathf.Clamp((Mathf.Sin(p1) * 0.3f + Mathf.Sin(p2) * 0.2f + Mathf.Sin(p3) * 0.12f) * env * (0.8f + 0.2f * Mathf.Sin(t * 14f)), -1f, 1f);
             }
             var clip = AudioClip.Create(name, n, 1, Rate, false);
+            clip.SetData(data, 0);
+            return clip;
+        }
+
+        /// <summary>
+        /// 筆でキャンバスを塗る音: 毛先が布目をこする、ざらっとした「サッ」を4回 (左右に行き来して塗る筆の動きと同じ 0.9 秒)。
+        /// 低い音と高い音を取り除いた、こすれるノイズに、布目に引っかかる細かい粒を混ぜる
+        /// </summary>
+        static AudioClip BrushStrokes()
+        {
+            const float Length = 0.9f;
+            const int Strokes = 4;
+            int n = (int)(Rate * Length);
+            var data = new float[n];
+            float lp = 0f, slow = 0f;
+            for (int i = 0; i < n; i++)
+            {
+                float t = i / (float)Rate;
+                float u = t / Length * Strokes;
+                float k = u - Mathf.Floor(u);
+                float env = Mathf.Sin(Mathf.PI * Mathf.Pow(k, 0.6f));
+                env *= env * (1f - 0.35f * (t / Length)) * (Mathf.FloorToInt(u) % 2 == 0 ? 1f : 0.85f);
+                lp = Mathf.Lerp(lp, Random.Range(-1f, 1f), 0.55f);
+                slow = Mathf.Lerp(slow, lp, 0.06f);
+                float scratch = lp - slow; // こすれる「シャー」の帯だけ残す
+                float grain = Random.value < 0.015f ? Random.Range(-1f, 1f) : 0f; // 布目に引っかかる粒
+                data[i] = Mathf.Clamp((scratch * 1.1f + grain * 0.35f) * env * 0.7f, -1f, 1f);
+            }
+            var clip = AudioClip.Create("PaintBrush", n, 1, Rate, false);
+            clip.SetData(data, 0);
+            return clip;
+        }
+
+        /// <summary>
+        /// 白い閃光の音: 明るいノイズが「シュワーッ」と高まり (光に包まれるまで)、光った瞬間に高い和音が「パァーン」と広がって、
+        /// きらきらした余韻を残して消える
+        /// </summary>
+        static AudioClip Flash()
+        {
+            const float Length = 1.8f, Peak = 0.38f;
+            int n = (int)(Rate * Length);
+            var data = new float[n];
+            float lp = 0f, slow = 0f;
+            float[] chord = { 1046.5f, 1318.5f, 1568f, 2093f, 2637f }; // ド・ミ・ソの明るい和音 (高め)
+            for (int i = 0; i < n; i++)
+            {
+                float t = i / (float)Rate;
+                // シュワーッ: 高い音だけ残したノイズが、光るまでに大きくなり、光ったあとすぐ引く
+                lp = Mathf.Lerp(lp, Random.Range(-1f, 1f), 0.7f);
+                slow = Mathf.Lerp(slow, lp, 0.1f);
+                float swell = t < Peak ? Mathf.Pow(t / Peak, 2.2f) : Mathf.Exp(-(t - Peak) * 9f);
+                float v = (lp - slow) * swell * 0.45f;
+                // パァーン: 光った瞬間から広がる和音 (少し揺らして、きらきらさせる)
+                if (t >= Peak)
+                {
+                    float d = t - Peak;
+                    float env = Mathf.Clamp01(d * 60f) * Mathf.Exp(-d * 2.6f);
+                    float sum = 0f;
+                    for (int k = 0; k < chord.Length; k++)
+                        sum += Mathf.Sin(2f * Mathf.PI * chord[k] * d * (1f + 0.003f * Mathf.Sin(d * (9f + k * 3f)))) * (1f - k * 0.12f);
+                    v += sum / chord.Length * env * 0.6f;
+                    // きらきら: 細かい高い粒
+                    if (Random.value < 0.002f * Mathf.Exp(-d * 2f)) v += Random.Range(-0.4f, 0.4f);
+                }
+                data[i] = Mathf.Clamp(v, -1f, 1f);
+            }
+            var clip = AudioClip.Create("Flash", n, 1, Rate, false);
+            clip.SetData(data, 0);
+            return clip;
+        }
+
+        /// <summary>
+        /// 粘土の音: 飛んできた粘土が「ぺちゃっ」とくっつき (低くこもった短い音と、湿った音)、そのあと「むにゅ」と押しつけられる
+        /// </summary>
+        static AudioClip Clay()
+        {
+            const float Length = 0.6f, Hit = 0.16f, Press = 0.3f;
+            int n = (int)(Rate * Length);
+            var data = new float[n];
+            float lp = 0f, phase = 0f;
+            for (int i = 0; i < n; i++)
+            {
+                float t = i / (float)Rate;
+                lp = Mathf.Lerp(lp, Random.Range(-1f, 1f), 0.18f); // こもった、湿った音
+                float v = 0f;
+                if (t >= Hit)
+                {
+                    float d = t - Hit;
+                    float f = Mathf.Lerp(190f, 70f, Mathf.Clamp01(d / 0.08f)); // ぺちゃっ: 高めから低く落ちる
+                    phase += 2f * Mathf.PI * f / Rate;
+                    v += Mathf.Sin(phase) * Mathf.Exp(-d * 30f) * 0.7f;
+                    v += lp * Mathf.Exp(-d * 45f) * 1.1f;
+                }
+                if (t >= Press) // むにゅ: ゆっくりふくらんでしぼむ、くぐもった音
+                {
+                    float d = t - Press;
+                    float env = Mathf.Sin(Mathf.PI * Mathf.Clamp01(d / 0.25f));
+                    v += lp * env * 0.35f * (1f + 0.5f * Mathf.Sin(d * 90f));
+                }
+                data[i] = Mathf.Clamp(v, -1f, 1f);
+            }
+            var clip = AudioClip.Create("Clay", n, 1, Rate, false);
+            clip.SetData(data, 0);
+            return clip;
+        }
+
+        /// <summary>
+        /// 石を彫る音: トンカチでノミをたたく金属の「カン」を2回 (トンカチを振り下ろす時と同じ間) と、それぞれのあとに石のかけらが落ちる「ぱらぱら」
+        /// </summary>
+        static AudioClip Chisel()
+        {
+            const float Length = 0.75f;
+            float[] strikes = { 0.13f, 0.41f };
+            int n = (int)(Rate * Length);
+            var data = new float[n];
+            float lp = 0f;
+            for (int i = 0; i < n; i++)
+            {
+                float t = i / (float)Rate;
+                float v = 0f;
+                lp = Mathf.Lerp(lp, Random.Range(-1f, 1f), 0.3f);
+                for (int s = 0; s < strikes.Length; s++)
+                {
+                    float d = t - strikes[s];
+                    if (d < 0f) continue;
+                    float ring = Mathf.Exp(-d * 34f);
+                    float w = 2f * Mathf.PI * d;
+                    v += (Mathf.Sin(w * 2380f) * 0.45f + Mathf.Sin(w * 3810f) * 0.3f + Mathf.Sin(w * 5230f) * 0.18f) * ring * 0.55f; // カン (金属)
+                    v += lp * Mathf.Exp(-d * 70f) * 0.6f;                                                                       // コッ (石に当たる)
+                    if (d > 0.03f && Random.value < 0.004f * Mathf.Exp(-(d - 0.03f) * 9f) * 8f) v += Random.Range(-0.5f, 0.5f);   // ぱらぱら (かけら)
+                }
+                data[i] = Mathf.Clamp(v, -1f, 1f);
+            }
+            var clip = AudioClip.Create("Chisel", n, 1, Rate, false);
             clip.SetData(data, 0);
             return clip;
         }

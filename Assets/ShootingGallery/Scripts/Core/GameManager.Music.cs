@@ -29,6 +29,7 @@ namespace ShootingGallery
             stageStalls.Clear();
             SetShownStallTargets(false);
             SetFlatFloor(true); // カーテンが閉まる間に、ハッチが縮んで穴がふさがる
+            ResetView(true); // 浮き床で持ち上げる前に、いつもの視点にそろえる (そこからの高さで動かすので)
             concertHall.Begin(yaw, player.transform);
             player.GiveWeapon(WeaponType.Trumpet, concertHall.duration);
             Sfx.Play("stageup");

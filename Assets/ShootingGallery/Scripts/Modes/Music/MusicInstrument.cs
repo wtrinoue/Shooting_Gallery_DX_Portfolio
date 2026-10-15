@@ -144,7 +144,7 @@ namespace ShootingGallery
         {
             IsSolo = on;
             if (soloMark != null) soloMark.SetActive(on);
-            if (soloLabel != null) soloLabel.text = MusicNote.PointsText(points);
+            if (soloLabel != null) soloLabel.text = PointText.Of(points);
             if (hitBox != null) hitBox.localScale = on ? hitBase * soloHitScale : hitBase;
             if (!on) SetNeon(-1);
         }

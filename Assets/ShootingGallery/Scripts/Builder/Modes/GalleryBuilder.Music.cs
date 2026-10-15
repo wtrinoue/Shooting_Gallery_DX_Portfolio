@@ -24,8 +24,8 @@ namespace ShootingGallery
         const float ConcertCurtainH = 2.35f;
         const float HallShiftZ = 0.8f;     // ホールを奥へずらす量 (プレイヤーは客席の前の方、ステージの手前の縁から約 5.4m)
         const float ConcertLiftH = 4.2f;   // プレイヤーを浮き床ごと持ち上げる高さ (ステージ全体を見下ろせて、奥のソロの楽器も狙いやすいように)
-        public const string ConcertBgmPath = "Assets/Source/music_stage.mp3"; // 音楽モードの BGM (魔王魂。約134BPM・ヘ短調)
-        public const string ConcertBeatMapPath = "Assets/Source/music_stage.csv"; // その曲の拍の表 (time,bar,beat。ユーザーが手で打った)
+        public const string ConcertBgmPath = "Assets/Source/music_stage/music_stage.mp3"; // 音楽モードの BGM (魔王魂。約134BPM・ヘ短調)
+        public const string ConcertBeatMapPath = "Assets/Source/music_stage/music_stage.csv"; // その曲の拍の表 (time,bar,beat。ユーザーが手で打った)
         const float PlatformR = 1.4f;      // 浮き床の半径 (足元だけの小さな台)
         const float RailH = 0.35f;         // 浮き床の手すりの高さ (足元を囲むだけの低い手すり)
 

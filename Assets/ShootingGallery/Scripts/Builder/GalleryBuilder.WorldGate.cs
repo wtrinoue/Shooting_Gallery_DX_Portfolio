@@ -10,10 +10,10 @@ namespace ShootingGallery
     public partial class GalleryBuilder
     {
         const int GateStallCount = 6;   // WORLD GATE の輪の屋台の数
-        const int GateSlots = 2;        // 1軒の段に並べる的の数 (入りきらない世界の的は次の屋台へ)
+        const int GateSlots = 3;        // 1軒の段に並べる的の数 (入りきらない世界の的は次の屋台へ。6軒 × 3 = 18 個まで)
         const float GateTierH = 1.3f;   // 段の高さ (普通の屋台の中段と同じ)
         const float GateTierZ = 0.15f;
-        const float GateSlotStep = 1.1f; // 的の間隔
+        const float GateSlotStep = 0.95f; // 的の間隔
 
         /// <summary>タイトルの WORLD GATE の的 (START の横)。文字は WORLD が上、GATE が下</summary>
         Target BuildWorldGateTarget(Transform stall)
@@ -33,6 +33,25 @@ namespace ShootingGallery
             MakeText(pivot, "LabelWorld", "WORLD", new Vector3(0f, 0.685f, -0.03f), 0.1f, ink);
             MakeText(pivot, "LabelGate", "GATE", new Vector3(0f, 0.555f, -0.03f), 0.1f, ink);
             return target;
+        }
+
+        /// <summary>WORLD GATE の BACK の的 (撃つとタイトルに戻る): 紫の板に、左向きの白い矢印と「BACK」の文字</summary>
+        GameObject GateBackLook(Transform look)
+        {
+            var c = new Vector3(0f, TargetDiscY, 0f);
+            Prim(PrimitiveType.Cube, "Plate", look, c, new Vector3(0.32f, 0.32f, 0.04f), Mat("Target_GateBack", new Color(0.3f, 0.12f, 0.5f), new Color(0.08f, 0.03f, 0.15f)));
+            Prim(PrimitiveType.Cube, "PlateTrim", look, c + Vector3.forward * 0.005f, new Vector3(0.35f, 0.35f, 0.03f), Mat("Gold", new Color(1f, 0.78f, 0.25f), new Color(0.3f, 0.2f, 0f)), false);
+            // 左向きの矢印 (軸と、斜めの2本の矢じり)
+            var white = Mat("Target_White", Color.white);
+            var arrow = c + new Vector3(0f, 0.035f, -0.025f);
+            Prim(PrimitiveType.Cube, "ArrowShaft", look, arrow + new Vector3(0.02f, 0f, 0f), new Vector3(0.17f, 0.035f, 0.01f), white, false);
+            foreach (float a in new[] { 45f, -45f })
+            {
+                var head = Prim(PrimitiveType.Cube, "ArrowHead", look, arrow + new Vector3(-0.045f, a > 0f ? 0.03f : -0.03f, 0f), new Vector3(0.1f, 0.035f, 0.01f), white, false);
+                head.transform.localRotation = Quaternion.Euler(0f, 0f, a);
+            }
+            MakeText(look, "Label", "BACK", c + new Vector3(0f, -0.075f, -0.025f), 0.05f, new Color(1f, 0.88f, 0.55f));
+            return look.gameObject;
         }
 
         /// <summary>WORLD GATE の6軒の屋台 (1段だけ・的を横一列に GateSlots 個。隠した状態で作る。並べ方は GameManager がフィーバーの輪と同じように決める)</summary>

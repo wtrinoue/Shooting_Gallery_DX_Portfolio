@@ -158,7 +158,8 @@ namespace ShootingGallery
                 int have = 0;
                 foreach (var n in pool) if (n.kind == pair.Key) have++;
                 for (; have < prewarmPerKind; have++) Clone(pair.Value);
-                var c = new MeasureStock.Candidate { kind = pair.Key, length = pair.Value.length32, width = NoteWidth(pair.Value) };
+                var c = new MeasureStock.Candidate { kind = pair.Key, length = pair.Value.length32, width = NoteWidth(pair.Value),
+                                                    isRest = pair.Value.hasFixedHeight && pair.Value.role == MusicNote.MeasureRole.Timed }; // 決まった高さに置く長さのある記号 = 休符
                 switch (pair.Value.role)
                 {
                     case MusicNote.MeasureRole.WholeRest: wholeRest = c; break;

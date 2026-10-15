@@ -195,9 +195,11 @@ namespace ShootingGallery
 
         // 引っ込めた屋台を戻す。待っている間に豪華版 ⇔ 普通版に入れ替わっていたら、その場所の今の版を戻す
         // (待っている間にフィーバーが終わったフィーバー屋台の場所は戻さない)
-        IEnumerator RiseStallsAfter(List<Stall> stalls, float delay)
+        // bring = 屋台の戻し方 (なければ地下からせり上がる)。bringTime = 戻しきるまでの秒数 (なければ stallMoveDuration)
+        IEnumerator RiseStallsAfter(List<Stall> stalls, float delay, System.Action<Stall, int> bring = null, float bringTime = -1f)
         {
-            HoldStallsFor(delay + stallMoveDuration + 0.1f); // 戻りきるまで、屋台の拡張・入れ替えを待たせる
+            if (bringTime < 0f) bringTime = stallMoveDuration;
+            HoldStallsFor(delay + bringTime + 0.1f); // 戻りきるまで、屋台の拡張・入れ替えを待たせる
             yield return new WaitForSeconds(delay);
             ShowHatch(); // 別の世界から戻った: 床下のハッチも戻す (隠していなければ何もしない)
             var done = new List<Stall>();
@@ -206,7 +208,8 @@ namespace ShootingGallery
                 var cur = CurrentStallAt(s);
                 if (cur == null || done.Contains(cur) || IsChallengeSpot(cur)) continue; // 念のため: もう次のチャレンジで引っ込めている場所
                 done.Add(cur);
-                cur.Rise(stallMoveDuration, State == GameState.Playing);
+                if (bring != null) bring(cur, done.Count - 1);
+                else cur.Rise(stallMoveDuration, State == GameState.Playing);
             }
         }
 

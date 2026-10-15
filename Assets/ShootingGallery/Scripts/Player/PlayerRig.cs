@@ -83,8 +83,81 @@ namespace ShootingGallery
         public bool DualWield => dualWield;
         public WeaponType Weapon => weapon;
 
+        // ---- 視点を整える (どのモードでもない時の、いつもの立ち位置・大きさ・視点の高さに戻す) ----
+        // 発掘・潜水艦・音楽モードはプレイヤーを上下に動かす。不具合や途中で止められたことで元に戻りきらなくても、
+        // GameManager がここを呼んで、いつもの視点に戻す (ResetView)
+
+        Vector3 homePos, homeScale = Vector3.one;
+        Quaternion homeRot = Quaternion.identity;
+        Coroutine viewRoutine;
+        bool floorOrigin; // VR の床の高さを、床を基準に取れているか (ApplyMode で決まる)
+
+        /// <summary>視点を元に戻している途中か</summary>
+        public bool IsRestoringView => viewRoutine != null;
+
+        // 今の視点の高さの元 (CameraOffset)。VR は身長に合わせた値 (まだなら床の取り方に応じた値)、VR でなければ 0
+        Vector3 HomeCameraOffset()
+        {
+            if (xrModeApplied != true) return Vector3.zero;
+            return Vector3.up * (calibratedOffsetY ?? (floorOrigin ? 0f : standingEyeHeight) + xrHeightBoost);
+        }
+
+        /// <summary>いつもの立ち位置・大きさ・視点の高さからずれているか (1cm より大きくずれていたら true)</summary>
+        public bool IsViewOff
+        {
+            get
+            {
+                if ((transform.localPosition - homePos).sqrMagnitude > 0.0001f) return true;
+                if ((transform.localScale - homeScale).sqrMagnitude > 0.0001f) return true;
+                if (Quaternion.Angle(transform.localRotation, homeRot) > 0.5f) return true;
+                if (cameraOffset != null && xrModeApplied == true && calibratedOffsetY.HasValue
+                    && Mathf.Abs(cameraOffset.localPosition.y - calibratedOffsetY.Value) > 0.01f) return true;
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// 視点を整える: いつもの立ち位置・大きさ・向きと、視点の高さ (CameraOffset) に戻す。
+        /// instant でなければ 0.4 秒かけてなめらかに戻す (急に動くと VR で酔うので)
+        /// </summary>
+        public void ResetView(bool instant)
+        {
+            if (viewRoutine != null) StopCoroutine(viewRoutine);
+            viewRoutine = null;
+            if (instant || !isActiveAndEnabled)
+            {
+                transform.localPosition = homePos;
+                transform.localScale = homeScale;
+                transform.localRotation = homeRot;
+                if (cameraOffset != null) cameraOffset.localPosition = HomeCameraOffset();
+                return;
+            }
+            viewRoutine = StartCoroutine(ResetViewSmooth(0.4f));
+        }
+
+        System.Collections.IEnumerator ResetViewSmooth(float seconds)
+        {
+            Vector3 fromPos = transform.localPosition, fromScale = transform.localScale;
+            Quaternion fromRot = transform.localRotation;
+            Vector3 fromOffset = cameraOffset != null ? cameraOffset.localPosition : Vector3.zero, toOffset = HomeCameraOffset();
+            for (float t = 0f; t < 1f; t += Time.deltaTime / seconds)
+            {
+                float e = t * t * (3f - 2f * t);
+                transform.localPosition = Vector3.Lerp(fromPos, homePos, e);
+                transform.localScale = Vector3.Lerp(fromScale, homeScale, e);
+                transform.localRotation = Quaternion.Slerp(fromRot, homeRot, e);
+                if (cameraOffset != null) cameraOffset.localPosition = Vector3.Lerp(fromOffset, toOffset, e);
+                yield return null;
+            }
+            viewRoutine = null;
+            ResetView(true);
+        }
+
         void Awake()
         {
+            homePos = transform.localPosition; // ゲームが始まった時の立ち位置・大きさ・向きを「いつもの視点」として覚える
+            homeScale = transform.localScale;
+            homeRot = transform.localRotation;
             if (rightHand != null) rightPose = rightHand.GetComponent<TrackedPoseDriver>();
             if (leftHand != null) leftPose = leftHand.GetComponent<TrackedPoseDriver>();
 
@@ -195,6 +268,7 @@ namespace ShootingGallery
         static Color GaugeColor(WeaponType type) => type switch
         {
             WeaponType.MachineGun => new Color(0.3f, 0.6f, 1f),
+            WeaponType.AirMachineGun => new Color(0.3f, 0.6f, 1f),
             WeaponType.Shotgun => new Color(0.3f, 0.95f, 0.4f),
             WeaponType.Bomb => new Color(1f, 0.6f, 0.15f),
             WeaponType.Sniper => new Color(1f, 0.2f, 0.25f),
@@ -212,6 +286,7 @@ namespace ShootingGallery
             WeaponType.Coin => new Color(1f, 0.85f, 0.25f),
             WeaponType.Torpedo => new Color(0.35f, 0.9f, 1f),
             WeaponType.Trumpet => new Color(1f, 0.82f, 0.3f),
+            WeaponType.Imagination => new Color(0.95f, 0.6f, 1f),
             _ => Color.white
         };
 
@@ -295,6 +370,7 @@ namespace ShootingGallery
             {
                 handCheckAt = Time.unscaledTime + 3f;
                 bool floor = XRBridge.TrySetFloorOrigin();
+                floorOrigin = floor;
                 cameraOffset.localPosition = Vector3.up * (calibratedOffsetY ?? (floor ? 0f : standingEyeHeight) + xrHeightBoost);
             }
             else

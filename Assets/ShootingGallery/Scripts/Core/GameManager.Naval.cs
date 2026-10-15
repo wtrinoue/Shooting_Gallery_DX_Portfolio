@@ -22,21 +22,29 @@ namespace ShootingGallery
             return timeLeft > lifetime + navalBattle.duration + navalBattle.riseTime + 2f;
         }
 
-        /// <summary>錨の的を撃った: 出ている屋台を全部沈め、足元に甲板、まわりに海を出して敵の船を走らせる。yaw = 撃った的の向き (船首をこちらへ)</summary>
+        [Tooltip("海戦モード: 屋台が海に沈む秒数")]
+        public float navalSinkTime = 2.4f;
+
+        /// <summary>
+        /// 錨の的を撃った: 床下のハッチがその場で消え、海面がせり上がって床をきれいに覆い、一面の海になる。出ている屋台は傾きながら海に沈んでいく。
+        /// 沈んだら足元に甲板がせり上がり、敵の船が走り出す。yaw = 撃った的の向き (船首をこちらへ)
+        /// </summary>
         void StartNaval(float yaw)
         {
             if (DebugClearFor(() => StartNaval(yaw))) return;
             if (navalBattle == null || ChallengeActive || DeluxeActive || (bonusStage != null && bonusStage.IsBusy)) return;
-            HideHatch(); // 床下のハッチはすぐに小さくなって消える
+            HideHatch(true); // 床下のハッチは、その場で消す (すぐに海が覆う)
             navalStalls.Clear();
             navalStalls.Add(mainStall);
             if (IsFever) navalStalls.AddRange(activeFeverStalls);
-            foreach (var s in navalStalls) s.Sink(stallMoveDuration);
+            // 海が床を覆ったころから、屋台ごとに少しずらして、ぐらっと傾いて海に沈む (根元に水しぶき)
+            for (int i = 0; i < navalStalls.Count; i++)
+                navalStalls[i].Bury(navalSinkTime, navalBattle.seaRiseTime * 0.6f + (i == 0 ? 0f : Random.Range(0.05f, 0.5f)), navalBattle.splashMaterial);
 
-            navalBattle.dropDelay = StallsAwayTime; // 屋台が沈みきってから甲板と海がせり上がる
+            navalBattle.dropDelay = navalBattle.seaRiseTime * 0.6f + navalSinkTime * 0.75f; // 屋台がだいたい沈んでから甲板がせり上がる
             navalBattle.Begin(yaw); // 船首を撃った的の方へ
-            player.GiveWeapon(WeaponType.Bazooka, navalBattle.duration + navalBattle.riseTime); // 海戦の間はずっとバズーカ
-            StartCoroutine(WhileActiveAfter(StallsAwayTime, () => NavalActive, () => FadeAmbience(navalFogColor, navalAmbient, navalSkyColor))); // 屋台が沈みきってから、夜から昼の青空へ
+            player.GiveWeapon(WeaponType.Bazooka, navalBattle.duration + navalBattle.riseTime); // 海戦の間はずっと大砲 (WeaponType.Bazooka の見た目が大砲)
+            FadeAmbience(navalFogColor, navalAmbient, navalSkyColor, 0.8f); // 海が広がるのといっしょに、夜から昼の青空へ
             Sfx.Play("stageup");
             ShowMessage("SEA BATTLE!!\nSINK THE PIRATE SHIPS!", 3f, new Color(0.4f, 0.8f, 1f));
         }
