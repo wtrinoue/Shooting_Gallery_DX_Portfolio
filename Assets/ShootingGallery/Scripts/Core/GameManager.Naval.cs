@@ -22,10 +22,10 @@ namespace ShootingGallery
             return timeLeft > lifetime + navalBattle.duration + navalBattle.riseTime + 2f;
         }
 
-        /// <summary>錨の的を撃った: 出ている屋台を全部沈め、足元に甲板、まわりに海を出して敵の船を走らせる</summary>
-        void StartNaval()
+        /// <summary>錨の的を撃った: 出ている屋台を全部沈め、足元に甲板、まわりに海を出して敵の船を走らせる。yaw = 撃った的の向き (船首をこちらへ)</summary>
+        void StartNaval(float yaw)
         {
-            if (DebugClearFor(StartNaval)) return;
+            if (DebugClearFor(() => StartNaval(yaw))) return;
             if (navalBattle == null || ChallengeActive || DeluxeActive || (bonusStage != null && bonusStage.IsBusy)) return;
             HideHatch(); // 床下のハッチはすぐに小さくなって消える
             navalStalls.Clear();
@@ -34,7 +34,7 @@ namespace ShootingGallery
             foreach (var s in navalStalls) s.Sink(stallMoveDuration);
 
             navalBattle.dropDelay = StallsAwayTime; // 屋台が沈みきってから甲板と海がせり上がる
-            navalBattle.Begin();
+            navalBattle.Begin(yaw); // 船首を撃った的の方へ
             player.GiveWeapon(WeaponType.Bazooka, navalBattle.duration + navalBattle.riseTime); // 海戦の間はずっとバズーカ
             StartCoroutine(WhileActiveAfter(StallsAwayTime, () => NavalActive, () => FadeAmbience(navalFogColor, navalAmbient, navalSkyColor))); // 屋台が沈みきってから、夜から昼の青空へ
             Sfx.Play("stageup");

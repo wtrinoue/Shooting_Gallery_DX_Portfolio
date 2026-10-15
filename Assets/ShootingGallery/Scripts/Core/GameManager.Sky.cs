@@ -21,10 +21,10 @@ namespace ShootingGallery
             return timeLeft > lifetime + skyBattle.duration + skyBattle.riseTime + 2f;
         }
 
-        /// <summary>プロペラの的を撃った: 出ている屋台を全部沈め、地面を落として足元にプロペラ機を出し、気球や敵機を飛ばす</summary>
-        void StartSky()
+        /// <summary>プロペラの的を撃った: 出ている屋台を全部沈め、地面を落として足元にプロペラ機を出し、気球や敵機を飛ばす。yaw = 撃った的の向き (機首をこちらへ)</summary>
+        void StartSky(float yaw)
         {
-            if (DebugClearFor(StartSky)) return;
+            if (DebugClearFor(() => StartSky(yaw))) return;
             if (skyBattle == null || ChallengeActive || DeluxeActive || (bonusStage != null && bonusStage.IsBusy)) return;
             HideHatch(); // 床下のハッチはすぐに小さくなって消える
             skyStalls.Clear();
@@ -33,7 +33,7 @@ namespace ShootingGallery
             foreach (var s in skyStalls) s.Sink(stallMoveDuration);
 
             skyBattle.dropDelay = StallsAwayTime; // 屋台が沈みきってから地面が落ちる
-            skyBattle.Begin();
+            skyBattle.Begin(yaw); // 機首を撃った的の方へ
             player.GiveWeapon(WeaponType.MachineGun, skyBattle.duration + skyBattle.riseTime); // 空中ステージの間はずっとマシンガン
             StartCoroutine(WhileActiveAfter(StallsAwayTime, () => SkyActive, () => FadeAmbience(skyFogColor, skyAmbient, skySkyColor))); // 屋台が沈みきってから、夜から昼の青空へ
             Sfx.Play("stageup");

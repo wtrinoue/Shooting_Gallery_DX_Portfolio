@@ -72,12 +72,13 @@ namespace ShootingGallery
             SetStageVisible(false);
         }
 
-        /// <summary>空中ステージを始める (少し待ってから地面を落とし、翼をせり上げ、敵を出し始める)</summary>
-        public void Begin()
+        /// <summary>空中ステージを始める (少し待ってから地面を落とし、翼をせり上げ、敵を出し始める)。yawDeg = 自分のプロペラ機の前 (機首) を向ける向き (度。撃った的の方)</summary>
+        public void Begin(float yawDeg)
         {
             if (IsActive) return;
             IsActive = true;
             startTime = Time.time;
+            transform.localRotation = Quaternion.Euler(0f, yawDeg, 0f); // 機首 (と雲の流れ) を撃った的の方へ。翼・雲・敵はみなこの子なので、いっしょに回る (落とす地面は子ではないが、真下へ落とすだけなので向きは関係ない)
             nextLaunchTime = Time.time + dropDelay + riseTime * 0.8f; // 翼がせり上がり終わる頃に1機目
             Downed = 0;
             lastAngle = Random.Range(0f, 360f);

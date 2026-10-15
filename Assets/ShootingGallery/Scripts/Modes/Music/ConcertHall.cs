@@ -44,9 +44,11 @@ namespace ShootingGallery
         [Tooltip("客席を照らす明かり (演奏中はビルダーで決めた明るさの housePlay 倍。1 より大きいとホール全体も明るくなる)")]
         public Light houseLight;
         public float housePlay = 1.6f; // 前は houseDim 0.45 (演奏中は客席を暗くしていた)
-        [Tooltip("ソロの楽器を追いかけるスポットライトと、その光の筋 (光と同じ向きに伸ばす。長さ 1 の円すい)")]
+        [Tooltip("ソロの楽器を照らすスポットライトと、その光の筋 (光と同じ向きに伸ばす。長さ 1 の円すい)。ソロ1つに1台ずつ、その楽器の斜め上前に固定して照らす。ソロの数より少なければ、始める時に1台目を複製して足す")]
         public Light[] followSpots;
         public Transform[] followBeams;
+        [Tooltip("スポットライトを置く所: ソロの楽器から客席の方へ何 m 手前か (高さは天井近く = ビルダーで置いた高さ)")]
+        public float spotFront = 2.5f;
         [Tooltip("演奏中だけ点ける物 (ステージの縁の明かり・光の筋など)")]
         public GameObject[] showWhilePlaying;
         [Tooltip("演奏が始まると同時に、ステージがゆっくり明るくなっていく秒数")]
@@ -58,13 +60,26 @@ namespace ShootingGallery
         [Header("楽器")]
         public MusicInstrument[] instruments;
         [Tooltip("同時にソロを弾く楽器の数 / 1つの楽器がソロを続ける拍の数")]
-        public int soloCount = 2;
+        public int soloSlots = 5; // 名前を変えて、シーンに保存された前の値 (soloCount 2) を使わない
         public float soloBeats = 16f;
         [Tooltip("ソロの楽器を撃ちやすいように当たり判定を消す範囲: ソロの楽器からの距離 (m) / プレイヤーからソロの楽器への視線からの距離 (m)")]
         public float blockRadius = 3f;
         public float sightClearance = 1.2f;
-        [Tooltip("指揮者の譜面台の上で拍子をとる指揮棒")]
+        [Tooltip("指揮台の上で4拍子を振る指揮棒 (指揮者はいない)。先が4拍子の図形 (1 真下 → 2 左 → 3 右 → 4 上) を描き、光の尾を引く")]
         public Transform baton;
+        [Tooltip("指揮棒の大きさ (ビルダーで作った大きさの倍率) / 図形の幅と高さ (m)")]
+        public float batonScale = 1.7f;
+        public Vector2 batonPatternSize = new Vector2(0.62f, 0.72f);
+        [Tooltip("演奏が始まる前に指揮棒を振り上げる秒数 (振り上げきった所から振り下ろすと演奏が始まる)")]
+        public float batonRaiseSeconds = 1.1f;
+        [Tooltip("振り上げたあと、振り下ろして演奏を始めるまで、いったん静かに止まっている秒数 (大事な間)")]
+        public float batonHoldSeconds = 1.5f;
+        [Tooltip("振り下ろす直前に、ポイっと上へ跳ね上げる高さ (m) / 秒数")]
+        public float batonFlickHeight = 0.2f;
+        public float batonFlickSeconds = 0.16f;
+        [Tooltip("カーテンが消えてから、指揮台がスポットライトで照らされるまでの秒数 / 明るくなる秒数")]
+        public float podiumSpotDelay = 0.5f;
+        public float podiumSpotFade = 0.6f;
 
         [Header("五線譜")]
         public MusicStaff[] staffs;
@@ -84,11 +99,14 @@ namespace ShootingGallery
         [Tooltip("演奏中に曲 (BGM) を流すか。流さない時も、楽器の揺れは同じ速さ (曲のテンポ) の拍で動く")]
         public bool bgm = true; // (名前を変えた: 前の playBackgroundMusic = false がシーンに残っていて、BGM が鳴らなかったので)
         [Range(0f, 1f)] public float musicVolume = 0.55f;
+        [Range(0f, 1f), Tooltip("演奏の始まりの BGM の音量。introFadeSeconds かけて musicVolume (いつもの音量) へ下げていく")]
+        public float introVolume = 0.9f;
+        public float introFadeSeconds = 10f;
         [Tooltip("BGM の曲 (空ならコードで作った曲を流す)。今は 魔王魂 の曲 (Assets/Source/music_stage.mp3。クレジットは Resources/THIRD_PARTY_NOTICES.txt)")]
         public AudioClip bgmClip;
         [Tooltip("BGM の曲のテンポ (BPM) / 最初の拍の時刻 (秒)。楽器の揺れ・指揮棒をこの拍に合わせる")]
-        public float bgmBpm = 135f;
-        public float bgmFirstBeat = 0.14f;
+        public float bgmTempo = 133.975f;    // 曲の打点を1拍ずつ測って求めた値 (前は bgmBpm 135 で、70秒で 0.4秒ずれていた)。名前を変えて、シーンに保存された前の値を使わない
+        public float bgmBeatOffset = 0.0067f; // 同じく (前は bgmFirstBeat 0.14)。1.798秒 (bgmSkipSeconds の所) が拍の頭になる
         [Tooltip("BGM の曲を、頭から何秒の所から流し始めるか (曲の初めの音のない所を飛ばす)。拍の数え方もこれに合わせるので、楽器の揺れはずれない。曲が終わって頭に戻る時は 0 秒から")]
         public float bgmSkipSeconds = 1.8f; // 魔王魂の曲は頭から 1.8 秒の所から (ユーザー指定)。名前を変えて、シーンに保存された前の値 (bgmStartAt 1.7 / bgmStartSeconds 1) を使わない
         [Tooltip("BGM の曲の調: 主音 (0 = ド, 2 = レ, 5 = ファ …) と短調かどうか。楽器や音符を撃った時の音を、この調の音階に合わせる")]
@@ -97,11 +115,11 @@ namespace ShootingGallery
 
         bool UseBgmClip => bgmClip != null;
         AudioClip CurrentBgm => UseBgmClip ? bgmClip : ConcertMusic.Loop;
-        float BeatSec => UseBgmClip ? 60f / Mathf.Max(1f, bgmBpm) : ConcertMusic.BeatSeconds;
-        float FirstBeat => UseBgmClip ? bgmFirstBeat : 0f;
-        // 流し始める所 (曲の頭からの秒) と、その所の拍 (演奏はこの拍から数え始める)
-        float StartAt => UseBgmClip ? Mathf.Max(0f, bgmSkipSeconds) : 0f;
-        float StartBeat => StartAt > 0f ? (StartAt - FirstBeat) / BeatSec : 0f;
+        float BeatSec => UseBgmClip ? 60f / Mathf.Max(1f, bgmTempo) : ConcertMusic.BeatSeconds;
+        float FirstBeat => UseBgmClip ? bgmBeatOffset : 0f;
+        // 曲を流し始める拍: bgmSkipSeconds にいちばん近い拍の頭 (指揮棒の「1」をたたく瞬間に音が出て、そのあとも拍とずれないように)。その拍の曲の時刻から流す
+        float StartBeat => UseBgmClip && bgmSkipSeconds > 0f ? Mathf.Max(0f, Mathf.Round((bgmSkipSeconds - FirstBeat) / BeatSec)) : 0f;
+        float StartAt => StartBeat > 0f ? FirstBeat + StartBeat * BeatSec : 0f;
 
         [Header("時間")]
         [Tooltip("音楽モードの長さ (秒。カーテンが閉まり始めてから)")]
@@ -144,7 +162,6 @@ namespace ShootingGallery
         bool playing;
         readonly List<MusicInstrument> soloists = new List<MusicInstrument>();
         readonly Dictionary<MusicInstrument, float> soloUntil = new Dictionary<MusicInstrument, float>();
-        Quaternion batonBase;
 
         // 五線の線と間 (下から 0〜8) の音の高さ: ミ ファ ソ ラ シ ド レ ミ ファ (ト音記号の五線と同じ)
         static readonly int[] SlotMidi = { 64, 65, 67, 69, 71, 72, 74, 76, 77 };
@@ -169,10 +186,9 @@ namespace ShootingGallery
             }
             stageBase = new float[stageLights.Length];
             for (int i = 0; i < stageLights.Length; i++) stageBase[i] = stageLights[i] != null ? stageLights[i].intensity : 0f;
-            followBase = new float[followSpots.Length];
-            for (int i = 0; i < followSpots.Length; i++) followBase[i] = followSpots[i] != null ? followSpots[i].intensity : 0f;
+            PrepareSpots();
             houseBase = houseLight != null ? houseLight.intensity : 0f;
-            if (baton != null) batonBase = baton.localRotation;
+            PrepareBaton();
             foreach (var inst in instruments) if (inst != null) inst.Init(this);
             foreach (var s in staffs) if (s != null) s.Init();
             if (curtain != null) { curtain.Init(); curtain.HideInstant(); }
@@ -208,6 +224,8 @@ namespace ShootingGallery
                 if (music != null) music.Stop();
                 Groove = 0f;
                 SetLights(0f);
+                SetPodiumSpot(0f);
+                LowerBatonNow();
                 SetTargets(false);
                 if (hall != null) hall.SetActive(false);
                 if (curtain != null) curtain.HideInstant();
@@ -240,8 +258,32 @@ namespace ShootingGallery
             yield return curtain.Draw(1f, 0f, curtainOpenSeconds);
             yield return curtain.Vanish(vanishTime);
             Opened?.Invoke();
-            yield return new WaitForSeconds(darkSeconds); // 暗いホールで拍手を聞かせてから
-            // 4. 明るくなり始めると同時に演奏が始まり、ステージ全体が lightRiseSeconds かけてゆっくり明るくなる (ホールの環境光も GameManager が同時に上げる)。
+            // 暗いホールで拍手を聞かせる間に、まず指揮台だけがスポットライトで照らされ、最後に指揮棒を振り上げる
+            float raise = batonRaiseSeconds + batonHoldSeconds;
+            float dark = Mathf.Max(darkSeconds, podiumSpotDelay + podiumSpotFade + raise);
+            yield return new WaitForSeconds(podiumSpotDelay);
+            yield return FadePodiumSpot(1f, podiumSpotFade);
+            yield return new WaitForSeconds(Mathf.Max(0f, dark - podiumSpotDelay - podiumSpotFade - raise));
+            batonHoldBeat = 3.5f; // 4拍目の「と」= 図形のいちばん上まで振り上げる
+            batonTargetW = 1f;
+            yield return new WaitForSeconds(batonRaiseSeconds);
+            yield return new WaitForSeconds(batonHoldSeconds); // 振り上げたまま、いったん静かに落ち着く (大事な間)
+            // ポイっと少し上へ跳ね上げて (息を吸うように)、そこから曲のテンポで真下へ振り下ろす (半拍)
+            for (float t = 0f; t < 1f; t += Time.deltaTime / Mathf.Max(0.02f, batonFlickSeconds))
+            {
+                batonFlick = batonFlickHeight * (1f - (1f - t) * (1f - t)); // すっと上がって、上で止まる
+                yield return null;
+            }
+            batonFlick = batonFlickHeight;
+            for (float t = 0f; t < 1f; t += Time.deltaTime / Mathf.Max(0.05f, BeatSec * 0.5f))
+            {
+                batonHoldBeat = 3.5f + 0.5f * t;
+                batonFlick = batonFlickHeight * (1f - t) * (1f - t); // 跳ね上げた分は振り下ろしの勢いの中で消える
+                yield return null;
+            }
+            batonFlick = 0f;
+            batonHoldBeat = 4f;
+            // 4. 振り下ろした底 (1拍目をたたく瞬間) に演奏が始まり、ステージ全体が lightRiseSeconds かけてゆっくり明るくなる (ホールの環境光も GameManager が同時に上げる)。
             //    楽器の動きも少しずつ活発になり (Update の Groove)、あとはずっと最高潮
             StartPlaying();
             MusicStarted?.Invoke();
@@ -257,19 +299,24 @@ namespace ShootingGallery
         IEnumerator Leave()
         {
             // 1. 演奏が止まって拍手。ステージが暗くなる
+            batonHoldBeat = Beat - StartBeat; // 指揮棒は今の所で止めて、ゆっくり下ろす
             StopPlaying(false);
+            batonTargetW = 0f;
             Sfx.Play("applause", 0.85f);
             float vol = music != null ? music.volume : 0f;
+            float podium = podiumLevel;
             for (float t = 0f; t < 1f; t += Time.deltaTime / 1.2f)
             {
                 if (music != null) music.volume = vol * (1f - t);
                 Groove = 1f - t;
                 SetLights(1f - t);
+                SetPodiumSpot(podium * (1f - t));
                 yield return null;
             }
             if (music != null) music.Stop();
             Groove = 0f;
             SetLights(0f);
+            SetPodiumSpot(0f);
             // 2. カーテンが閉まる。閉まっている間にホールを消して、屋台を戻す
             yield return curtain.Appear(appearTime);
             PlayClip(ConcertMusic.Curtain, curtainVolume);
@@ -299,18 +346,23 @@ namespace ShootingGallery
             idleBeatClock = StartBeat;
             TryStartMusic();
             soloists.Clear();
+            if (spotOwner != null) System.Array.Clear(spotOwner, 0, spotOwner.Length);
             soloUntil.Clear();
-            for (int i = 0; i < soloCount; i++) PickSoloist();
+            for (int i = 0; i < soloSlots; i++) PickSoloist();
             SpawnStaff();
         }
 
         // BGM を流し始める (曲ができていれば)。演奏の途中から始める時は、今の拍の位置から鳴らして、楽器の揺れとずれないようにする
+        // 今の BGM の音量: 演奏の始まりは introVolume、introFadeSeconds かけてなめらかに musicVolume へ下げる
+        float CurrentMusicVolume() =>
+            Mathf.Lerp(introVolume, musicVolume, Mathf.SmoothStep(0f, 1f, (Time.time - playStartTime) / Mathf.Max(0.01f, introFadeSeconds)));
+
         void TryStartMusic()
         {
             var clip = CurrentBgm;
             if (!bgm || music == null || clip == null || music.isPlaying) return;
             music.clip = clip;
-            music.volume = musicVolume;
+            music.volume = CurrentMusicVolume();
             float loopBeats = (clip.length - FirstBeat) / BeatSec;
             loops = Mathf.FloorToInt(idleBeatClock / loopBeats);
             float raw = idleBeatClock - loops * loopBeats;
@@ -325,6 +377,8 @@ namespace ShootingGallery
             playing = false;
             foreach (var s in soloists) if (s != null) s.SetSolo(false);
             soloists.Clear();
+            if (spotOwner != null) System.Array.Clear(spotOwner, 0, spotOwner.Length); // スポットライトも全部消す
+            ApplySpots();
             soloUntil.Clear();
             UpdateBlockers(); // 演奏が止まったら、当たり判定を全部戻す
             foreach (var s in staffs)
@@ -351,15 +405,97 @@ namespace ShootingGallery
         {
             for (int i = 0; i < stageLights.Length; i++)
                 if (stageLights[i] != null) stageLights[i].intensity = stageBase[i] * Mathf.Lerp(dimLevel, playBright, k);
-            for (int i = 0; i < followSpots.Length; i++)
-                if (followSpots[i] != null)
-                {
-                    followSpots[i].intensity = followBase[i] * k;
-                    followSpots[i].enabled = k > 0.01f;
-                }
             if (houseLight != null) houseLight.intensity = houseBase * Mathf.Lerp(1f, housePlay, k);
             if (showWhilePlaying != null)
                 foreach (var go in showWhilePlaying) if (go != null) go.SetActive(k > 0.3f);
+            lightLevel = k;
+            ApplySpots(); // 光の筋も showWhilePlaying に入っているので、その後でソロのある物だけにする
+        }
+
+        // ---- ソロのスポットライト (ソロ1つに1台。その楽器の斜め上前に固定して照らす) ----
+
+        float lightLevel;            // 今の照明の明るさ (SetLights の k)
+        MusicInstrument[] spotOwner; // スポットライトごとの、照らしているソロの楽器 (なければ null)
+
+        // ソロの数だけスポットライトと光の筋をそろえる (足りなければ1台目を複製)
+        void PrepareSpots()
+        {
+            var spots = new List<Light>();
+            var beams = new List<Transform>();
+            for (int i = 0; i < followSpots.Length; i++)
+            {
+                if (followSpots[i] == null) continue;
+                spots.Add(followSpots[i]);
+                beams.Add(i < followBeams.Length ? followBeams[i] : null);
+            }
+            if (spots.Count > 0)
+                while (spots.Count < soloSlots)
+                {
+                    var spot = Instantiate(spots[0], spots[0].transform.parent);
+                    spot.name = spots[0].name + "_Copy";
+                    spots.Add(spot);
+                    Transform beam = null;
+                    if (beams[0] != null)
+                    {
+                        beam = Instantiate(beams[0], beams[0].parent);
+                        beam.name = beams[0].name + "_Copy";
+                    }
+                    beams.Add(beam);
+                }
+            followSpots = spots.ToArray();
+            followBeams = beams.ToArray();
+            followBase = new float[followSpots.Length];
+            for (int i = 0; i < followSpots.Length; i++) followBase[i] = followSpots[i].intensity;
+            spotOwner = new MusicInstrument[followSpots.Length];
+        }
+
+        // 空いているスポットライトをソロの楽器に向けて置く (ソロの間は動かさない)
+        void AssignSpot(MusicInstrument inst)
+        {
+            if (spotOwner == null) return;
+            for (int i = 0; i < spotOwner.Length; i++)
+            {
+                if (spotOwner[i] != null) continue;
+                spotOwner[i] = inst;
+                var spot = followSpots[i].transform;
+                var hall = spot.parent;
+                // 楽器から客席の方へ spotFront 手前の、天井近く (ビルダーで置いた高さ) から照らす
+                Vector3 target = inst.AimPoint;
+                Vector3 back = hall != null ? -hall.forward : Vector3.back;
+                Vector3 pos = target + back * spotFront;
+                pos.y = spot.position.y;
+                spot.position = pos;
+                spot.rotation = Quaternion.LookRotation((target - pos).normalized);
+                var beam = followBeams[i];
+                if (beam != null)
+                {
+                    beam.position = pos;
+                    beam.rotation = spot.rotation;
+                    beam.localScale = new Vector3(1f, 1f, Mathf.Max(0.1f, (target - pos).magnitude));
+                }
+                break;
+            }
+            ApplySpots();
+        }
+
+        void ReleaseSpot(MusicInstrument inst)
+        {
+            if (spotOwner == null) return;
+            for (int i = 0; i < spotOwner.Length; i++) if (spotOwner[i] == inst) spotOwner[i] = null;
+            ApplySpots();
+        }
+
+        // ソロを照らしているスポットライトだけ点ける (明るさは照明に合わせる)
+        void ApplySpots()
+        {
+            if (spotOwner == null) return;
+            for (int i = 0; i < followSpots.Length; i++)
+            {
+                bool on = spotOwner[i] != null && lightLevel > 0.01f;
+                followSpots[i].intensity = followBase[i] * lightLevel;
+                followSpots[i].enabled = on;
+                if (followBeams[i] != null) followBeams[i].gameObject.SetActive(on && lightLevel > 0.3f);
+            }
         }
 
         // ---- ソロ ----
@@ -380,6 +516,7 @@ namespace ShootingGallery
                 pick = candidates[Random.Range(0, candidates.Count)];
             }
             pick.SetSolo(true);
+            AssignSpot(pick); // 空いているスポットライトをこの楽器に固定して当てる
             soloists.Add(pick);
             soloUntil[pick] = Beat + soloBeats * Random.Range(0.8f, 1.2f);
             UpdateBlockers();
@@ -389,6 +526,7 @@ namespace ShootingGallery
         {
             if (inst == null) return;
             inst.SetSolo(false);
+            ReleaseSpot(inst);
             soloists.Remove(inst);
             soloUntil.Remove(inst);
             UpdateBlockers();
@@ -568,12 +706,12 @@ namespace ShootingGallery
                 Beat = idleBeatClock;
             }
 
+            UpdateBaton(); // 指揮棒は演奏の前 (振り上げ) と後 (下ろす) も動く
             if (!playing) return;
             // 楽器の動き: 演奏の始まりは控えめで、grooveRiseSeconds かけて最高潮へ。あとはずっと最高潮
             Groove = Mathf.Lerp(grooveStart, 1f, Mathf.SmoothStep(0f, 1f, (Time.time - playStartTime) / Mathf.Max(0.01f, grooveRiseSeconds)));
+            if (music != null && music.isPlaying) music.volume = CurrentMusicVolume(); // 始まりは大きく、だんだんいつもの音量へ
             TryStartMusic(); // 演奏が始まった時に曲がまだできていなかったら、できしだい流す
-            UpdateBaton();
-            UpdateFollowSpots();
 
             // ソロの交代
             if (Time.time >= nextSoloCheck)
@@ -581,47 +719,165 @@ namespace ShootingGallery
                 nextSoloCheck = Time.time + 0.25f;
                 foreach (var s in new List<MusicInstrument>(soloists))
                     if (soloUntil.TryGetValue(s, out var until) && Beat >= until && until < float.MaxValue) EndSolo(s);
-                while (soloists.Count < soloCount && playing) { int before = soloists.Count; PickSoloist(); if (soloists.Count == before) break; }
+                while (soloists.Count < soloSlots && playing) { int before = soloists.Count; PickSoloist(); if (soloists.Count == before) break; }
             }
             // 五線譜を次々に出す (何本も出てきては途切れる)
             if (Time.time - lastStaffTime > staffEvery) SpawnStaff();
         }
 
-        // 指揮棒: 4拍子の図形 (下 → 左 → 右 → 上) を描く
+        // ---- 指揮棒 (指揮台の上で4拍子を振る。指揮者はいない) ----
+        //
+        // 指揮棒の先が描く4拍子の図形 (指揮者から見た向き = 後ろの客席から見た向きと同じ。x は右、y は上。1 の点が (0, 0)、いちばん上が 1)。
+        // 拍の点 (1〜4、たたく所) と、その間の跳ね上がった所 (「と」) を3次ベジェ曲線でつなぐ。半拍ごとに1本、全部で8本 (それぞれ4つの制御点)。
+        //   1 (真下へ振り下ろした所) → と (左上へまっすぐ跳ね上がる) → 2 (左下で丸く) → と (左上) → 3 (右へ大きく、下で丸く) → と (右上)
+        //   → 4 (少し左へ戻って丸く) → と (真上。いちばん高い所。振り上げ) → 1 (まっすぐ真下へ。いちばん大事な振り下ろし)
+        static readonly Vector2[] BatonPath =
+        {
+            new Vector2(0f, 0f),        new Vector2(-0.127f, 0.197f), new Vector2(-0.253f, 0.393f), new Vector2(-0.38f, 0.59f),  // 1 → と
+            new Vector2(-0.38f, 0.59f), new Vector2(-0.40f, 0.35f),   new Vector2(-0.38f, 0.054f),  new Vector2(-0.5f, 0.054f),  // と → 2
+            new Vector2(-0.5f, 0.054f), new Vector2(-0.62f, 0.054f),  new Vector2(-0.72f, 0.25f),   new Vector2(-0.735f, 0.446f), // 2 → と
+            new Vector2(-0.735f, 0.446f), new Vector2(-0.45f, 0.20f), new Vector2(0.10f, 0.036f),   new Vector2(0.5f, 0.036f),   // と → 3
+            new Vector2(0.5f, 0.036f),  new Vector2(0.85f, 0.036f),   new Vector2(1.1f, 0.22f),     new Vector2(1.206f, 0.375f), // 3 → と
+            new Vector2(1.206f, 0.375f), new Vector2(0.95f, 0.22f),   new Vector2(0.70f, 0.232f),   new Vector2(0.47f, 0.232f),  // と → 4
+            new Vector2(0.47f, 0.232f), new Vector2(0.24f, 0.232f),   new Vector2(0.02f, 0.55f),    new Vector2(0f, 1f),         // 4 → と (振り上げ)
+            new Vector2(0f, 1f),        new Vector2(0f, 0.667f),      new Vector2(0f, 0.333f),      new Vector2(0f, 0f),         // と → 1 (振り下ろし)
+        };
+        const float BatonPathCenterX = 0.235f; // 図形の左右の真ん中 (左端 -0.735 と右端 1.206 の間)
+        static readonly Vector3 BatonTipLocal = new Vector3(0f, 0.08f, 0.445f); // ビルダーで作った指揮棒の先 (Baton の中の位置。大きさを掛ける前)
+
+        Vector3 batonRest;        // ビルダーで置いた指揮棒の位置 (Conductor の中)
+        Vector3 batonShoulder;    // 指揮棒を持つ「肩」の位置 (見えない指揮者。ここから指揮棒の先の方を向く)
+        Vector3 batonCenter;      // 図形の 1 の点 (たたく所の真ん中の下)
+        Vector3 batonDown;        // 演奏していない時に指揮棒の先を下ろしておく所
+        float batonW;             // 0 = 下ろしている 〜 1 = 振っている
+        float batonTargetW;
+        float batonHoldBeat;      // 演奏していない間の指揮棒の図形の上の拍 (0 = 1拍目をたたく所。振り上げは 3.5 = 4拍目の「と」のいちばん上)
+        float batonFlick;         // 振り下ろす直前にポイっと跳ね上げている高さ (m)
+        TrailRenderer batonTrail; // 指揮棒の先の光の尾 (図形が見えるように)
+        Light podiumSpot;         // 指揮台を照らすスポットライト (演奏の前に、最初に点く)
+        Transform podiumBeam;
+        float podiumSpotBase, podiumLevel;
+
+        // 指揮棒を大きくして、先に光の尾を付け、指揮台を照らすスポットライトを用意する (ビルダーの作り直しなしで動くように、ここで作る)
+        void PrepareBaton()
+        {
+            if (baton == null) return;
+            batonRest = baton.localPosition;
+            baton.localScale = Vector3.one * batonScale;
+            // 見えない指揮者: 肩は指揮棒の少し右上・手前 (客席側)。図形はその前 (楽器の方) の縦の面に描く
+            batonShoulder = batonRest + new Vector3(0.1f, 0.3f, -0.55f);
+            batonCenter = batonRest + new Vector3(-0.05f, -0.1f, 0.55f);
+            batonDown = batonRest + new Vector3(0.1f, -0.45f, 0.25f);
+
+            var tip = new GameObject("BatonTip").transform;
+            tip.SetParent(baton, false);
+            tip.localPosition = BatonTipLocal;
+            batonTrail = tip.gameObject.AddComponent<TrailRenderer>();
+            batonTrail.time = 0.45f;
+            batonTrail.minVertexDistance = 0.01f;
+            batonTrail.widthMultiplier = 0.035f;
+            batonTrail.widthCurve = AnimationCurve.Linear(0f, 1f, 1f, 0f);
+            var grad = new Gradient();
+            grad.SetKeys(new[] { new GradientColorKey(new Color(1f, 0.95f, 0.7f), 0f), new GradientColorKey(new Color(1f, 0.75f, 0.3f), 1f) },
+                         new[] { new GradientAlphaKey(0.9f, 0f), new GradientAlphaKey(0f, 1f) });
+            batonTrail.colorGradient = grad;
+            batonTrail.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            batonTrail.receiveShadows = false;
+            batonTrail.emitting = false;
+            // 材質は五線譜の線と同じ (半透明・頂点の色が効く)
+            if (staffs != null && staffs.Length > 0 && staffs[0] != null && staffs[0].lines != null && staffs[0].lines.Length > 0 && staffs[0].lines[0] != null)
+                batonTrail.sharedMaterial = staffs[0].lines[0].sharedMaterial;
+
+            // 指揮台を照らすスポットライト: ソロのスポットライトを複製して、指揮台の上の客席寄りから当てる
+            if (followSpots != null && followSpots.Length > 0 && followSpots[0] != null)
+            {
+                var parent = baton.parent;
+                podiumSpot = Instantiate(followSpots[0], followSpots[0].transform.parent);
+                podiumSpot.name = "PodiumSpot";
+                podiumSpot.spotAngle = 18f;
+                podiumSpotBase = followBase != null && followBase.Length > 0 ? followBase[0] : podiumSpot.intensity;
+                Vector3 target = parent.TransformPoint(batonRest + new Vector3(-0.2f, -0.7f, -0.1f)); // 指揮台の上の、指揮者の胸くらい
+                Vector3 pos = parent.TransformPoint(batonRest + new Vector3(-0.2f, 5.5f, -3.2f));
+                podiumSpot.transform.position = pos;
+                podiumSpot.transform.rotation = Quaternion.LookRotation((target - pos).normalized);
+                if (followBeams != null && followBeams.Length > 0 && followBeams[0] != null)
+                {
+                    podiumBeam = Instantiate(followBeams[0], followBeams[0].parent);
+                    podiumBeam.name = "PodiumBeam";
+                    podiumBeam.position = pos;
+                    podiumBeam.rotation = podiumSpot.transform.rotation;
+                    podiumBeam.localScale = new Vector3(1.3f, 1.3f, (target - pos).magnitude + 1.5f);
+                }
+                SetPodiumSpot(0f);
+            }
+            batonW = batonTargetW = 0f;
+            PlaceBaton(batonDown);
+        }
+
+        // 指揮棒をその場ですぐ下ろす (光の尾も消す)。モードをすぐに終わらせる時
+        void LowerBatonNow()
+        {
+            if (baton == null) return;
+            batonW = batonTargetW = 0f;
+            batonFlick = 0f;
+            PlaceBaton(batonDown);
+            if (batonTrail != null) { batonTrail.emitting = false; batonTrail.Clear(); }
+        }
+
+        void SetPodiumSpot(float k)
+        {
+            podiumLevel = k;
+            if (podiumSpot != null)
+            {
+                podiumSpot.intensity = podiumSpotBase * k;
+                podiumSpot.enabled = k > 0.01f;
+            }
+            if (podiumBeam != null) podiumBeam.gameObject.SetActive(k > 0.2f);
+        }
+
+        IEnumerator FadePodiumSpot(float to, float seconds)
+        {
+            float from = podiumLevel;
+            for (float t = 0f; t < 1f; t += Time.deltaTime / Mathf.Max(0.01f, seconds))
+            {
+                SetPodiumSpot(Mathf.Lerp(from, to, t));
+                yield return null;
+            }
+            SetPodiumSpot(to);
+        }
+
+        // 拍 beat の時の、図形の上の指揮棒の先の位置 (Conductor の中)。拍の点ではいちばん速く (たたく)、「と」ではゆっくり止まる
+        Vector3 BatonPatternPoint(float beat)
+        {
+            float h = Mathf.Repeat(beat, 4f) * 2f; // 半拍ごとの番号 0〜8
+            int seg = Mathf.Min(7, Mathf.FloorToInt(h));
+            float t = h - seg;
+            t = seg % 2 == 0 ? 1f - (1f - t) * (1f - t) : t * t; // 拍の点から「と」へは減速、「と」から拍の点へは加速
+            int i = seg * 4;
+            float u = 1f - t;
+            Vector2 p = u * u * u * BatonPath[i] + 3f * u * u * t * BatonPath[i + 1] + 3f * u * t * t * BatonPath[i + 2] + t * t * t * BatonPath[i + 3];
+            return batonCenter + new Vector3((p.x - BatonPathCenterX) * batonPatternSize.x, p.y * batonPatternSize.y, 0f);
+        }
+
+        // 指揮棒の先を tipPos (Conductor の中) に置く。根元は肩から先の方へ向けた線の上
+        void PlaceBaton(Vector3 tipPos)
+        {
+            var dir = tipPos - batonShoulder;
+            if (dir.sqrMagnitude < 0.0001f) return;
+            var rot = Quaternion.LookRotation(dir.normalized, Vector3.up) * Quaternion.Inverse(Quaternion.LookRotation(BatonTipLocal.normalized, Vector3.up));
+            baton.localRotation = rot;
+            baton.localPosition = tipPos - rot * (BatonTipLocal * batonScale);
+        }
+
+        // 毎フレーム: 演奏中は今の拍の図形の上、演奏前は止めておく拍の所 (振り上げ)。下ろしている所との間をなめらかにつなぐ
         void UpdateBaton()
         {
             if (baton == null) return;
-            float b = Mathf.Repeat(Beat, 4f);
-            int i = Mathf.FloorToInt(b);
-            float f = b - i;
-            float e = f * f * (3f - 2f * f);
-            float[] side = { 0f, -35f, 35f, 0f };
-            float[] lift = { 25f, 5f, 5f, -20f };
-            float z = Mathf.Lerp(side[i], side[(i + 1) % 4], e);
-            float x = Mathf.Lerp(lift[i], lift[(i + 1) % 4], e) - 18f * Mathf.Exp(-f * 8f);
-            baton.localRotation = batonBase * Quaternion.Euler(x, 0f, z);
-        }
-
-        // ソロの楽器を追いかけるスポットライト
-        void UpdateFollowSpots()
-        {
-            for (int i = 0; i < followSpots.Length; i++)
-            {
-                var spot = followSpots[i];
-                if (spot == null) continue;
-                var target = i < soloists.Count ? soloists[i] : null;
-                if (target == null) continue;
-                Vector3 to = target.AimPoint - spot.transform.position;
-                var want = Quaternion.LookRotation(to.normalized);
-                spot.transform.rotation = Quaternion.Slerp(spot.transform.rotation, want, Time.deltaTime * 4f);
-                if (i < followBeams.Length && followBeams[i] != null)
-                {
-                    var beam = followBeams[i];
-                    beam.position = spot.transform.position;
-                    beam.rotation = spot.transform.rotation;
-                    beam.localScale = new Vector3(1f, 1f, Mathf.Max(0.1f, to.magnitude));
-                }
-            }
+            batonW = Mathf.MoveTowards(batonW, batonTargetW, Time.deltaTime / Mathf.Max(0.05f, batonRaiseSeconds));
+            float beat = playing ? Beat - StartBeat : batonHoldBeat; // 曲を流し始めた拍を「1」にする
+            float w = Mathf.SmoothStep(0f, 1f, batonW);
+            PlaceBaton(Vector3.Lerp(batonDown, BatonPatternPoint(beat), w) + Vector3.up * batonFlick);
+            if (batonTrail != null) batonTrail.emitting = batonW > 0.95f;
         }
 
         void Play(IEnumerator routine)

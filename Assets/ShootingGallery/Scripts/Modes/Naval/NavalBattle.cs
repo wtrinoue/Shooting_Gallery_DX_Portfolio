@@ -63,12 +63,13 @@ namespace ShootingGallery
             SetStageVisible(false);
         }
 
-        /// <summary>海戦モードを始める (甲板と海面をせり上げ、敵の船を出し始める)</summary>
-        public void Begin()
+        /// <summary>海戦モードを始める (甲板と海面をせり上げ、敵の船を出し始める)。yawDeg = 自分の船の前 (船首) を向ける向き (度。撃った的の方)</summary>
+        public void Begin(float yawDeg)
         {
             if (IsActive) return;
             IsActive = true;
             startTime = Time.time;
+            transform.localRotation = Quaternion.Euler(0f, yawDeg, 0f); // 船首 (と景色の流れ) を撃った的の方へ。船・海・景色はみなこの子なので、いっしょに回る
             nextLaunchTime = Time.time + dropDelay + riseTime * 0.8f; // 甲板がせり上がり終わる頃に1隻目
             Sunk = 0;
             lastAngle = Random.Range(0f, 360f);

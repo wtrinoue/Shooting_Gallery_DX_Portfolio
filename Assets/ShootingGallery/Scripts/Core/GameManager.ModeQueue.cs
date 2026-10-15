@@ -14,7 +14,7 @@ namespace ShootingGallery
         struct PendingMode
         {
             public TargetKind kind;
-            public float yaw;   // 的があった向き (カジノ・西部劇・忍者の正面)
+            public float yaw;   // 的があった向き (カジノ・西部劇・忍者・海戦・空中などの正面)
             public Stall stall; // 的があった屋台 (スナイパー・マシンガンのチャレンジで引っ込める屋台)
         }
 
@@ -103,8 +103,8 @@ namespace ShootingGallery
                 case TargetKind.Sniper: StartSniper(stall); break;
                 case TargetKind.MachineGunChallenge: StartMachineGunChallenge(stall); break;
                 case TargetKind.Deluxe: StartDeluxe(); break;
-                case TargetKind.Naval: StartNaval(); break;
-                case TargetKind.Sky: StartSky(); break;
+                case TargetKind.Naval: StartNaval(p.yaw); break;
+                case TargetKind.Sky: StartSky(p.yaw); break;
                 case TargetKind.Ninja: StartNinja(p.yaw); break;
                 case TargetKind.Kaiju: StartKaiju(); break;
                 case TargetKind.Casino: StartCasino(p.yaw); break;
