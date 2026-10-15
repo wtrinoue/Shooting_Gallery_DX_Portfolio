@@ -114,7 +114,7 @@ namespace ShootingGallery
         {
             IsSolo = on;
             if (soloMark != null) soloMark.SetActive(on);
-            if (soloLabel != null) soloLabel.text = points.ToString();
+            if (soloLabel != null) soloLabel.text = MusicNote.PointsText(points);
             if (hitBox != null) hitBox.localScale = on ? hitBase * soloHitScale : hitBase;
             if (!on) SetNeon(-1);
         }
@@ -144,6 +144,7 @@ namespace ShootingGallery
             if (hall == null || pivot == null) return;
             float beat = hall.Beat;
             float groove = hall.Groove; // 演奏中は 1、始まる前・終わった後は 0
+            if (float.IsNaN(beat) || float.IsInfinity(beat)) return; // おかしな拍で位置が NaN になると、楽器が消えてしまう
             float b = beat + phaseBeats;
             float amp = Mathf.Lerp(0.15f, IsSolo ? 2.4f : 1f, groove);
             float pulse = Mathf.Exp(-Frac(b) * 6f) * groove; // 拍の頭で 1、すぐに減る

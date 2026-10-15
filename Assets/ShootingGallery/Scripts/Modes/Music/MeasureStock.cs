@@ -28,7 +28,8 @@ namespace ShootingGallery
         readonly List<Candidate> candidates;
         readonly Candidate? wholeRest, fermata; // なければ null
         readonly float wholeRestChance, fermataChance;
-        readonly Dictionary<int, Queue<int[]>> stocks = new Dictionary<int, Queue<int[]>>(); // 小節の長さ → ためた小節 (音符の種類の並び)
+        readonly Dictionary<int, Queue<List<int>>> stocks = new Dictionary<int, Queue<List<int>>>(); // 小節の長さ → ためた小節 (音符の種類の並び)
+        readonly Stack<List<int>> spare = new Stack<List<int>>(); // 出し終わった小節の入れ物 (使い回して、演奏中にメモリを確保しない = GC で止まらないように)
         readonly List<int> picked = new List<int>();
         readonly List<int> fits = new List<int>();
         readonly float maxWidth;
@@ -60,12 +61,16 @@ namespace ShootingGallery
             if (q.Count < refillCount) Refill(q, length, refillCount - q.Count);
         }
 
-        /// <summary>ためた小節を1つ出す (音符の種類の並び。前から順に小節の始まり側)。空なら、その場で1つ抽選する (ふつうは起きない)</summary>
-        public int[] Take(int length)
+        /// <summary>ためた小節を1つ出して result に入れる (音符の種類の並び。前から順に小節の始まり側)。空なら、その場で1つ抽選する (ふつうは起きない)</summary>
+        public void Take(int length, List<int> result)
         {
             var q = QueueFor(length);
             if (q.Count == 0) Refill(q, length, 1);
-            return q.Dequeue();
+            var measure = q.Dequeue();
+            result.Clear();
+            result.AddRange(measure);
+            measure.Clear();
+            spare.Push(measure);
         }
 
         /// <summary>少なくなった長さを1つだけ補充する (毎フレーム呼ぶ。1フレームに1つの長さまでにして、重くならないようにする)。補充したら true</summary>
@@ -80,33 +85,42 @@ namespace ShootingGallery
             return false;
         }
 
-        Queue<int[]> QueueFor(int length)
+        Queue<List<int>> QueueFor(int length)
         {
             if (!stocks.TryGetValue(length, out var q))
             {
-                q = new Queue<int[]>();
+                q = new Queue<List<int>>();
                 stocks.Add(length, q);
             }
             return q;
         }
 
-        void Refill(Queue<int[]> q, int length, int count)
+        void Refill(Queue<List<int>> q, int length, int count)
         {
-            for (int i = 0; i < count; i++) q.Enqueue(Draw(length));
+            for (int i = 0; i < count; i++)
+            {
+                var measure = spare.Count > 0 ? spare.Pop() : new List<int>(16);
+                Draw(length, measure);
+                q.Enqueue(measure);
+            }
         }
 
-        // 1小節分を抽選する
-        int[] Draw(int length)
+        // 1小節分を抽選して result に入れる
+        void Draw(int length, List<int> result)
         {
+            result.Clear();
             // 初めに全休符を入れるか。入れる時は、その小節は全休符1つだけ (フェルマータも付けない。MusicStaff が小節の真ん中に置く)
             if (wholeRest != null && Random.value < wholeRestChance)
-                return new[] { wholeRest.Value.kind };
+            {
+                result.Add(wholeRest.Value.kind);
+                return;
+            }
 
             // 小節の最後にフェルマータを付けるか (付ける時は、そのぶん音符に使える幅が減る)
             bool withFermata = fermata != null && Random.value < fermataChance;
             float limit = maxWidth - (withFermata ? fermata.Value.width : 0f);
 
-            int[] last = null;
+            bool found = false;
             for (int tries = 0; tries < MaxTries; tries++)
             {
                 picked.Clear();
@@ -126,21 +140,18 @@ namespace ShootingGallery
                     width += c.width;
                 }
                 if (!ok) continue;
-                last = picked.ToArray();
+                found = true;
+                result.Clear();
+                result.AddRange(picked);
                 if (maxWidth <= 0f || width <= limit) break;
             }
             // どうしてもぴったりにならない時 (候補の長さの組み合わせで作れない時) は、全休符があれば全休符、なければ空の小節
-            if (last == null) return wholeRest != null ? new[] { wholeRest.Value.kind } : new int[0];
-            return WithFermata(last, withFermata);
-        }
-
-        int[] WithFermata(int[] kinds, bool withFermata)
-        {
-            if (!withFermata || kinds.Length == 0) return kinds;
-            var result = new int[kinds.Length + 1];
-            kinds.CopyTo(result, 0);
-            result[kinds.Length] = fermata.Value.kind;
-            return result;
+            if (!found)
+            {
+                if (wholeRest != null) result.Add(wholeRest.Value.kind);
+                return;
+            }
+            if (withFermata && result.Count > 0) result.Add(fermata.Value.kind);
         }
     }
 }

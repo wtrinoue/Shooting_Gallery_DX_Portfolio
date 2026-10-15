@@ -104,6 +104,7 @@ namespace ShootingGallery
         readonly List<MusicNote> pool = new List<MusicNote>();
         readonly Dictionary<int, MusicNote> templates = new Dictionary<int, MusicNote>();
         MeasureStock stock;
+        readonly List<int> measureKinds = new List<int>(16); // 並べる小節の音符の種類 (使い回す)
         // 並べたがまだ出していない音符 (head が at になったら、始まりから流し始める)
         struct Pending { public MusicNote note; public float at; }
         readonly List<Pending> pending = new List<Pending>();
@@ -352,8 +353,9 @@ namespace ShootingGallery
             float measureStart = MeasureStartAt(nextMeasure); // この小節の先に出てくる側の端が出てくる head
             nextMeasure++;
             if (stock == null) return;
-            var kinds = stock.Take(length);
-            if (kinds.Length == 0) return; // 抽選できなかった (長さの組み合わせで作れない) 時は空の小節
+            var kinds = measureKinds;
+            stock.Take(length, kinds);
+            if (kinds.Count == 0) return; // 抽選できなかった (長さの組み合わせで作れない) 時は空の小節
 
             float avail = BarLen - 2f * barPadding;
             float need = 0f;

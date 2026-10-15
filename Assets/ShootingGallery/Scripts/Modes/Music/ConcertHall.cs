@@ -444,6 +444,7 @@ namespace ShootingGallery
             soloists.Clear();
             if (spotOwner != null) System.Array.Clear(spotOwner, 0, spotOwner.Length);
             soloUntil.Clear();
+            passAt.Clear();
             for (int i = 0; i < soloSlots; i++) PickSoloist();
             SpawnStaff();
         }
@@ -460,6 +461,7 @@ namespace ShootingGallery
         {
             var clip = CurrentBgm;
             if (!bgm || music == null || clip == null || music.isPlaying) return;
+            if (music.clip == clip && Time.realtimeSinceStartup - songPlayCalled < 2f) return; // WebGL では Play() の直後しばらく isPlaying が false のことがある。毎フレーム頭から流し直さない
             music.clip = clip;
             music.volume = CurrentMusicVolume();
             float loopBeats = LoopBeats(clip);
@@ -467,9 +469,50 @@ namespace ShootingGallery
             float raw = idleBeatClock - loops * loopBeats;
             lastRawBeat = raw;
             float time = idleBeatClock <= StartBeat ? StartAt : BeatToTime(raw); // 演奏の始まりからなら、流し始める所 (bgmSkipSeconds) から
-            music.timeSamples = Mathf.Clamp(Mathf.RoundToInt(time * clip.frequency), 0, clip.samples - 1);
+            // WebGL (unityroom) では曲の読み込みが終わるまで frequency / samples が 0 のことがあるので、その時は秒で指定する
+            if (clip.frequency > 0 && clip.samples > 0) music.timeSamples = Mathf.Clamp(Mathf.RoundToInt(time * clip.frequency), 0, clip.samples - 1);
+            else music.time = Mathf.Max(0f, time);
             music.Play();
+            songStartPos = time;
+            songLastPos = -1f;
+            songHeard = false;
+            songPlayCalled = Time.realtimeSinceStartup;
         }
+
+        // 曲の今の再生位置 (秒)。
+        // WebGL (unityroom) では Play() を呼んでから本当に音が出始めるまで遅れがあり、再生位置や frequency が 0 / NaN のこともある
+        // (そのまま使うと拍が NaN になって楽器が全部消えた。Play() の時から自分の時計で進めると、音より先に楽器が動いてずれた)。
+        // そこで、再生位置が進み始める (= 本当に音が出始める) までは流し始めた位置で止めて待ち、進み始めたらそれに合わせる。
+        // 再生位置が取れない間 (フレームの合間など) は、最後に合わせた所から実時間で進める。いつまでも進まない時 (1.5秒) は実時間だけで進める
+        float songStartPos, songLastPos, songSyncPos, songSyncAt, songPlayCalled = -10f;
+        bool songHeard;
+        float SongTime(AudioClip clip)
+        {
+            float now = Time.realtimeSinceStartup;
+            float a = clip.frequency > 0 ? music.timeSamples / (float)clip.frequency : music.time;
+            bool valid = IsFinite(a) && a >= 0f;
+            if (valid && songLastPos >= 0f && a != songLastPos)
+            {
+                // 再生位置が動いた: 本当に鳴っている。その位置に合わせる
+                songHeard = true;
+                songSyncPos = a;
+                songSyncAt = now;
+            }
+            if (valid) songLastPos = a;
+            if (!songHeard)
+            {
+                if (now - songPlayCalled < 1.5f) return songStartPos; // まだ音が出ていない: 流し始める所で待つ
+                songHeard = true; // 再生位置が取れない環境: ここから実時間で進める
+                songSyncPos = songStartPos;
+                songSyncAt = now;
+            }
+            float t = songSyncPos + (now - songSyncAt);
+            float len = clip.length;
+            if (len > 0.1f && IsFinite(len)) t = Mathf.Repeat(t, len);
+            return t;
+        }
+
+        static bool IsFinite(float x) => !float.IsNaN(x) && !float.IsInfinity(x);
 
         void StopPlaying(bool instant)
         {
@@ -479,6 +522,7 @@ namespace ShootingGallery
             if (spotOwner != null) System.Array.Clear(spotOwner, 0, spotOwner.Length); // スポットライトも全部消す
             ApplySpots();
             soloUntil.Clear();
+            passAt.Clear();
             UpdateBlockers(); // 演奏が止まったら、当たり判定を全部戻す
             foreach (var s in staffs)
             {
@@ -599,9 +643,11 @@ namespace ShootingGallery
 
         // ---- ソロ ----
 
+        readonly List<MusicInstrument> candidates = new List<MusicInstrument>(); // ソロの候補 (使い回す。演奏中にメモリを確保しない = GC で止まらないように)
+
         void PickSoloist()
         {
-            var candidates = new List<MusicInstrument>();
+            candidates.Clear();
             foreach (var inst in instruments)
                 if (inst != null && !inst.IsSolo && inst.hitTarget != null) candidates.Add(inst);
             if (candidates.Count == 0) return;
@@ -628,6 +674,7 @@ namespace ShootingGallery
             ReleaseSpot(inst);
             soloists.Remove(inst);
             soloUntil.Remove(inst);
+            passAt.Remove(inst);
             UpdateBlockers();
             if (playing) PickSoloist();
         }
@@ -656,11 +703,12 @@ namespace ShootingGallery
             }
         }
 
-        IEnumerator PassSoloAfter(MusicInstrument inst, float delay)
+        // 撃たれたソロの楽器を、delay 秒後に別の楽器へ交代させる (Update で見る。コルーチンを作らない)
+        readonly Dictionary<MusicInstrument, float> passAt = new Dictionary<MusicInstrument, float>();
+        void PassSoloAfter(MusicInstrument inst, float delay)
         {
             soloUntil[inst] = float.MaxValue; // 交代するまで、時間切れで交代させない
-            yield return new WaitForSeconds(delay);
-            if (soloists.Contains(inst)) EndSolo(inst);
+            if (!passAt.ContainsKey(inst)) passAt[inst] = Time.time + delay;
         }
 
         // ---- 浮き床 ----
@@ -697,7 +745,7 @@ namespace ShootingGallery
             inst.Jump(true);
             Hits++;
             SpawnStaff();
-            StartCoroutine(PassSoloAfter(inst, 0.9f)); // 少し見せてから、ソロが別の楽器へ移る
+            PassSoloAfter(inst, 0.9f); // 少し見せてから、ソロが別の楽器へ移る
             return inst.points;
         }
 
@@ -726,8 +774,9 @@ namespace ShootingGallery
             if (staff == null) return;
 
             float side = 0f, level = -1f;
-            foreach (float sd in new[] { staffSide, -staffSide })
+            for (int k = 0; k < 2; k++)
             {
+                float sd = k == 0 ? staffSide : -staffSide;
                 level = PickStaffLevel(staff, sd);
                 if (level >= 0f) { side = sd; break; }
             }
@@ -793,15 +842,18 @@ namespace ShootingGallery
             // 拍: 演奏中は曲の再生位置から (楽器の揺れが音とずれないように)。それ以外はゆっくり進める
             if (music != null && music.isPlaying && music.clip != null)
             {
-                float raw = TimeToBeat(music.timeSamples / (float)music.clip.frequency); // 拍の表があれば表から
+                float raw = TimeToBeat(SongTime(music.clip)); // 拍の表があれば表から
                 if (raw < lastRawBeat - 1f) loops++; // 曲の頭に戻った
                 lastRawBeat = raw;
-                Beat = loops * LoopBeats(music.clip) + raw;
+                float beat = loops * LoopBeats(music.clip) + raw;
+                if (IsFinite(beat)) Beat = idleBeatClock = beat; // 念のため、おかしな値の時は前の拍のまま
             }
             else
             {
                 // 曲を流していない演奏中は、曲のテンポどおりに進める
-                idleBeatClock += playing ? Time.deltaTime / BeatSec : Time.deltaTime * 0.6f;
+                // (曲を流し始めたのにまだ鳴っていない間は、拍を進めずに音を待つ)
+                bool waitingForSong = playing && bgm && CurrentBgm != null && Time.realtimeSinceStartup - songPlayCalled < 2f;
+                if (!waitingForSong) idleBeatClock += playing ? Time.deltaTime / BeatSec : Time.deltaTime * 0.6f;
                 Beat = idleBeatClock;
             }
 
@@ -812,12 +864,24 @@ namespace ShootingGallery
             if (music != null && music.isPlaying) music.volume = CurrentMusicVolume(); // 始まりは大きく、だんだんいつもの音量へ
             TryStartMusic(); // 演奏が始まった時に曲がまだできていなかったら、できしだい流す
 
+            // 撃たれたソロの交代 (EndSolo は soloists から消して後ろに足すので、後ろから見る)
+            if (passAt.Count > 0)
+                for (int i = soloists.Count - 1; i >= 0; i--)
+                {
+                    if (i >= soloists.Count) continue;
+                    var s = soloists[i];
+                    if (passAt.TryGetValue(s, out var at) && Time.time >= at) EndSolo(s);
+                }
             // ソロの交代
             if (Time.time >= nextSoloCheck)
             {
                 nextSoloCheck = Time.time + 0.25f;
-                foreach (var s in new List<MusicInstrument>(soloists))
+                for (int i = soloists.Count - 1; i >= 0; i--)
+                {
+                    if (i >= soloists.Count) continue;
+                    var s = soloists[i];
                     if (soloUntil.TryGetValue(s, out var until) && Beat >= until && until < float.MaxValue) EndSolo(s);
+                }
                 while (soloists.Count < soloSlots && playing) { int before = soloists.Count; PickSoloist(); if (soloists.Count == before) break; }
             }
             // 五線譜を次々に出す (何本も出てきては途切れる)

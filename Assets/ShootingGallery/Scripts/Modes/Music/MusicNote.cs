@@ -43,12 +43,20 @@ namespace ShootingGallery
 
         public int Points { get; private set; }
 
+        // 点数の文字 (点数ごとに一度だけ作って使い回す。出すたびに文字列を作ると GC で止まるので)
+        static readonly System.Collections.Generic.Dictionary<int, string> pointTexts = new System.Collections.Generic.Dictionary<int, string>();
+        public static string PointsText(int points)
+        {
+            if (!pointTexts.TryGetValue(points, out var s)) pointTexts.Add(points, s = points.ToString());
+            return s;
+        }
+
         /// <summary>出す (gold なら金色の高得点の音符)</summary>
         public void Show(bool gold)
         {
             Points = basePoints + (gold ? goldBonus : 0);
             if (goldMark != null) goldMark.SetActive(gold);
-            if (label != null) label.text = Points.ToString();
+            if (label != null) label.text = PointsText(Points);
             if (palette != null && palette.Length > 0 && bodyRenderers != null)
             {
                 var mat = palette[Random.Range(0, palette.Length)];
