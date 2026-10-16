@@ -80,10 +80,7 @@ namespace ShootingGallery
             hall.luxury = luxury.gameObject;
             hall.slot = slot;
             hall.wheels = wheels.ToArray();
-#if UNITY_EDITOR
-            // BGM (エディターで「シーンに生成」する時だけ結びつける。実機向けのビルドには UnityEditor がないので)
             hall.bgmClip = UnityEditor.AssetDatabase.LoadAssetAtPath<AudioClip>(CasinoBgmPath);
-#endif
             // 明かりが点く時の演出: ネオンがチカチカと点き、広間の明かりがふっと強く点いて落ち着き、紙吹雪が舞う
             var neon = new List<Renderer>();
             foreach (var r in luxury.GetComponentsInChildren<Renderer>(true)) if (r.name.StartsWith("Neon")) neon.Add(r);
