@@ -18,6 +18,8 @@ namespace ShootingGallery
     ///   切り口: 面を切っただけだと、柱や提灯の中が空洞に見える (ねぎの輪切りのように) ので、切り口に同じ灰色のふた (断面) を貼る。
     ///          部品 (立方体・円柱・球など。まとめたメッシュは、頂点の位置でつながっている所ごとに分ける) ごとに、
     ///          破片の境目の面の上にできた点を集め、その凸包を断面にする (平らな地面などは点が一直線に並ぶので、ふたは作らない)。
+    ///   3D の文字 (看板・点数。TextMesh) は、フォントの文字の形から 1文字ずつの板のメッシュに組み立て直し (BakeText)、ほかの面と同じように切る
+    ///   (文字の途中でも、ひびの線どおりに割れる)。並びは、実際に描かれている文字の範囲にぴったり合わせる。色は頂点の色で渡す。
     ///   破片の GameObject とメッシュは使い回す (オブジェクトプール)。同じ形のメッシュの頂点は1回だけ読む。
     /// </summary>
     public class WorldShatter : MonoBehaviour
@@ -40,7 +42,8 @@ namespace ShootingGallery
         {
             public Vector3 p, n;
             public Vector2 uv;
-            public static V Lerp(V a, V b, float t) => new V { p = Vector3.Lerp(a.p, b.p, t), n = Vector3.Lerp(a.n, b.n, t), uv = Vector2.Lerp(a.uv, b.uv, t) };
+            public Color c; // 頂点の色 (3D の文字の色。ほかの面は白)
+            public static V Lerp(V a, V b, float t) => new V { p = Vector3.Lerp(a.p, b.p, t), n = Vector3.Lerp(a.n, b.n, t), uv = Vector2.Lerp(a.uv, b.uv, t), c = Color.Lerp(a.c, b.c, t) };
         }
 
         class MeshData
@@ -64,13 +67,14 @@ namespace ShootingGallery
         {
             public readonly List<Vector3> v = new List<Vector3>(), n = new List<Vector3>();
             public readonly List<Vector2> uv = new List<Vector2>();
+            public readonly List<Color> colors = new List<Color>();
             public readonly List<Material> mats = new List<Material>();
             public readonly List<List<int>> subs = new List<List<int>>();
             public readonly List<(TextMesh text, Renderer renderer)> texts = new List<(TextMesh, Renderer)>();
             public bool Empty => v.Count == 0 && texts.Count == 0;
             public void Clear()
             {
-                v.Clear(); n.Clear(); uv.Clear(); mats.Clear(); texts.Clear();
+                v.Clear(); n.Clear(); uv.Clear(); colors.Clear(); mats.Clear(); texts.Clear();
                 foreach (var s in subs) s.Clear();
             }
             public List<int> Sub(Material m)
@@ -187,7 +191,11 @@ namespace ShootingGallery
             foreach (var r in list)
             {
                 var tm = r.GetComponent<TextMesh>();
-                if (tm != null) { AddText(tm, r); continue; }
+                if (tm != null)
+                {
+                    if (!BakeText(tm, r)) AddText(tm, r); // (組み立てられない文字は、真ん中が入っている破片にそのまま乗せる)
+                    continue;
+                }
                 var mf = r.GetComponent<MeshFilter>();
                 var data = mf != null ? DataOf(mf.sharedMesh) : null;
                 if (data == null) continue;
@@ -290,7 +298,8 @@ namespace ShootingGallery
         {
             p = l2w.MultiplyPoint3x4(d.v[i]) - head,
             n = d.n != null && d.n.Length > i ? nrm.MultiplyVector(d.n[i]).normalized : Vector3.up,
-            uv = d.uv != null && d.uv.Length > i ? d.uv[i] : Vector2.zero
+            uv = d.uv != null && d.uv.Length > i ? d.uv[i] : Vector2.zero,
+            c = Color.white
         };
 
         // 三角形 1枚を、重なる錐と距離の段ごとに切って、それぞれの破片に足す
@@ -457,6 +466,7 @@ namespace ShootingGallery
                 b.v.Add(pts[i]);
                 b.n.Add(normal);
                 b.uv.Add(Vector2.zero);
+                b.colors.Add(Color.white);
             }
             for (int i = 1; i + 1 < hull.Count; i++)
             {
@@ -500,6 +510,7 @@ namespace ShootingGallery
                 b.v.Add(p[i].p);
                 b.n.Add(p[i].n);
                 b.uv.Add(p[i].uv);
+                b.colors.Add(p[i].c);
             }
             for (int i = 1; i + 1 < count; i++)
             {
@@ -509,7 +520,101 @@ namespace ShootingGallery
             }
         }
 
-        // 3D の文字 (看板・点数) は切れないので、真ん中が入っている破片にそのまま乗せる
+        // ---- 3D の文字をメッシュに組み立て直す ----
+
+        struct Glyph { public Vector2 min, max, uvBL, uvBR, uvTR, uvTL; }
+        readonly List<Glyph> glyphs = new List<Glyph>(); // 使い回す
+        readonly List<float> lineWidths = new List<float>();
+
+        /// <summary>
+        /// 3D の文字を、フォントの文字の形 (1文字ずつの四角い板と、フォントの画像の中の位置) からメッシュに組み立て直して、ほかの面と同じように切る。
+        /// 並べ方は TextMesh の行・揃え方に合わせ、全体を、実際に描かれている文字の範囲 (localBounds) にぴったり合わせて置く
+        /// (TextMesh の大きさの計算をまねなくても、見た目が割れる前と同じになる)。組み立てられない時は false
+        /// </summary>
+        bool BakeText(TextMesh tm, Renderer r)
+        {
+            var font = tm.font;
+            string text = tm.text;
+            if (font == null || string.IsNullOrEmpty(text) || r.sharedMaterial == null) return false;
+            if (tm.richText && text.IndexOf('<') >= 0) return false; // (色などの指定が入った文字は、そのまま乗せる)
+            int size = tm.fontSize > 0 ? tm.fontSize : font.fontSize;
+            var style = tm.fontStyle;
+            font.RequestCharactersInTexture(text, size, style);
+            float lineHeight = font.lineHeight * (font.fontSize > 0 && size > 0 ? size / (float)font.fontSize : 1f) * tm.lineSpacing;
+
+            // 1. 行ごとの幅 (揃え方のため)
+            lineWidths.Clear();
+            float w = 0f;
+            foreach (char ch in text)
+            {
+                if (ch == '\n') { lineWidths.Add(w); w = 0f; continue; }
+                if (font.GetCharacterInfo(ch, out var ci, size, style)) w += ci.advance;
+            }
+            lineWidths.Add(w);
+            float widest = 0f;
+            foreach (float lw in lineWidths) widest = Mathf.Max(widest, lw);
+
+            // 2. 1文字ずつの板を並べる (文字の単位はフォントのピクセル。下の行ほど下へ)
+            glyphs.Clear();
+            int line = 0;
+            float pen = LineStart(tm.alignment, lineWidths[0], widest);
+            foreach (char ch in text)
+            {
+                if (ch == '\n')
+                {
+                    line++;
+                    pen = LineStart(tm.alignment, lineWidths[line], widest);
+                    continue;
+                }
+                if (!font.GetCharacterInfo(ch, out var ci, size, style)) continue;
+                float y = -line * lineHeight;
+                if (ci.maxX > ci.minX && ci.maxY > ci.minY)
+                    glyphs.Add(new Glyph
+                    {
+                        min = new Vector2(pen + ci.minX, y + ci.minY), max = new Vector2(pen + ci.maxX, y + ci.maxY),
+                        uvBL = ci.uvBottomLeft, uvBR = ci.uvBottomRight, uvTR = ci.uvTopRight, uvTL = ci.uvTopLeft
+                    });
+                pen += ci.advance;
+            }
+            if (glyphs.Count == 0) return false;
+
+            // 3. 並べた全体を、実際に描かれている文字の範囲に合わせる。大きさは横幅で決めて、縦も同じ倍率にする
+            //    (描かれている範囲は縦に行の高さの余白まで含むので、縦も範囲に合わせると文字が縦に伸びてしまう)。上下は範囲の真ん中に置く
+            Vector2 lo = glyphs[0].min, hi = glyphs[0].max;
+            foreach (var g in glyphs) { lo = Vector2.Min(lo, g.min); hi = Vector2.Max(hi, g.max); }
+            var lb = r.localBounds;
+            if (hi.x - lo.x < 1e-4f || hi.y - lo.y < 1e-4f || lb.size.x < 1e-5f) return false;
+            var l2w = r.transform.localToWorldMatrix;
+            var normal = l2w.MultiplyVector(Vector3.back).normalized; // (文字は -Z の方から読める)
+            var mat = r.sharedMaterial;
+            var color = tm.color; // (もう灰色になっている)
+            float k = lb.size.x / (hi.x - lo.x); // (フォントのピクセル → 文字のローカル座標)
+            float midY = (lo.y + hi.y) * 0.5f;
+            V At(float x, float y, Vector2 uv) => new V
+            {
+                p = l2w.MultiplyPoint3x4(new Vector3(lb.min.x + (x - lo.x) * k, lb.center.y + (y - midY) * k, lb.center.z)) - head,
+                n = normal, uv = uv, c = color
+            };
+
+            // 4. ほかの面と同じように、錐と距離で切って破片に足す (文字は平らなので、切り口のふたは作らない)
+            capComp = -1;
+            foreach (var g in glyphs)
+            {
+                var bl = At(g.min.x, g.min.y, g.uvBL);
+                var tl = At(g.min.x, g.max.y, g.uvTL);
+                var tr = At(g.max.x, g.max.y, g.uvTR);
+                var br = At(g.max.x, g.min.y, g.uvBR);
+                AddTriangle(bl, tl, tr, mat);
+                AddTriangle(bl, tr, br, mat);
+            }
+            return true;
+        }
+
+        // 行の書き始めの位置 (揃え方: 左 / 真ん中 / 右。いちばん長い行の中で揃える)
+        static float LineStart(TextAlignment alignment, float width, float widest) =>
+            alignment == TextAlignment.Center ? (widest - width) * 0.5f : alignment == TextAlignment.Right ? widest - width : 0f;
+
+        // 組み立てられない 3D の文字は、真ん中が入っている破片にそのまま乗せる
         void AddText(TextMesh src, Renderer r)
         {
             var p = r.bounds.center - head;
@@ -554,6 +659,7 @@ namespace ShootingGallery
             mesh.SetVertices(shiftTmp);
             mesh.SetNormals(b.n);
             mesh.SetUVs(0, b.uv);
+            mesh.SetColors(b.colors);
             mesh.subMeshCount = b.mats.Count;
             for (int s = 0; s < b.mats.Count; s++) mesh.SetTriangles(b.subs[s], s, false);
             mesh.RecalculateBounds();
