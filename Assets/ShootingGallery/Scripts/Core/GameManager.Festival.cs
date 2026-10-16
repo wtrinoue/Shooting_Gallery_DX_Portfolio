@@ -33,7 +33,7 @@ namespace ShootingGallery
             festivalStage.Begin(yaw);
             RenderSettings.fogStartDistance = Mathf.Max(normalFogStart, 40f); // 空高く上がる遠くの花火が見えるように
             RenderSettings.fogEndDistance = Mathf.Max(normalFogEnd, 95f);
-            player.GiveWeapon(festivalStage.WeaponFor(player.head.transform.forward, WeaponType.Handgun), festivalStage.duration);
+            player.GiveStageWeapon(festivalStage.WeaponFor(player.head.transform.forward, WeaponType.Handgun), festivalStage.duration);
             Sfx.Play("stageup");
             ShowMessage("SUMMER FESTIVAL!!\nWIN GAMES = EARN MONEY\nSPEND IT AT THE FOOD STALL!", 3.5f, new Color(1f, 0.55f, 0.35f));
         }
@@ -49,7 +49,7 @@ namespace ShootingGallery
             }
             var w = festivalStage.WeaponFor(player.head.transform.forward, player.Weapon);
             if (w == player.Weapon) return;
-            player.GiveWeapon(w, festivalStage.TimeLeft);
+            player.GiveStageWeapon(w, festivalStage.TimeLeft);
             Sfx.Play("click");
         }
 
@@ -60,7 +60,7 @@ namespace ShootingGallery
             int hits = festivalStage.Hits;
             bool immediate = State != GameState.Playing;
             festivalStage.End(immediate);
-            if (festivalStage.IsFestivalWeapon(player.Weapon)) player.ResetWeapon();
+            if (festivalStage.IsFestivalWeapon(player.Weapon)) ReleaseStageWeapon(player.Weapon);
             RenderSettings.fogStartDistance = normalFogStart;
             RenderSettings.fogEndDistance = normalFogEnd;
             StartCoroutine(RiseStallsAfter(new List<Stall>(stageStalls), immediate ? 0f : festivalStage.CloseTime));

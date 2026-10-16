@@ -31,10 +31,12 @@ namespace ShootingGallery
         public float curtainVolume = 0.3f; // 前は 0.7
 
         [Header("浮き床 (カーテンが閉まっている間に、その場でプレイヤーを床ごと客席の上の高さに置き直す。動く様子は見せない。ステージ全体が見えるように)")]
-        [Tooltip("持ち上げる物 (カーテンと浮き床) / 浮き床 (ホールが出ている間だけ出す)")]
+        [Tooltip("持ち上げる物 (カーテンと浮き床) / 浮き床 (的を撃った時から、帰りにカーテンが開ききるまで出す)")]
         public Transform lift;
         public GameObject platform;
         public float liftHeight = 4.2f;
+        [Tooltip("いつもの地面の高さにある間 (行きにカーテンが閉まるまで・帰りにカーテンが開ききるまで)、浮き床を持ち上げておく高さ (m。地面に埋もれて見えなくならないように)")]
+        public float platformGroundRaise = 0.08f;
 
         [Header("照明")]
         [Tooltip("ステージを照らす明かり (演奏前は dimLevel の明るさ、演奏中はビルダーで決めた明るさの playBright 倍)")]
@@ -365,7 +367,9 @@ namespace ShootingGallery
 
         IEnumerator Enter()
         {
-            // 1. 天井とレールが現れ、カーテンがぐるりと閉まる
+            // 1. 足元の浮き床が出て (的を撃った時点から)、天井とレールが現れ、カーテンがぐるりと閉まる
+            PlacePlatform(0f);
+            if (platform != null) platform.SetActive(true);
             yield return curtain.Appear(appearTime);
             PlayClip(ConcertMusic.Curtain, curtainVolume);
             yield return curtain.Draw(0f, 1f, curtainCloseSeconds);
@@ -374,7 +378,6 @@ namespace ShootingGallery
             if (hall != null) hall.SetActive(true);
             SetHallShadows(true);
             SetLights(0f);
-            if (platform != null) platform.SetActive(true);
             Covered?.Invoke();
             SetLift(liftHeight); // カーテンが閉まっている間に、その場で浮き床ごと客席の上の高さへ置き直す (エレベーターのようには動かさない)
             yield return new WaitForSeconds(holdSeconds);
@@ -450,13 +453,13 @@ namespace ShootingGallery
             SetTargets(false);
             if (hall != null) hall.SetActive(false);
             SetHallShadows(false);
-            SetLift(0f); // 閉まっている間に、その場で元の地面の高さへ戻す
-            if (platform != null) platform.SetActive(false);
+            SetLift(0f); // 閉まっている間に、その場で元の地面の高さへ戻す (浮き床は、カーテンが開ききるまで足元に残す)
             CoveredBack?.Invoke(false);
             yield return new WaitForSeconds(0.4f);
             // 3. カーテンが開いて消えると、元の屋台の前
             PlayClip(ConcertMusic.CurtainOpen, curtainVolume);
             yield return curtain.Draw(1f, 0f, curtainOpenSeconds);
+            if (platform != null) platform.SetActive(false); // カーテンが開ききった
             yield return curtain.Vanish(vanishTime);
             Closed?.Invoke();
             anim = null;
@@ -807,11 +810,24 @@ namespace ShootingGallery
         void SetLift(float h)
         {
             if (lift != null) lift.localPosition = Vector3.up * h;
+            PlacePlatform(h);
             if (player != null)
             {
                 var p = player.localPosition;
                 player.localPosition = new Vector3(p.x, playerStartY + h, p.z);
             }
+        }
+
+        Vector3 platformRest;
+        bool platformRestCaptured;
+
+        // 浮き床の高さ: 持ち上げた時は足元にぴったり、いつもの地面の高さの時は少し上げて見えるように
+        void PlacePlatform(float h)
+        {
+            if (platform == null) return;
+            var t = platform.transform;
+            if (!platformRestCaptured) { platformRest = t.localPosition; platformRestCaptured = true; }
+            t.localPosition = platformRest + Vector3.up * (h < 0.01f ? platformGroundRaise : 0f);
         }
 
         public static ConcertHall Instance { get; private set; }

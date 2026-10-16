@@ -5,7 +5,7 @@ namespace ShootingGallery
     /// <summary>
     /// カジノモードの大きなスロットマシン (壇の上)。撃つと横のレバーが下がり、3つのリールが回って左から順に止まる。
     /// 出目は撃った瞬間に決まり、止まった時に GameManager へ点数を知らせる (Result)。点数と演出の強さは出目で決まる:
-    ///   7 7 7 … JACKPOT (一番高い)、BAR / $ / 5 / 3 がそろう … BIG WIN / WIN、2つだけそろう … 少し、そろわない … ほんの少し。
+    ///   7 7 7 … JACKPOT (一番高い)、BAR / BELL / CHERRY / STAR がそろう … BIG WIN / WIN、2つだけそろう … 少し、そろわない … ほんの少し。
     /// 回っている間は周りの電球が速く流れ、当たると点滅する。
     /// </summary>
     public class SlotMachine : MonoBehaviour
@@ -19,7 +19,7 @@ namespace ShootingGallery
         [Tooltip("3つのリール (ローカル X まわりに回る。絵柄は symbols の順に、等間隔でぐるりと並べてある)")]
         public Transform[] reels;
         [Tooltip("リールに並んだ絵柄 (上から順。リールの1周分)")]
-        public string[] symbols = { "7", "BAR", "3", "$", "5", "BAR", "3", "5" };
+        public string[] symbols = { "7", "BAR", "STAR", "BELL", "CHERRY", "BAR", "STAR", "CHERRY" };
         [Tooltip("周りの電球 (順番に並べる)")]
         public Renderer[] lamps;
         public Material lampOn;
@@ -112,9 +112,9 @@ namespace ShootingGallery
             string triple = null;
             if (r < 0.06f) { resultTier = Tier.Jackpot; triple = "7"; resultPoints = 3000; }
             else if (r < 0.14f) { resultTier = Tier.BigWin; triple = "BAR"; resultPoints = 1500; }
-            else if (r < 0.24f) { resultTier = Tier.BigWin; triple = "$"; resultPoints = 1000; }
-            else if (r < 0.36f) { resultTier = Tier.Win; triple = "5"; resultPoints = 500; }
-            else if (r < 0.50f) { resultTier = Tier.Win; triple = "3"; resultPoints = 300; }
+            else if (r < 0.24f) { resultTier = Tier.BigWin; triple = "BELL"; resultPoints = 1000; }
+            else if (r < 0.36f) { resultTier = Tier.Win; triple = "CHERRY"; resultPoints = 500; }
+            else if (r < 0.50f) { resultTier = Tier.Win; triple = "STAR"; resultPoints = 300; }
             else if (r < 0.75f) { resultTier = Tier.Pair; resultPoints = 50; }
             else { resultTier = Tier.Miss; resultPoints = 10; }
 
@@ -125,7 +125,7 @@ namespace ShootingGallery
             }
             if (resultTier == Tier.Pair)
             {   // 2つだけそろう (7 以外。7 が2つだと惜しすぎて紛らわしいので)
-                string pair = new[] { "BAR", "$", "5", "3" }[Random.Range(0, 4)];
+                string pair = PairSymbols[Random.Range(0, PairSymbols.Length)];
                 int odd = Random.Range(0, reels.Length);
                 for (int i = 0; i < reels.Length; i++) result[i] = i == odd ? RandomIndexNot(pair) : RandomIndexOf(pair);
                 return;
@@ -140,6 +140,8 @@ namespace ShootingGallery
                 result[i] = pick;
             }
         }
+
+        static readonly string[] PairSymbols = { "BAR", "BELL", "CHERRY", "STAR" };
 
         bool SameAsBefore(int pick, int count)
         {

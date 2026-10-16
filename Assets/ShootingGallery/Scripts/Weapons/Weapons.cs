@@ -2,7 +2,7 @@ using UnityEngine;
 
 namespace ShootingGallery
 {
-    public enum WeaponType { Handgun = 0, MachineGun = 1, Shotgun = 2, Bomb = 3, Sniper = 4, Bazooka = 5, Shuriken = 6, FireBall = 7, Dart = 8, Revolver = 9, Missile = 10, Flashlight = 11, Pickaxe = 12, RingToss = 13, CorkGun = 14, Poi = 15, Coin = 16, Torpedo = 17, Trumpet = 18, Imagination = 19, AirMachineGun = 20 }
+    public enum WeaponType { Handgun = 0, MachineGun = 1, Shotgun = 2, Bomb = 3, Sniper = 4, Bazooka = 5, Shuriken = 6, FireBall = 7, Dart = 8, Revolver = 9, Missile = 10, Flashlight = 11, Pickaxe = 12, RingToss = 13, CorkGun = 14, Poi = 15, Coin = 16, Torpedo = 17, Trumpet = 18, Imagination = 19, AirMachineGun = 20, Lightning = 21 }
 
     public struct WeaponDef
     {
@@ -57,6 +57,8 @@ namespace ShootingGallery
                     return new WeaponDef { displayName = "TRUMPET", fireInterval = 0.2f, automatic = true, pellets = 1, range = 40f, projectile = true, projectileSpeed = 15f, projectileGravity = 0f };
                 case WeaponType.Imagination: // 美術館モード専用。虹色に光るイマジネーションの玉を放つ (まっすぐ飛ぶ)。作品に当たると、キャンバスでは筆、彫刻ではトンカチになる。押しっぱなしで次々に
                     return new WeaponDef { displayName = "IMAGINATION", fireInterval = 0.22f, automatic = true, pellets = 1, range = 40f, projectile = true, projectileSpeed = 16f, projectileGravity = 0f };
+                case WeaponType.Lightning: // Unknown ステージ専用。紫の電撃が一瞬で届く (ジグザグの稲妻)。当たった物は別の世界へ転送される (びりびりしながら縮んで消える)。押しっぱなしで次々に
+                    return new WeaponDef { displayName = "WARP BOLT", fireInterval = 0.2f, automatic = true, pellets = 1, spreadDeg = 0f, range = 60f };
                 case WeaponType.Pickaxe: // 発掘モード専用。つるはしを縦にくるくる回しながら投げる。押しっぱなしで次々に投げられる (マシンガンほど速くない。手裏剣と同じく、当たった所に刺さる)。白いレーザーで狙う
                     return new WeaponDef { displayName = "PICKAXE", fireInterval = 0.15f, automatic = true, pellets = 1, range = 35f, projectileSpeed = 19f };
                 case WeaponType.RingToss: // 夏祭りモード (輪投げの屋台)。銃を向けた所へ、いつも同じ形の丸い放物線で輪が飛ぶ (GunController.ArcVelocity。projectileSpeed は使わない)

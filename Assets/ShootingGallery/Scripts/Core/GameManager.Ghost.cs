@@ -32,7 +32,7 @@ namespace ShootingGallery
             PutAwayStalls(false);
             ghostManor.dropDelay = StallsAwayTime; // 屋台が沈みきって平らな床になってから、土に変わり始める
             ghostManor.Begin(yaw);
-            player.GiveWeapon(WeaponType.Flashlight, ghostManor.duration);
+            player.GiveStageWeapon(WeaponType.Flashlight, ghostManor.duration);
             Sfx.Play("stageup");
             ShowMessage("GHOST MODE!!", 1.5f, new Color(0.75f, 0.5f, 1f));
         }
@@ -50,7 +50,7 @@ namespace ShootingGallery
             stageStalls.Clear();
             HoldStallsFor(ghostManor.CloseTime + stallMoveDuration + 0.2f); // 屋台がせり上がりきるまで、屋台の拡張・入れ替えを待たせる
             ghostManor.End(State != GameState.Playing);
-            if (player.Weapon == WeaponType.Flashlight) player.ResetWeapon();
+            ReleaseStageWeapon(WeaponType.Flashlight);
             if (State == GameState.Playing)
             {
                 Sfx.Play(hits > 0 ? "complete" : "end");

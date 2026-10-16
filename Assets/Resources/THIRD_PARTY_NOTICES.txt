@@ -33,7 +33,7 @@ This game uses the following third-party software.
    License: SIL Open Font License, Version 1.1 (full text at the end)
 
 
-4. Music (BGM of the Music Mode / 音楽モードの BGM)
+4. Music (BGM of the Music Mode and the Casino Mode / 音楽モード・カジノモードの BGM)
    音楽：魔王魂
    Music: MaouDamashii
    https://maou.audio/
@@ -42,9 +42,11 @@ This game uses the following third-party software.
    https://maou.audio/rule/
 
 
-5. Music (BGM of the Art Museum Mode / 美術館モードの BGM)
-   「ロシアの踊り」(チャイコフスキー「くるみ割り人形」より)
-   "Russian Dance" (Tchaikovsky, from "The Nutcracker")
+5. Music (BGM of the Art Museum Mode and the Sky Stage / 美術館モード・空中ステージの BGM)
+   美術館モード: 「ロシアの踊り」(チャイコフスキー「くるみ割り人形」より)
+   Art Museum Mode: "Russian Dance" (Tchaikovsky, from "The Nutcracker")
+   空中ステージ: 「大空は君のもの」
+   Sky Stage: "Oozora wa Kimi no Mono" (The Sky Is Yours)
    音楽：音楽の卵 (takai)
    Music: Ongaku no Tamago (takai)
    https://ontama-m.com/

@@ -9,8 +9,8 @@ namespace ShootingGallery
     ///   1. 屋台が沈んだあと、地味な灰色の円柱の壁が、的を撃った方から左右へ順に床下から伸びてプレイヤーを囲み、天井がふたをする。
     ///   2. 「バツン」と一気に真っ暗になり (Darken)、目の前の黒い板 (ScreenFader) で視界を完全にふさぐ。しばらく静かな暗闇が続く。
     ///   3. 視界をふさいだまま、ドラムロールの中でスポットライトがガシャン、ガシャンと1つずつ点く音がする (ルーレットとスロットはその間に現れる)。
-    ///      ジャーン! と視界が一気に開け、全部の明かりがまぶしく点く。壁は赤いビロードと金の飾りの豪華な姿に変わり、ネオンがチカチカと灯り、シャンデリアが輝き、
-    ///      紙吹雪が舞って歓声が上がる (LightUp)。ここからゲーム開始。
+    ///      ジャーン! と視界が一気に開け、全部の明かりがまぶしく点く。壁は深紅のビロードとマホガニーと金の、落ち着いた豪華な姿に変わり、金色の間接照明がチカチカと灯り、
+    ///      シャンデリアと壁の燭台が輝き、紙吹雪が舞って歓声が上がる (LightUp)。ここからゲーム開始。BGM (bgmClip) もここから流れ、終わりでふわっと消える。
     ///   4. 時間切れでまた視界をふさいで真っ暗になり、その間に地味な壁・天井・床だけに戻す (Restore)。しばらくして視界が開けたら、天井が外れ、壁が床下へゆっくりしまわれていく。
     /// 広さは屋台6軒の輪が入るくらい、天井は普通の3倍ほど。武器はダーツ。
     /// 屋台の出し入れ・点数・終わる時間・明るさの判断は GameManager が行い、ここは見た目の順番だけを受け持つ。プレイヤーは動かない。
@@ -72,6 +72,13 @@ namespace ShootingGallery
         [Tooltip("視界が開けてスロットが見える瞬間の、ジャーン・歓声の音の大きさ (1 = いつもの大きさ)")]
         [Range(0f, 1f)] public float revealVolume = 0.45f;
 
+        [Header("BGM")]
+        [Tooltip("全部の明かりが点いた時から流す曲 (Assets/Source/casino_stage/maou_bgm_acoustic01b.mp3。魔王魂。クレジットは Resources/THIRD_PARTY_NOTICES.txt)。空なら流さない")]
+        public AudioClip bgmClip;
+        [Range(0f, 1f)] public float bgmVolume = 0.45f;
+        [Tooltip("曲がふわっと大きくなる / 消えていく秒数")]
+        public float bgmFade = 1f;
+
         public bool IsActive { get; private set; }
         /// <summary>明かりが点いて、スロットとルーレットが使える状態</summary>
         public bool IsOpen { get; private set; }
@@ -97,6 +104,8 @@ namespace ShootingGallery
         float ceilingK;
         float[] lightBase;
         readonly List<Confetti> confetti = new List<Confetti>();
+        AudioSource bgm;
+        float bgmTarget; // 曲の音量の行き先 (0 になったら止める)
 
         void Awake()
         {
@@ -109,6 +118,12 @@ namespace ShootingGallery
                 panelDelay[i] = Mathf.Abs(Mathf.DeltaAngle(0f, Mathf.Atan2(p.x, p.z) * Mathf.Rad2Deg)) / 180f;
             }
             ceilingRest = ceiling.localPosition;
+            if (luxury != null)
+            {
+                var keep = new HashSet<Transform>();
+                if (neon != null) foreach (var n in neon) if (n != null) keep.Add(n.transform);
+                MeshMerger.Merge(luxury.transform, keep); // 内装の部品は多いので、まとめて描く回数を減らす (点滅するネオンは別)
+            }
             if (hallLights == null) hallLights = new Light[0];
             lightBase = new float[hallLights.Length];
             for (int i = 0; i < hallLights.Length; i++) lightBase[i] = hallLights[i] != null ? hallLights[i].intensity : 0f;
@@ -116,6 +131,11 @@ namespace ShootingGallery
             SetCeiling(0f);
             SetLuxury(false);
             SetStageVisible(false);
+            bgm = gameObject.AddComponent<AudioSource>();
+            bgm.playOnAwake = false;
+            bgm.loop = true;
+            bgm.spatialBlend = 0f; // どこにいても同じ大きさ
+            bgm.volume = 0f;
         }
 
         /// <summary>カジノモードを始める。yawDeg = 正面にする向き (的を撃った方)。スロットはこの向きに来る</summary>
@@ -125,6 +145,7 @@ namespace ShootingGallery
             IsActive = true;
             IsOpen = false;
             transform.localRotation = Quaternion.Euler(0f, yawDeg, 0f);
+            if (bgmClip != null && bgmClip.loadState == AudioDataLoadState.Unloaded) bgmClip.LoadAudioData(); // 明かりが点くまでに読み込んでおく
             Play(Intro());
         }
 
@@ -133,6 +154,7 @@ namespace ShootingGallery
             if (!IsActive) return;
             IsActive = false;
             IsOpen = false;
+            bgmTarget = 0f; // 曲はふわっと消える
             Play(Outro());
         }
 
@@ -188,6 +210,7 @@ namespace ShootingGallery
             Sfx.Play("deluxe", revealVolume);
             Sfx.Play("cheer", revealVolume);
             if (luxury != null) luxury.SetActive(true);
+            StartBgm();
             StartCoroutine(LightShow());
             SpawnConfetti();
             slot.Activate();
@@ -318,6 +341,12 @@ namespace ShootingGallery
 
         void Update()
         {
+            // BGM の音量をなめらかに行き先へ (消えきったら止める)
+            if (bgm != null && bgm.isPlaying)
+            {
+                bgm.volume = Mathf.MoveTowards(bgm.volume, bgmTarget, Time.deltaTime * bgmVolume / Mathf.Max(0.05f, bgmFade));
+                if (bgmTarget <= 0f && bgm.volume <= 0f) bgm.Stop();
+            }
             // 紙吹雪: はじめの勢いはすぐ弱まり、あとはゆらゆら揺れながらゆっくり落ちる。床に着いたら消える
             float dt = Time.deltaTime;
             for (int i = confetti.Count - 1; i >= 0; i--)
@@ -343,6 +372,17 @@ namespace ShootingGallery
             public Transform t;
             public Vector3 velocity, spinAxis;
             public float spin, sway, phase;
+        }
+
+        // 曲を頭から、ふわっと大きくしながら流す
+        void StartBgm()
+        {
+            if (bgm == null || bgmClip == null) return;
+            bgm.clip = bgmClip;
+            bgm.time = 0f;
+            bgm.volume = 0f;
+            bgm.Play();
+            bgmTarget = bgmVolume;
         }
 
         void SetLuxury(bool on)

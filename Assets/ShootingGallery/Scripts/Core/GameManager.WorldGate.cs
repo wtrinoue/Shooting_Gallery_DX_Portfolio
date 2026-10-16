@@ -23,6 +23,7 @@ namespace ShootingGallery
             TargetKind.GateBack,
             TargetKind.Naval, TargetKind.Sky, TargetKind.Ninja, TargetKind.Kaiju, TargetKind.Casino, TargetKind.Western,
             TargetKind.Space, TargetKind.Ghost, TargetKind.Mine, TargetKind.Festival, TargetKind.Submarine, TargetKind.Music, TargetKind.Museum,
+            TargetKind.Unknown,
         };
 
         /// <summary>WORLD GATE を始める (タイトルの WORLD GATE の的を撃った時)</summary>

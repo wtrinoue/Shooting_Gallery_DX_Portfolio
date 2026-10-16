@@ -58,7 +58,7 @@ namespace ShootingGallery
             if (!KaijuActive) return;
             FadeAmbience(kaijuFogColor, kaijuAmbient, kaijuSkyColor);
             if (State != GameState.Playing) return;
-            player.GiveWeapon(WeaponType.FireBall, kaijuCity.TimeLeft);
+            player.GiveStageWeapon(WeaponType.FireBall, kaijuCity.TimeLeft);
             Sfx.Play("roar");
             ShowMessage("SMASH BUILDINGS, CARS,\nPLANES & HELICOPTERS!", 2.5f, new Color(0.4f, 1f, 0.4f));
         }
@@ -69,7 +69,7 @@ namespace ShootingGallery
             if (!KaijuActive) return;
             int broken = kaijuCity.Destroyed;
             kaijuCity.End();
-            if (player.Weapon == WeaponType.FireBall) player.ResetWeapon();
+            ReleaseStageWeapon(WeaponType.FireBall);
             StartWorldScale(ScaleWorld(new List<Stall>(stageStalls), false, KaijuGrowTime, kaijuCity.CloseTime));
             HoldStallsFor(kaijuCity.CloseTime + KaijuGrowTime + 0.2f); // 大きくなって戻りきるまで、屋台の拡張 (別の屋台がせり上がる) を待たせる
             stageStalls.Clear();

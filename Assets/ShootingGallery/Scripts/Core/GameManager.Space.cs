@@ -30,7 +30,7 @@ namespace ShootingGallery
             PutAwayStalls(false);
             spaceStage.dropDelay = StallsAwayTime; // 屋台が沈みきってから暗くなる
             spaceStage.Begin();
-            player.GiveWeapon(WeaponType.Missile, spaceStage.duration);
+            player.GiveStageWeapon(WeaponType.Missile, spaceStage.duration);
             Sfx.Play("stageup");
             ShowMessage("SPACE MODE!!", 2f, new Color(0.6f, 0.75f, 1f));
         }
@@ -60,7 +60,7 @@ namespace ShootingGallery
             if (!SpaceActive) return;
             int hits = spaceStage.Hits;
             spaceStage.End();
-            if (player.Weapon == WeaponType.Missile) player.ResetWeapon();
+            ReleaseStageWeapon(WeaponType.Missile);
             StartCoroutine(RiseStallsAfter(new List<Stall>(stageStalls), spaceStage.CloseTime));
             stageStalls.Clear();
             if (State == GameState.Playing)

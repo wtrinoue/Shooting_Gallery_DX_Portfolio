@@ -31,7 +31,7 @@ namespace ShootingGallery
             SetFlatFloor(true); // カーテンが閉まる間に、ハッチが縮んで穴がふさがる
             ResetView(true); // 浮き床で持ち上げる前に、いつもの視点にそろえる (そこからの高さで動かすので)
             concertHall.Begin(yaw, player.transform);
-            player.GiveWeapon(WeaponType.Trumpet, concertHall.duration);
+            player.GiveStageWeapon(WeaponType.Trumpet, concertHall.duration);
             Sfx.Play("stageup");
             ShowMessage("MUSIC MODE!!", 2f, new Color(1f, 0.85f, 0.3f));
         }
@@ -68,7 +68,7 @@ namespace ShootingGallery
             int hits = concertHall.Hits;
             bool immediate = State != GameState.Playing;
             concertHall.End(immediate);
-            if (player.Weapon == WeaponType.Trumpet) player.ResetWeapon();
+            ReleaseStageWeapon(WeaponType.Trumpet);
             HoldStallsFor(immediate ? 0.1f : concertHall.CloseTime); // カーテンが消えるまで、屋台の拡張・入れ替えを待たせる
             if (State == GameState.Playing)
             {

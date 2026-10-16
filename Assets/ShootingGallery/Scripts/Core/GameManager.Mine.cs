@@ -34,7 +34,7 @@ namespace ShootingGallery
             SetShownStallTargets(false);
             ResetView(true); // 下へ降りる前に、いつもの視点にそろえる (そこからの深さで動かすので)
             mineCave.Begin(player.transform);
-            player.GiveWeapon(WeaponType.Pickaxe, mineCave.duration); // つるはしを回しながら投げる
+            player.GiveStageWeapon(WeaponType.Pickaxe, mineCave.duration); // つるはしを回しながら投げる
             // 縦穴を降りる間に、だんだん暗くなる
             FadeAmbience(mineFogColor, mineAmbient * 0.6f, mineSkyColor, mineCave.descendTime * 0.7f);
             FadeSun(sunIntensity * 0.12f, mineCave.descendTime * 0.6f);
@@ -99,7 +99,7 @@ namespace ShootingGallery
                 FadeSun(sunIntensity, 0.05f);
             }
             mineCave.End(immediate);
-            if (player.Weapon == WeaponType.Pickaxe) player.ResetWeapon();
+            ReleaseStageWeapon(WeaponType.Pickaxe);
             HoldStallsFor(immediate ? 0.1f : mineCave.CloseTime); // 上がりきって穴が埋まるまで、屋台の拡張・入れ替えを待たせる
             if (State == GameState.Playing)
             {

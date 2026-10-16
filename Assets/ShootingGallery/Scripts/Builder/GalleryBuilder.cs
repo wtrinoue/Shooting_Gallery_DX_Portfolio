@@ -237,6 +237,8 @@ namespace ShootingGallery
             var submarineDive = BuildSubmarine();
             var concertHall = BuildConcertHall();
             var artMuseum = BuildMuseum();
+            var unknownStage = BuildUnknown();
+            unknownStage.grayExclude = new[] { player.transform, hudText.transform.parent }; // 世界が灰色に止まっても、自分 (手・銃) と HUD は色のまま
             var festivalStage = BuildFestival();
             LogStep("武器の的 / UFO", step);
 
@@ -266,6 +268,7 @@ namespace ShootingGallery
             gm.submarineDive = submarineDive;
             gm.concertHall = concertHall;
             gm.artMuseum = artMuseum;
+            gm.unknownStage = unknownStage;
             gm.festivalStage = festivalStage;
             BuildMoneyPanel(hudText.transform.parent, gm); // 夏祭りモードのお金と残り時間の表示 (HUD の上の方)
             gm.deluxeMainStall = deluxeMain;

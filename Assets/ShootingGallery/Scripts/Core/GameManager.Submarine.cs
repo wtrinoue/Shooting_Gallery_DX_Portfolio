@@ -30,7 +30,7 @@ namespace ShootingGallery
             SetShownStallTargets(false);
             ResetView(true); // もぐる前に、いつもの視点にそろえる (そこからの深さで動かすので)
             submarineDive.Begin(player.transform, player.head.transform);
-            player.GiveWeapon(WeaponType.Torpedo, submarineDive.duration);
+            player.GiveStageWeapon(WeaponType.Torpedo, submarineDive.duration);
             Sfx.Play("stageup");
             ShowMessage("SUBMARINE MODE!!", 2f, new Color(1f, 0.85f, 0.25f));
         }
@@ -86,7 +86,7 @@ namespace ShootingGallery
             int hits = submarineDive.Hits;
             bool immediate = State != GameState.Playing;
             submarineDive.End(immediate);
-            if (player.Weapon == WeaponType.Torpedo) player.ResetWeapon();
+            ReleaseStageWeapon(WeaponType.Torpedo);
             HoldStallsFor(immediate ? 0.1f : submarineDive.CloseTime); // 浮かび上がって屋台が戻り、砂の床が消えるまで、屋台の拡張・入れ替えを待たせる
             if (State == GameState.Playing)
             {

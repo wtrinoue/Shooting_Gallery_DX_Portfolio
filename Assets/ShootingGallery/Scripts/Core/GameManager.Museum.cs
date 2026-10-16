@@ -36,7 +36,7 @@ namespace ShootingGallery
             }
             SetFlatFloor(true); // ハッチが真ん中へ縮んで消え、穴にふたをする
             artMuseum.Begin(yaw, Mathf.Max(MuseumStallSinkTime, HatchTime) + 0.25f);
-            player.GiveWeapon(WeaponType.Imagination, artMuseum.duration); // (始まりの音は鳴らさない。描き終えて光る時に、閃光の音)
+            player.GiveStageWeapon(WeaponType.Imagination, artMuseum.duration); // (始まりの音は鳴らさない。描き終えて光る時に、閃光の音)
             ShowMessage("ART MUSEUM!!", 2f, new Color(0.95f, 0.7f, 1f));
         }
 
@@ -59,7 +59,7 @@ namespace ShootingGallery
             int hits = artMuseum.Hits, done = artMuseum.Completed;
             bool immediate = State != GameState.Playing;
             artMuseum.End(immediate);
-            if (player.Weapon == WeaponType.Imagination) player.ResetWeapon();
+            ReleaseStageWeapon(WeaponType.Imagination);
             HoldStallsFor(immediate ? 0.1f : artMuseum.CloseTime); // 光が晴れるまで、屋台の拡張・入れ替えを待たせる
             if (State == GameState.Playing)
             {

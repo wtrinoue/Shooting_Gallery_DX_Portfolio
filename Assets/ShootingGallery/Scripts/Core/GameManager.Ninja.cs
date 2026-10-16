@@ -45,7 +45,7 @@ namespace ShootingGallery
             RenderSettings.fogEndDistance = Mathf.Max(normalFogEnd, 45f);
             ninjaDojo.dropDelay = StallsAwayTime; // 屋台が沈みきってから壁が起き上がる
             ninjaDojo.Begin(yaw);
-            player.GiveWeapon(WeaponType.Shuriken, ninjaDojo.duration + 0.5f); // 忍者モードの間はずっと手裏剣
+            player.GiveStageWeapon(WeaponType.Shuriken, ninjaDojo.duration + 0.5f); // 忍者モードの間はずっと手裏剣
             StartCoroutine(WhileActiveAfter(StallsAwayTime, () => NinjaActive, () => FadeAmbience(normalFogColor, ninjaAmbient))); // 屋台が沈みきってから
             Sfx.Play("stageup");
             ShowMessage("NINJA MODE!!", 2f, new Color(0.75f, 0.5f, 1f));
@@ -64,7 +64,7 @@ namespace ShootingGallery
             if (!NinjaActive) return;
             int hits = ninjaDojo.Hits;
             ninjaDojo.End();
-            if (player.Weapon == WeaponType.Shuriken) player.ResetWeapon();
+            ReleaseStageWeapon(WeaponType.Shuriken);
             StartCoroutine(RiseStallsAfter(new List<Stall>(ninjaStalls), ninjaDojo.CloseTime + 0.1f));
             ninjaStalls.Clear();
             FadeAmbience(normalFogColor, normalAmbient);

@@ -43,8 +43,12 @@ namespace ShootingGallery
             restPosCaptured = true;
         }
 
+        /// <summary>屋台の的を出す直前 (GameManager が、モード専用の武器をここでハンドガンに戻す)</summary>
+        public static event System.Action<Stall> TargetsShowing;
+
         public void SetTargetsAvailable(bool value)
         {
+            if (value) TargetsShowing?.Invoke(this);
             // しまう時は、せり上がり途中の「着いたら的を出す」も取り消す (ゲーム終了後に的が出てこないように)
             if (!value) enableTargetsOnArrive = false;
             foreach (var t in targets)
@@ -192,6 +196,110 @@ namespace ShootingGallery
             {
                 enableTargetsOnArrive = false;
                 SetTargetsAvailable(true);
+            }
+        }
+
+        // ---- 海戦モード: 船の外の海へはね飛ばされ、海に流されて、船の後ろで沈んでいく ----
+
+        /// <summary>
+        /// 海戦モード: 少し跳ね上がって、船 (ship。原点が船の真ん中、+Z が船首) の横の外側の海へ落ち (水しぶき)、
+        /// ぷかぷか揺れながら後ろへ流されていき、船の後ろの見やすい所で、傾きながら沈んでいく (水しぶき)。
+        /// delay 秒待ってから始める (屋台ごとにずらす)。沈みきったら隠す (いつもの隠れた姿勢に戻しておく)
+        /// </summary>
+        public void CastAdrift(Transform ship, float shipHalfWidth, float sternZ, float seaY, float delay, Material splash)
+        {
+            if (!gameObject.activeInHierarchy || ship == null) return;
+            CaptureRestPos();
+            CaptureScale();
+            enableTargetsOnArrive = false;
+            SetTargetsAvailable(false);
+            if (moveRoutine != null) StopCoroutine(moveRoutine);
+            HideChute();
+            worldScaling = false;
+            transform.localScale = restScale;
+            moveRoutine = StartCoroutine(AdriftRoutine(ship, shipHalfWidth, sternZ, seaY, delay, splash));
+        }
+
+        IEnumerator AdriftRoutine(Transform ship, float halfWidth, float sternZ, float seaY, float delay, Material splash)
+        {
+            if (delay > 0f) yield return new WaitForSeconds(delay);
+            Vector3 start = transform.position;
+            Quaternion startRot = transform.rotation;
+            var onShip = ship.InverseTransformPoint(start);
+            float side = Mathf.Abs(onShip.x) > 0.4f ? Mathf.Sign(onShip.x) : (Random.value < 0.5f ? -1f : 1f); // 近い方の船べりの外へ
+            float floatY = seaY - 0.35f; // 屋台の根元が少し水につかった高さ
+            // 落ちる所: 船べりより外 (屋台の幅の分も空ける)。前後は今の位置のあたり
+            var land = ship.TransformPoint(new Vector3(side * Random.Range(halfWidth + 2.4f, halfWidth + 3.2f), 0f,
+                                                       Mathf.Clamp(onShip.z, sternZ + 1f, 4f) + Random.Range(-0.6f, 0.6f)));
+            land.y = floatY;
+            // 沈む所: 船の後ろの、斜め後ろを振り返ると見える所 (屋台ごとに少しずつ違う)
+            var sinkAt = ship.TransformPoint(new Vector3(side * Random.Range(halfWidth + 2.6f, halfWidth + 6f), 0f, sternZ - Random.Range(6f, 11f)));
+            sinkAt.y = floatY;
+            var lean = Quaternion.AngleAxis(Random.Range(-12f, 12f), ship.forward) * Quaternion.AngleAxis(Random.Range(-8f, 8f), ship.right);
+            float seed = Random.value * 10f;
+
+            // 1. 少し跳ね上がって、船の外の海へ (回りながら)
+            const float HopTime = 0.85f;
+            float hopH = Random.Range(0.9f, 1.5f), hopSpin = Random.Range(-40f, 40f);
+            for (float t = 0f; t < 1f; t += Time.deltaTime / HopTime)
+            {
+                transform.position = Vector3.Lerp(start, land, t) + Vector3.up * (4f * hopH * t * (1f - t));
+                transform.rotation = Quaternion.AngleAxis(hopSpin * t, Vector3.up) * Quaternion.Slerp(startRot, lean * startRot, t);
+                yield return null;
+            }
+            var floatRot = Quaternion.AngleAxis(hopSpin, Vector3.up) * lean * startRot;
+            SplashAround(land, splash, 6, 1.6f, 0.6f, 1.1f); // ザブン
+
+            // 2. ぷかぷか揺れながら、後ろへ流されていく (はじめは落ちた勢いで速く、だんだんゆっくり)
+            float driftTime = Random.Range(3.2f, 4.2f), driftSpin = Random.Range(-30f, 30f), nextSplash = 0f;
+            Vector3 bobPos = land;
+            for (float t = 0f; t < 1f; t += Time.deltaTime / driftTime)
+            {
+                float e = 1f - (1f - t) * (1f - t);
+                float time = Time.time + seed;
+                bobPos = Vector3.Lerp(land, sinkAt, e) + Vector3.up * (Mathf.Sin(time * 2.1f) * 0.08f);
+                transform.position = bobPos;
+                transform.rotation = Quaternion.AngleAxis(driftSpin * e, Vector3.up)
+                                   * Quaternion.AngleAxis(Mathf.Sin(time * 1.6f) * 4f, ship.forward) * Quaternion.AngleAxis(Mathf.Sin(time * 1.3f + 1f) * 3f, ship.right)
+                                   * floatRot;
+                if (splash != null && Time.time >= nextSplash) // 流れていく根元の小さな波しぶき
+                {
+                    nextSplash = Time.time + 0.35f;
+                    SplashAround(new Vector3(bobPos.x, seaY, bobPos.z), splash, 1, 1.4f, 0.3f, 0.55f);
+                }
+                yield return null;
+            }
+
+            // 3. 傾きながら、だんだん速く沈んでいく (ブクブクと水しぶき)
+            const float SinkTime = 2f, SinkDepth = 5.5f;
+            var before = transform.rotation;
+            var tipped = Quaternion.AngleAxis(Random.Range(28f, 42f) * (Random.value < 0.5f ? -1f : 1f), ship.forward) * before;
+            nextSplash = 0f;
+            for (float t = 0f; t < 1f; t += Time.deltaTime / SinkTime)
+            {
+                transform.position = bobPos + Vector3.down * (SinkDepth * t * t);
+                transform.rotation = Quaternion.Slerp(before, tipped, Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(t * 1.8f)));
+                if (splash != null && t < 0.6f && Time.time >= nextSplash)
+                {
+                    nextSplash = Time.time + 0.09f;
+                    SplashAround(new Vector3(bobPos.x, seaY, bobPos.z), splash, 1, 1.3f, 0.4f, 0.8f);
+                }
+                yield return null;
+            }
+            moveRoutine = null;
+            transform.localRotation = restRot;
+            transform.localPosition = restPos + Vector3.down * hiddenDepth;
+            gameObject.SetActive(false);
+        }
+
+        // center のまわり (半径 spread) に、水しぶきを count 個
+        static void SplashAround(Vector3 center, Material splash, int count, float spread, float minSize, float maxSize)
+        {
+            if (splash == null) return;
+            for (int i = 0; i < count; i++)
+            {
+                var r = Random.insideUnitCircle * spread;
+                Explosion.Spawn(center + new Vector3(r.x, 0.1f, r.y), Random.Range(minSize, maxSize), splash);
             }
         }
 

@@ -48,6 +48,9 @@ namespace ShootingGallery
         public AudioClip flash;
         [Tooltip("美術館モード: 粘土がぺちゃっとくっついて、むにゅっと押しつけられる音")]
         public AudioClip clay;
+        [Header("Unknown ステージ (世界が灰色に止まるキーン / ひびが入るピキピキ / 割れるガシャーン / 破片が集まるカシャカシャ / ガラスが砕けるパリン)")]
+        public AudioClip freeze, crack, shatter, reassemble, glass;
+        public AudioClip zap, warpZap;
         [Header("同時に鳴る音の抑え方")]
         [Tooltip("同じ種類の音がこの秒数以内に続いたら、2回目以降は鳴らさない (複数の的を同時に倒した時など)")]
         public float sameSoundGap = 0.07f;
@@ -127,6 +130,13 @@ namespace ShootingGallery
                 () => { if (chisel == null) chisel = Chisel(); }, // カン、カン、ぱらぱら (石を彫る)
                 () => { if (flash == null) flash = Flash(); }, // シュワーッ…パァーン (白い閃光)
                 () => { if (clay == null) clay = Clay(); }, // ぺちゃっ…むにゅ (粘土)
+                () => { if (freeze == null) freeze = FreezeRing(); }, // キーン (世界が止まる)
+                () => { if (crack == null) crack = Cracks("Crack", 1.4f, 70); }, // ピキッ、ピキピキッ…
+                () => { if (shatter == null) shatter = Shatter("Shatter", 2f, 1f, false); }, // ガシャーン (ガラスが割れて散らばる)
+                () => { if (reassemble == null) reassemble = Shatter("Reassemble", 2.2f, 0.7f, true); }, // カシャ、カシャカシャ… (破片が集まってくる)
+                () => { if (glass == null) glass = Shatter("Glass", 0.55f, 0.6f, false); }, // パリン (的が砕ける)
+                () => { if (zap == null) zap = Zap(); }, // ビリッ (紫の電撃を撃つ)
+                () => { if (warpZap == null) warpZap = WarpZap(); }, // ビリビリビリ…シュン (撃たれた物が別の世界へ転送される)
 
                 () => { if (blackout == null) blackout = Blackout(); }, // バツン
                 () => { if (drumroll == null) drumroll = Drumroll(3.6f); }, // ドロロロロ…
@@ -180,6 +190,7 @@ namespace ShootingGallery
                      : type == WeaponType.Sniper ? instance.sniperShot
                      : type == WeaponType.Shuriken || type == WeaponType.Dart || type == WeaponType.Pickaxe ? instance.shurikenThrow
                      : type == WeaponType.CorkGun ? instance.corkPop
+                     : type == WeaponType.Lightning ? instance.zap
                      : type == WeaponType.RingToss || type == WeaponType.Poi || type == WeaponType.Coin ? instance.fusuma // ふわっと投げる音
                      : instance.handgunShot;
             // 二丁拳銃で左右同時に撃っても1発分の音。つるはしは押しっぱなしで次々に投げるので、続けて聞いても気にならない小ささに
@@ -225,7 +236,7 @@ namespace ShootingGallery
             }
             // 的に当たった音 (hit / bonus) は同じ種類として扱い、同時に倒しても1回だけ鳴らす
             string group = name == "bonus" ? "hit" : name;
-            bool limited = name == "hit" || name == "bonus" || name == "explosion" || name == "pickup" || name == "ufo" || name == "thunk" || name == "fusuma" || name == "coin" || name == "reelstop" || name == "ghostpop" || name == "splash" || name == "rip" || name == "paint" || name == "chisel" || name == "clay";
+            bool limited = name == "hit" || name == "bonus" || name == "explosion" || name == "pickup" || name == "ufo" || name == "thunk" || name == "fusuma" || name == "coin" || name == "reelstop" || name == "ghostpop" || name == "splash" || name == "rip" || name == "paint" || name == "chisel" || name == "clay" || name == "glass";
             AudioClip clip = name switch
             {
                 "stageup" => instance.stageUp,
@@ -273,6 +284,12 @@ namespace ShootingGallery
                 "chisel" => instance.chisel,
                 "flash" => instance.flash,
                 "clay" => instance.clay,
+                "freeze" => instance.freeze,
+                "crack" => instance.crack,
+                "shatter" => instance.shatter,
+                "reassemble" => instance.reassemble,
+                "glass" => instance.glass,
+                "warpzap" => instance.warpZap,
                 "warpin" => instance.warpIn,
                 "warpout" => instance.warpOut,
                 _ => null
@@ -1032,6 +1049,132 @@ namespace ShootingGallery
         /// <summary>
         /// 粘土の音: 飛んできた粘土が「ぺちゃっ」とくっつき (低くこもった短い音と、湿った音)、そのあと「むにゅ」と押しつけられる
         /// </summary>
+        /// <summary>キーン: 耳鳴りのような高い音が、わずかにうなりながら長く残る (世界が灰色に止まる瞬間)</summary>
+        static AudioClip FreezeRing()
+        {
+            const float Length = 2.2f;
+            int n = (int)(Rate * Length);
+            var data = new float[n];
+            float lp = 0f;
+            for (int i = 0; i < n; i++)
+            {
+                float t = i / (float)Rate;
+                float env = Mathf.Clamp01(t * 40f) * Mathf.Exp(-t * 1.3f);
+                float v = (Mathf.Sin(2f * Mathf.PI * 3520f * t) * 0.5f + Mathf.Sin(2f * Mathf.PI * 3527f * t) * 0.35f + Mathf.Sin(2f * Mathf.PI * 1760f * t) * 0.2f) * env;
+                // 始まりの一瞬だけ、空気が止まるような低いドン
+                lp = Mathf.Lerp(lp, Random.Range(-1f, 1f), 0.05f);
+                v += (Mathf.Sin(2f * Mathf.PI * 50f * t) * 0.6f + lp * 0.8f) * Mathf.Exp(-t * 9f);
+                data[i] = Mathf.Clamp(v * 0.6f, -1f, 1f);
+            }
+            var clip = AudioClip.Create("FreezeRing", n, 1, Rate, false);
+            clip.SetData(data, 0);
+            return clip;
+        }
+
+        /// <summary>ピキピキ: ガラスにひびが走る、短く鋭い音が、だんだん増えながら続く</summary>
+        static AudioClip Cracks(string name, float length, int count)
+        {
+            int n = (int)(Rate * length);
+            var data = new float[n];
+            for (int c = 0; c < count; c++)
+            {
+                float at = Mathf.Pow(Random.value, 0.6f) * length * 0.92f; // 後ろほど多い
+                float f = Random.Range(2200f, 5200f);
+                float amp = Random.Range(0.25f, 0.6f);
+                int start = (int)(at * Rate), len = (int)(0.035f * Rate);
+                for (int i = 0; i < len && start + i < n; i++)
+                {
+                    float d = i / (float)Rate;
+                    data[start + i] += (Mathf.Sin(2f * Mathf.PI * f * d) * 0.7f + Random.Range(-1f, 1f) * 0.5f) * Mathf.Exp(-d * 140f) * amp;
+                }
+            }
+            for (int i = 0; i < n; i++) data[i] = Mathf.Clamp(data[i], -1f, 1f);
+            var clip = AudioClip.Create(name, n, 1, Rate, false);
+            clip.SetData(data, 0);
+            return clip;
+        }
+
+        /// <summary>
+        /// ガシャーン: 割れた瞬間のザッという音と、たくさんのガラスのかけらがチリンチリンと鳴りながら散らばる音。
+        /// reverse なら逆に、かけらの音がだんだん増えて集まってきて、最後にカシャッとはまる
+        /// </summary>
+        static AudioClip Shatter(string name, float length, float loudness, bool reverse)
+        {
+            int n = (int)(Rate * length);
+            var data = new float[n];
+            int pings = (int)(90 * length);
+            for (int c = 0; c < pings; c++)
+            {
+                float x = Mathf.Pow(Random.value, 2.2f); // 割れた直後ほど多い
+                float at = (reverse ? 1f - x : x) * length * 0.95f;
+                float f = Random.Range(2500f, 7500f);
+                float amp = Random.Range(0.08f, 0.3f) * (reverse ? 0.5f + 0.5f * at / length : 1f - 0.6f * at / length);
+                int start = (int)(at * Rate), len = (int)(0.12f * Rate);
+                for (int i = 0; i < len && start + i < n; i++)
+                {
+                    float d = i / (float)Rate;
+                    data[start + i] += Mathf.Sin(2f * Mathf.PI * f * d) * Mathf.Exp(-d * 45f) * amp;
+                }
+            }
+            float lp = 0f;
+            for (int i = 0; i < n; i++)
+            {
+                float t = i / (float)Rate;
+                lp = Mathf.Lerp(lp, Random.Range(-1f, 1f), 0.6f);
+                float hit = reverse ? Mathf.Exp(-Mathf.Abs(t - length * 0.93f) * 60f) : Mathf.Exp(-t * 14f); // ザッ (割れた瞬間 / はまる瞬間)
+                float swell = reverse ? Mathf.Pow(t / length, 3f) * 0.25f : 0f; // 集まってくる時の、だんだん大きくなるシャーッ
+                data[i] = Mathf.Clamp((data[i] + lp * (hit * 0.9f + swell)) * loudness, -1f, 1f);
+            }
+            var clip = AudioClip.Create(name, n, 1, Rate, false);
+            clip.SetData(data, 0);
+            return clip;
+        }
+
+        // ビリッ: 細かく途切れるジジッという電気の音に、下がっていく高い音を重ねる (短く)
+        static AudioClip Zap()
+        {
+            const float Length = 0.22f;
+            int n = (int)(Rate * Length);
+            var data = new float[n];
+            float phase = 0f, hold = 0f;
+            for (int i = 0; i < n; i++)
+            {
+                float t = i / (float)Rate;
+                if (i % 40 == 0) hold = Random.value < 0.75f ? Random.Range(-1f, 1f) : 0f; // ジジッ (途切れ途切れの火花)
+                float f = Mathf.Lerp(2400f, 500f, t / Length);
+                phase += 2f * Mathf.PI * f / Rate;
+                float buzz = Mathf.Sign(Mathf.Sin(phase)) * 0.25f + Mathf.Sin(phase * 0.5f) * 0.2f;
+                float env = Mathf.Exp(-t * 14f) * Mathf.Clamp01(t * 600f);
+                data[i] = Mathf.Clamp((hold * 0.55f + buzz) * env, -1f, 1f);
+            }
+            var clip = AudioClip.Create("Zap", n, 1, Rate, false);
+            clip.SetData(data, 0);
+            return clip;
+        }
+
+        // ビリビリビリ…シュン: 火花の音が続きながら、音の高さが上がっていき、最後に小さく消える (別の世界へ吸い込まれる)
+        static AudioClip WarpZap()
+        {
+            const float Length = 0.8f;
+            int n = (int)(Rate * Length);
+            var data = new float[n];
+            float phase = 0f, hold = 0f;
+            for (int i = 0; i < n; i++)
+            {
+                float t = i / (float)Rate, u = t / Length;
+                if (i % 55 == 0) hold = Random.value < 0.6f ? Random.Range(-1f, 1f) : 0f;
+                float f = Mathf.Lerp(300f, 1800f, u * u);
+                phase += 2f * Mathf.PI * f / Rate;
+                float tone = Mathf.Sin(phase) * 0.35f + Mathf.Sin(phase * 2.01f) * 0.12f;
+                float crackle = hold * 0.4f * (1f - u * 0.6f);
+                float env = Mathf.Clamp01(t * 300f) * (1f - u * u);
+                data[i] = Mathf.Clamp((tone + crackle) * env * 0.8f, -1f, 1f);
+            }
+            var clip = AudioClip.Create("WarpZap", n, 1, Rate, false);
+            clip.SetData(data, 0);
+            return clip;
+        }
+
         static AudioClip Clay()
         {
             const float Length = 0.6f, Hit = 0.16f, Press = 0.3f;

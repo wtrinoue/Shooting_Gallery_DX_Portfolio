@@ -7,10 +7,10 @@ namespace ShootingGallery
     /// <summary>1丁の銃。見た目の切り替えと発射(レイキャスト)を担当する。</summary>
     public class GunController : MonoBehaviour
     {
-        [Tooltip("WeaponType の順 (Handgun, MachineGun, Shotgun, Bomb, Sniper, Bazooka, Shuriken, FireBall, Dart, Revolver, Missile, Flashlight, Pickaxe, RingToss, CorkGun, Poi, Coin, Torpedo, Trumpet, Imagination, AirMachineGun) に並べた見た目")]
-        public GameObject[] models = new GameObject[21];
+        [Tooltip("WeaponType の順 (Handgun, MachineGun, Shotgun, Bomb, Sniper, Bazooka, Shuriken, FireBall, Dart, Revolver, Missile, Flashlight, Pickaxe, RingToss, CorkGun, Poi, Coin, Torpedo, Trumpet, Imagination, AirMachineGun, Lightning) に並べた見た目")]
+        public GameObject[] models = new GameObject[22];
         [Tooltip("各見た目の銃口。最初の子をマズルフラッシュとして使う")]
-        public Transform[] muzzles = new Transform[21];
+        public Transform[] muzzles = new Transform[22];
         [Header("夏祭り (輪投げの輪 / コルク / ポイ / お金)")]
         [Tooltip("輪の形 (ドーナツ形のメッシュ) と、投げるたびに選ぶ輪の色")]
         public Mesh ringMesh;
@@ -64,6 +64,8 @@ namespace ShootingGallery
         public Material[] imaginationMaterials;
         public Material imaginationTrailMaterial;
         public Material imaginationSparkMaterial;
+        [Tooltip("紫の電撃 (Unknown ステージの武器) の稲妻の材質")]
+        public Material lightningMaterial;
         [Header("Sniper / Shuriken")]
         [Tooltip("レーザーポインター (銃口から当たる所まで伸びる)。スナイパーは赤、手裏剣は白")]
         public LineRenderer laser;
@@ -602,14 +604,17 @@ namespace ShootingGallery
                 Vector3 end = origin + dir * def.range;
                 // 弾が多いショットガンは補正を小さく (全弾に大きな補正がつくと強すぎるため)
                 float assist = def.pellets > 1 ? aimAssistRadius * 0.5f : aimAssistRadius;
+                bool hitSomething = false;
                 if (TryHitTarget(origin, dir, def.range, assist, out var target, out var point))
                 {
                     end = point;
+                    hitSomething = true;
                     target.Hit(point);
                 }
                 else if (Physics.Raycast(origin, dir, out var wall, def.range, hitMask, QueryTriggerInteraction.Ignore))
                     end = wall.point;
-                SpawnTracer(origin, end);
+                if (current == WeaponType.Lightning) SpawnLightning(origin, end, hitSomething);
+                else SpawnTracer(origin, end);
             }
         }
 
@@ -676,6 +681,16 @@ namespace ShootingGallery
             lr.SetPosition(0, from);
             lr.SetPosition(1, to);
             FxPool.ReleaseAfter("Tracer", go, 0.05f);
+        }
+
+        // 紫の電撃: 銃口から当たった所まで、まっすぐな太いレーザーが1本走る (太さは銃の胴より少し細いくらい。的に当たらなかった時は 14m 先までで消える)
+        const float LightningBeamWidth = 0.028f;
+
+        void SpawnLightning(Vector3 from, Vector3 to, bool hit)
+        {
+            if (lightningMaterial == null) { SpawnTracer(from, to); return; }
+            if (!hit) to = from + (to - from).normalized * Mathf.Min(Vector3.Distance(from, to), 14f);
+            LightningBolt.Spawn(from, to, lightningMaterial, LightningBeamWidth, 0.12f, 0f, null, 0.85f);
         }
 
         // 投げる武器 (手裏剣 / ダーツ): 手に持った1本が消えて、少しして次の1本が出る。part を渡すとその部品だけ (込めてあるミサイル)
