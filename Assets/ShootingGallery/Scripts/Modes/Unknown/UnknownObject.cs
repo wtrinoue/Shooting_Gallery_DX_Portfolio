@@ -154,6 +154,7 @@ namespace ShootingGallery
             else
             {
                 float h = t - travel;
+                // ぷかぷか: 止まった高さのまま、横に少しずつ流れながら上下にゆらゆら (下へは沈んでいかない)
                 transform.position = dest + driftDir * (drift * h) + Vector3.up * (Mathf.Sin((h + phase) * 1.4f) * bob);
                 heading = driftDir;
                 if (h >= hover) BeginFade();

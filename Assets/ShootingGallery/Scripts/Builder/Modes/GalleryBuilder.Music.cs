@@ -402,7 +402,7 @@ namespace ShootingGallery
 
             MeshPart(hall, "BalconyWood", BoxesMesh("Shape_ConcertBalconyWood", wood), Mat("Concert_BalconyWood", new Color(0.55f, 0.35f, 0.19f), null, false, 0.45f));
             MeshPart(hall, "BalconySoffit", BoxesMesh("Shape_ConcertBalconySoffit", soffit), Mat("Concert_Soffit", new Color(0.78f, 0.62f, 0.42f)));
-            MeshPart(hall, "BalconyGlow", BoxesMesh("Shape_ConcertBalconyGlow", glow), Mat("Concert_BalconyGlow", new Color(1f, 0.82f, 0.55f), new Color(1.5f, 1.05f, 0.5f), true));
+            MeshPart(hall, "BalconyGlow", BoxesMesh("Shape_ConcertBalconyGlow", glow), Mat("Concert_BalconyGlow", new Color(0.7f, 0.55f, 0.38f), new Color(0.55f, 0.38f, 0.18f), true) /* (客席側は控えめに光らせる) */);
             MeshPart(hall, "BalconySeats", BoxesMesh("Shape_ConcertBalconySeats", cushion), Mat("Concert_Seat", new Color(0.45f, 0.06f, 0.09f)));
             MeshPart(hall, "BalconySeatFrames", BoxesMesh("Shape_ConcertBalconySeatFrames", frame), Mat("Concert_SeatFrame", new Color(0.12f, 0.08f, 0.06f)));
         }

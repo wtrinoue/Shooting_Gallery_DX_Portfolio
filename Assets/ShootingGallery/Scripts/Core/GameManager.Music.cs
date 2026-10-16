@@ -58,7 +58,7 @@ namespace ShootingGallery
         // ステージがぱっと明るくなる (照明は ConcertHall が上げ、明るくなりきった瞬間に演奏が始まる)。ホール全体の環境光も同時に明るくする
         void OnConcertMusic()
         {
-            FadeAmbience(concertFogColor, concertAmbientBright, concertSkyColor, concertHall.lightRiseSeconds);
+            FadeAmbience(concertFogColor, concertAmbientPlay, concertSkyColor, concertHall.lightRiseSeconds);
         }
 
         /// <summary>音楽モードの時間切れ: 演奏が終わり、カーテンが閉まって元の屋台に戻る (ラウンドの終わり・リセットの時は、その場ですぐ戻す)</summary>
