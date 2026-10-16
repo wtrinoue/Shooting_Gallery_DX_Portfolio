@@ -150,6 +150,20 @@ namespace ShootingGallery
         /// (アセットにしておかないと、シーンに保存・コピペした時にマテリアルが外れてしまう)
         /// 同じ名前のファイルがあれば中身を上書きして使い回すので、何度生成してもファイルは増えない。
         /// </summary>
+        /// <summary>
+        /// BGM などのアセットを読む。エディターではファイルの場所から読み、実機では Resources の一覧 (GalleryRuntimeAssets) から読む
+        /// (実機には UnityEditor.AssetDatabase がないので。一覧はビルドの直前にエディターがそろえる)
+        /// </summary>
+        T LoadSourceAsset<T>(string path, System.Func<GalleryRuntimeAssets, T> fromRuntime) where T : Object
+        {
+#if UNITY_EDITOR
+            var asset = UnityEditor.AssetDatabase.LoadAssetAtPath<T>(path);
+            if (asset != null) return asset;
+#endif
+            var runtime = GalleryRuntimeAssets.Instance;
+            return runtime != null ? fromRuntime(runtime) : null;
+        }
+
         Material SaveAsAssetIfEditing(Material mat, string name)
         {
 #if UNITY_EDITOR
