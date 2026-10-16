@@ -73,6 +73,7 @@ namespace ShootingGallery
         WeaponType weapon = WeaponType.Handgun;
         float weaponTimeLeft;
         float weaponDuration;
+        bool stageWeapon; // モード専用の武器 (時間が来ても自動では戻らない。GameManager が屋台が見えてから戻す)
         bool dualWield;
 
         bool? xrModeApplied;
@@ -239,7 +240,11 @@ namespace ShootingGallery
             if (weapon != WeaponType.Handgun)
             {
                 weaponTimeLeft -= Time.deltaTime;
-                if (weaponTimeLeft <= 0f) ResetWeapon();
+                if (weaponTimeLeft <= 0f)
+                {
+                    if (stageWeapon) weaponTimeLeft = 0f; // (モード専用の武器は、帰りの途中で勝手にハンドガンにならないように持ったまま)
+                    else ResetWeapon();
+                }
             }
             var def = Weapons.Get(weapon);
             rightGun.SetInfo(rightGun.IsCharging ? "CHARGING..." : rightGun.IsReloading ? (weapon == WeaponType.Poi ? "NEXT POI..." : "RELOADING...") : def.displayName); // 残りの弾は銃の上の弾の列で見せる
@@ -287,11 +292,20 @@ namespace ShootingGallery
             WeaponType.Torpedo => new Color(0.35f, 0.9f, 1f),
             WeaponType.Trumpet => new Color(1f, 0.82f, 0.3f),
             WeaponType.Imagination => new Color(0.95f, 0.6f, 1f),
+            WeaponType.Lightning => new Color(0.75f, 0.4f, 1f),
             _ => Color.white
         };
 
+        /// <summary>モード専用の武器を持たせる (時間が来ても自動ではハンドガンに戻らない。戻すのは GameManager.ReleaseStageWeapon)</summary>
+        public void GiveStageWeapon(WeaponType type, float duration)
+        {
+            GiveWeapon(type, duration);
+            stageWeapon = true;
+        }
+
         public void GiveWeapon(WeaponType type, float duration)
         {
+            stageWeapon = false;
             weapon = type;
             weaponTimeLeft = duration;
             weaponDuration = duration;
@@ -303,6 +317,7 @@ namespace ShootingGallery
         {
             weapon = WeaponType.Handgun;
             weaponTimeLeft = 0f;
+            stageWeapon = false;
             rightGun.SetWeapon(weapon);
             if (leftGun != null) leftGun.SetWeapon(weapon);
         }

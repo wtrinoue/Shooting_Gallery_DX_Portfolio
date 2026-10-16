@@ -37,6 +37,13 @@ namespace ShootingGallery
         [Tooltip("終わりのこの秒数前からは新しい敵を出さない (出てきてすぐ去るのを防ぐ)")]
         public float stopLaunchBefore = 2f;
 
+        [Header("BGM")]
+        [Tooltip("自分のプロペラ機に乗った (足元にせり上がりきった) 時から流す曲 (Assets/Source/sky_stage/oozora.mp3。音楽の卵「大空は君のもの」。クレジットは Resources/THIRD_PARTY_NOTICES.txt)。空なら流さない")]
+        public AudioClip bgmClip;
+        [Range(0f, 1f)] public float bgmVolume = 0.5f;
+        [Tooltip("曲がふわっと大きくなる / 消えていく秒数")]
+        public float bgmFade = 1f;
+
         [Header("Timing")]
         [Tooltip("始まってから終わるまでの秒数 (屋台が落ちる時間も含む)")]
         public float duration = 18f;
@@ -61,6 +68,9 @@ namespace ShootingGallery
         Vector3[] groundRest;
         bool[] groundWasActive;
         float currentRise;
+        AudioSource bgm;
+        float bgmTarget;   // 曲の音量の行き先 (0 になったら止める)
+        bool bgmStarted;   // 今回の空中ステージで、もう曲を流し始めたか
 
         void Awake()
         {
@@ -75,6 +85,11 @@ namespace ShootingGallery
             }
             SetRise(0f);
             SetStageVisible(false);
+            bgm = gameObject.AddComponent<AudioSource>();
+            bgm.playOnAwake = false;
+            bgm.loop = true;
+            bgm.spatialBlend = 0f; // どこにいても同じ大きさ
+            bgm.volume = 0f;
         }
 
         /// <summary>空中ステージを始める (少し待ってから地面を落とし、翼をせり上げ、敵を出し始める)。yawDeg = 自分のプロペラ機の前 (機首) を向ける向き (度。撃った的の方)</summary>
@@ -87,6 +102,8 @@ namespace ShootingGallery
             nextLaunchTime = Time.time + dropDelay + riseTime * 0.8f; // 翼がせり上がり終わる頃に1機目
             Downed = 0;
             lastAngle = Random.Range(0f, 360f);
+            bgmStarted = false;
+            if (bgmClip != null && bgmClip.loadState == AudioDataLoadState.Unloaded) bgmClip.LoadAudioData(); // 乗るまでに読み込んでおく
             for (int i = 0; i < scenery.Length; i++)
                 scenery[i].speed = scrollSpeed * (sceneryFactors != null && i < sceneryFactors.Length ? sceneryFactors[i] : 1f);
             // 床 (地面・穴のふち) はその場できれいさっぱり消す。下は一面の空と雲の海 (屋台は GameManager が空中から落とす)
@@ -105,6 +122,7 @@ namespace ShootingGallery
             if (!IsActive) return;
             IsActive = false;
             foreach (var e in enemies) e.Retreat();
+            bgmTarget = 0f; // 曲はふわっと消える
             if (groundRoutine != null) StopCoroutine(groundRoutine);
             groundRoutine = StartCoroutine(GrowGround());
             Play(Rise(0f, 0f));
@@ -136,6 +154,12 @@ namespace ShootingGallery
 
         void Update()
         {
+            // BGM の音量をなめらかに行き先へ (消えきったら止める)
+            if (bgm != null && bgm.isPlaying)
+            {
+                bgm.volume = Mathf.MoveTowards(bgm.volume, bgmTarget, Time.deltaTime * bgmVolume / Mathf.Max(0.05f, bgmFade));
+                if (bgmTarget <= 0f && bgm.volume <= 0f) bgm.Stop();
+            }
             if (!IsActive) return;
             if (Time.time < nextLaunchTime || TimeLeft < stopLaunchBefore) return;
             nextLaunchTime = Time.time + Random.Range(launchInterval.x, launchInterval.y);
@@ -181,6 +205,19 @@ namespace ShootingGallery
             float wing = Mathf.Clamp01(k / 0.5f);
             wing = wing * wing * (3f - 2f * wing);
             plane.localPosition = planeRest + Vector3.down * (planeHiddenDepth * (1f - wing));
+            // プロペラ機が足元までせり上がりきった (プレイヤーが乗った): 曲を頭から流す
+            if (IsActive && !bgmStarted && wing >= 1f) StartBgm();
+        }
+
+        void StartBgm()
+        {
+            bgmStarted = true;
+            if (bgm == null || bgmClip == null) return;
+            bgm.clip = bgmClip;
+            bgm.time = 0f;
+            bgm.volume = 0f;
+            bgm.Play();
+            bgmTarget = bgmVolume;
         }
 
         void SetStageVisible(bool visible)

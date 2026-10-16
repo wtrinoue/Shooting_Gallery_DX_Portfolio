@@ -22,6 +22,11 @@ namespace ShootingGallery
         public Transform sea;
         public float seaY = 0.05f;
         public float seaHiddenY = -0.4f;
+        [Tooltip("自分の船の大きさ (屋台を船の外の海へはね飛ばし、船の後ろで沈める時に使う。ローカル座標): 横幅の半分 / 船尾の Z")]
+        public float shipHalfWidth = 1.65f;
+        public float shipSternZ = -3.6f;
+        /// <summary>海面の高さ (ワールド)</summary>
+        public float SeaWorldY => transform.TransformPoint(0f, seaY, 0f).y;
         [Tooltip("海が覆ったら消す床の部品 (地面・穴のふち)。帰りは海が引く前に戻す")]
         public Transform[] groundParts;
         [Tooltip("屋台が海に沈む時の水しぶき (半透明)")]

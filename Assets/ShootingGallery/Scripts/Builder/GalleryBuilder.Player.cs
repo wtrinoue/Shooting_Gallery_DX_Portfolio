@@ -411,6 +411,25 @@ namespace ShootingGallery
             BuildAirMachineGunModel(am, grip);
             var amMuzzle = Muzzle(am, new Vector3(0f, 0.03f, 0.47f), flashMat);
 
+            // 21: 紫の電撃 (Unknown ステージ専用。黒い握りと胴に、紫に光る3つのコイル。先は3本の爪で、真ん中に光る玉)
+            var lt = Group(gunGo.transform, "Model_Lightning");
+            var ltBody = Mat("Lightning_Body", new Color(0.16f, 0.14f, 0.22f), new Color(0.02f, 0.01f, 0.04f), false, 0.8f);
+            var ltGlow = Mat("Lightning_Glow", new Color(0.75f, 0.45f, 1f), new Color(1.8f, 0.9f, 3f), true);
+            var ltSilver = Mat("Lightning_Silver", new Color(0.75f, 0.75f, 0.82f), null, false, 0.85f);
+            GunPart(PrimitiveType.Cube, lt, new Vector3(0f, -0.045f, -0.02f), new Vector3(0.026f, 0.08f, 0.032f), ltBody, 15f);   // 握り
+            GunPart(PrimitiveType.Cylinder, lt, new Vector3(0f, 0.01f, 0.04f), new Vector3(0.034f, 0.07f, 0.034f), ltBody, 90f);  // 胴
+            for (int i = 0; i < 3; i++)                                                                                             // 光るコイル
+                GunPart(PrimitiveType.Cylinder, lt, new Vector3(0f, 0.01f, 0.0f + i * 0.03f), new Vector3(0.04f, 0.005f, 0.04f), ltGlow, 90f);
+            GunPart(PrimitiveType.Cylinder, lt, new Vector3(0f, 0.01f, 0.115f), new Vector3(0.022f, 0.012f, 0.022f), ltSilver, 90f); // 先の口金
+            for (int i = 0; i < 3; i++)                                                                                             // 3本の爪
+            {
+                float a = i * 120f * Mathf.Deg2Rad;
+                GunPart(PrimitiveType.Cube, lt, new Vector3(Mathf.Cos(a) * 0.016f, 0.01f + Mathf.Sin(a) * 0.016f, 0.14f), new Vector3(0.005f, 0.005f, 0.04f), ltSilver);
+            }
+            GunPart(PrimitiveType.Sphere, lt, new Vector3(0f, 0.01f, 0.15f), Vector3.one * 0.016f, ltGlow); // 爪の間の光る玉
+            var ltMuzzle = Muzzle(lt, new Vector3(0f, 0.01f, 0.16f), ltGlow);
+            gun.lightningMaterial = Mat("Lightning_Bolt", new Color(0.8f, 0.5f, 1f), new Color(2.4f, 1.3f, 3.2f), true);
+
             var laserMat = Mat("Laser", new Color(1f, 0.1f, 0.1f), null, true);
             var laserGo = new GameObject("Laser");
             laserGo.transform.SetParent(gunGo.transform, false);
@@ -436,8 +455,8 @@ namespace ShootingGallery
             gun.bombMaterial = Mat("Bomb", new Color(0.12f, 0.12f, 0.14f), new Color(0.5f, 0.15f, 0f));
             gun.explosionMaterial = TransparentMat("Explosion", new Color(1f, 0.55f, 0.15f, 0.8f));
             gun.models = new[] { hg.gameObject, mg.gameObject, sg.gameObject, bm.gameObject, sr.gameObject, bz.gameObject, sk.gameObject, kj.gameObject, dt.gameObject, rv.gameObject, ms.gameObject, fl.gameObject, px.gameObject,
-                                 rt.gameObject, cg.gameObject, po.gameObject, cn.gameObject, tp.gameObject, tr.gameObject, im.gameObject, am.gameObject };
-            gun.muzzles = new[] { hgMuzzle, mgMuzzle, sgMuzzle, bmMuzzle, srMuzzle, bzMuzzle, skMuzzle, kjMuzzle, dtMuzzle, rvMuzzle, msMuzzle, flMuzzle, pxMuzzle, rtMuzzle, cgMuzzle, poMuzzle, cnMuzzle, tpMuzzle, trMuzzle, imMuzzle, amMuzzle };
+                                 rt.gameObject, cg.gameObject, po.gameObject, cn.gameObject, tp.gameObject, tr.gameObject, im.gameObject, am.gameObject, lt.gameObject };
+            gun.muzzles = new[] { hgMuzzle, mgMuzzle, sgMuzzle, bmMuzzle, srMuzzle, bzMuzzle, skMuzzle, kjMuzzle, dtMuzzle, rvMuzzle, msMuzzle, flMuzzle, pxMuzzle, rtMuzzle, cgMuzzle, poMuzzle, cnMuzzle, tpMuzzle, trMuzzle, imMuzzle, amMuzzle, ltMuzzle };
             gun.ringMesh = ringMesh;
             gun.ringMaterials = ringMats;
             gun.corkMaterial = cork;

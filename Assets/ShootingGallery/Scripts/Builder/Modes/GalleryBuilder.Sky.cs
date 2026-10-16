@@ -11,6 +11,7 @@ namespace ShootingGallery
     {
         enum AirType { Balloon, Fighter, Bomber }
 
+        public const string SkyBgmPath = "Assets/Source/sky_stage/oozora.mp3"; // 空中ステージの BGM
         const float WingTop = 0.1f; // プレイヤーの足元 (胴体の上の台の上面) の高さ。機体の Model の中では翼の上面の高さにも使う
 
         SkyBattle BuildSkyBattle(BonusStage bonusStage)
@@ -70,6 +71,10 @@ namespace ShootingGallery
 
             var battle = go.AddComponent<SkyBattle>();
             battle.plane = plane;
+#if UNITY_EDITOR
+            // BGM (エディターで「シーンに生成」する時だけ結びつける)。プロペラ機に乗った時から流れる
+            battle.bgmClip = UnityEditor.AssetDatabase.LoadAssetAtPath<AudioClip>(SkyBgmPath);
+#endif
             var ground = new List<Transform>();
             foreach (var name in new[] { "Ground", "PitRim" })
             {

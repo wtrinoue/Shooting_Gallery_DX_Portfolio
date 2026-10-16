@@ -48,10 +48,10 @@ namespace ShootingGallery
         // ダーツを渡す (手元のゲージがゲームの残り時間)
         void OnCasinoOpened()
         {
-            RenderSettings.ambientLight = new Color(1.6f, 1.35f, 1.05f);
+            RenderSettings.ambientLight = new Color(1.5f, 1.15f, 0.85f);
             FadeAmbience(normalFogColor, casinoAmbient, null, 1.6f);
             if (State != GameState.Playing) return;
-            player.GiveWeapon(WeaponType.Dart, casinoHall.TimeLeft);
+            player.GiveStageWeapon(WeaponType.Dart, casinoHall.TimeLeft);
             ShowMessage("WELCOME TO THE CASINO!\nHIT THE SLOT & ROULETTES!", 3f, new Color(1f, 0.85f, 0.3f));
         }
 
@@ -87,7 +87,7 @@ namespace ShootingGallery
         {
             if (!CasinoActive) return;
             casinoHall.End();
-            if (player.Weapon == WeaponType.Dart) player.ResetWeapon();
+            ReleaseStageWeapon(WeaponType.Dart);
             StartCoroutine(RiseStallsAfter(new List<Stall>(stageStalls), casinoHall.CloseTime + 0.1f));
             stageStalls.Clear();
             if (State == GameState.Playing)

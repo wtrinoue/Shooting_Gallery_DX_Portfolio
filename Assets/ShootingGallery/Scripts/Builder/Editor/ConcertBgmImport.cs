@@ -4,14 +4,14 @@ using UnityEngine;
 namespace ShootingGallery.EditorTools
 {
     /// <summary>
-    /// 音楽モードの BGM (GalleryBuilder.ConcertBgmPath。約4分49秒の長い曲) と、美術館モードの BGM (GalleryBuilder.MuseumBgmPath) の読み込み方を決める。
+    /// 音楽モードの BGM (GalleryBuilder.ConcertBgmPath。約4分49秒の長い曲) ・美術館モードの BGM (GalleryBuilder.MuseumBgmPath)・空中ステージの BGM (GalleryBuilder.SkyBgmPath)・カジノモードの BGM (GalleryBuilder.CasinoBgmPath) の読み込み方を決める。
     /// そのままだと読み込み時に全部ほどいてメモリに置く (約 50MB) ので、Vorbis 圧縮のままメモリに置いて、鳴らしながらほどく (CompressedInMemory)
     /// </summary>
     public class ConcertBgmImport : AssetPostprocessor
     {
         void OnPreprocessAudio()
         {
-            if (assetPath != GalleryBuilder.ConcertBgmPath && assetPath != GalleryBuilder.MuseumBgmPath) return;
+            if (assetPath != GalleryBuilder.ConcertBgmPath && assetPath != GalleryBuilder.MuseumBgmPath && assetPath != GalleryBuilder.SkyBgmPath && assetPath != GalleryBuilder.CasinoBgmPath) return;
             var importer = (AudioImporter)assetImporter;
             importer.loadInBackground = true;
             var settings = importer.defaultSampleSettings;

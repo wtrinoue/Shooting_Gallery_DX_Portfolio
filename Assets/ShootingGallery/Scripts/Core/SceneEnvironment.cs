@@ -42,11 +42,17 @@ namespace ShootingGallery
         }
 
         // 再生中に生成されたものをコピペすると、マテリアルが外れて全部ピンクになる。その時に原因を知らせる。
+        // 形 (メッシュ) がまだない物は描かれない (ピンクにならない) ので数えない (Unknown ステージの、使い回しの割れる部品の置き場など)
         void WarnMissingMaterials()
         {
             int missing = 0;
             foreach (var r in GetComponentsInChildren<Renderer>(true))
-                if (r is MeshRenderer && r.GetComponent<TextMesh>() == null && r.sharedMaterial == null) missing++;
+            {
+                if (!(r is MeshRenderer) || r.GetComponent<TextMesh>() != null || r.sharedMaterial != null) continue;
+                var mf = r.GetComponent<MeshFilter>();
+                if (mf == null || mf.sharedMesh == null) continue;
+                missing++;
+            }
             if (missing == 0) return;
 
             Debug.LogError(
