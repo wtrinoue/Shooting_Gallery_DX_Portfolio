@@ -12,7 +12,9 @@ namespace ShootingGallery
     ///          ひびの線と筒の境目が同じなので、プレイヤーからは、見えている景色がひびの線どおりに立体のまま割れて見える。
     ///   流れ: 世界が灰色に止まったら Build (重いので、ひびが広がっている間に、1フレーム数ミリ秒ずつ少しずつ切る) →
     ///         割れる瞬間に Show (本物の屋台・地面は GameManager / UnknownStage が隠す。破片は同じ形・同じ灰色なので入れ替わったことに気づかない) →
-    ///         Pose で散らばる。帰りは PoseReturning で同じ道を逆にたどって組み上がり、Clear で本物と入れ替える。
+    ///         ApplyPieces で散らばる (UnknownStage が決めた一片ごとの動き = ガラスの破片 1枚と同じ動きで、その錐の中の破片をみな動かす。
+    ///         頭を中心にした回転と拡大なので、目から見て、ひびで切り取られた景色の一片が奥行きを持ったまま、まとまって剥がれ落ちていく)。
+    ///         帰りは同じ道を逆にたどって組み上がり、Clear で本物と入れ替える。
     ///   切り口: 面を切っただけだと、柱や提灯の中が空洞に見える (ねぎの輪切りのように) ので、切り口に同じ灰色のふた (断面) を貼る。
     ///          部品 (立方体・円柱・球など。まとめたメッシュは、頂点の位置でつながっている所ごとに分ける) ごとに、
     ///          破片の境目の面の上にできた点を集め、その凸包を断面にする (平らな地面などは点が一直線に並ぶので、ふたは作らない)。
@@ -20,10 +22,7 @@ namespace ShootingGallery
     /// </summary>
     public class WorldShatter : MonoBehaviour
     {
-        [Tooltip("1つの破片が飛び出してから消えるまでの秒数 / 落ちる強さ (弱いほどふわっと漂う)")]
-        public float flyTime = 2.8f;
-        public float gravity = 1.6f;
-        [Tooltip("頭からの距離で切る所 (m)。手前・中ほど・奥 の3段になる")]
+        [Tooltip("頭からの距離で切る所 (m)。手前・中ほど・奥 の3段になる (動きは同じ一片としていっしょ)")]
         public float[] layerCuts = { 6f, 14f };
         [Tooltip("切り分けに使ってよい、1フレームあたりの時間 (ミリ秒)")]
         public float budgetMs = 3f;
@@ -90,8 +89,8 @@ namespace ShootingGallery
             public MeshFilter filter;
             public MeshRenderer renderer;
             public Mesh mesh;
-            public Vector3 pos, velocity, spinAxis;
-            public float spin, delay;
+            public Vector3 pos; // 元の場所 (破片の真ん中。ワールド)
+            public int cone;    // どのガラスの破片 (一片) の錐に入っているか
             public readonly List<GameObject> texts = new List<GameObject>();
         }
 
@@ -104,7 +103,6 @@ namespace ShootingGallery
         readonly List<MeshRenderer> renderersTmp = new List<MeshRenderer>();
         readonly List<Vector3> shiftTmp = new List<Vector3>();
         readonly V[] bufA = new V[24], bufB = new V[24], poly = new V[24];
-        float maxDelay = 0.01f;
         Vector3 head;
         // 切り口のふた
         const float CapEps = 0.002f; // この距離より面に近い点は、面の上にあるとみなす (m)
@@ -156,9 +154,9 @@ namespace ShootingGallery
 
         /// <summary>
         /// roots の下の見えている物と地面を、錐と距離で切り分けて破片を作る (少しずつ。終わると Ready)。
-        /// headPos = 頭の位置 (ガラスの球の真ん中)、front = 割れ始める向き、coneDelays = ガラスの破片ごとの飛び出すまでの秒数
+        /// headPos = 頭の位置 (ガラスの球の真ん中)
         /// </summary>
-        public IEnumerator Build(IList<Transform> roots, Renderer ground, Vector3 headPos, float[] coneDelays)
+        public IEnumerator Build(IList<Transform> roots, Renderer ground, Vector3 headPos)
         {
             Clear();
             Ready = false;
@@ -212,21 +210,14 @@ namespace ShootingGallery
                 FlushCaps(); // この見た目の部品の切り口に、ふたを貼る
             }
 
-            // 2. 集めた面から、破片の GameObject とメッシュを作る (使い回し)
-            maxDelay = 0.01f;
+            // 2. 集めた面から、破片の GameObject とメッシュを作る (使い回し)。動きは一片 (錐) ごとに UnknownStage が決める
             int layers = Layers;
             for (int i = 0; i < builders.Length; i++)
             {
                 var b = builders[i];
                 if (b.Empty) continue;
-                int cone = i / layers, layer = i % layers;
                 var c = MakeChunk(b);
-                c.delay = (coneDelays != null && cone < coneDelays.Length ? coneDelays[cone] : 0f) + layer * 0.12f + Random.Range(0f, 0.08f);
-                maxDelay = Mathf.Max(maxDelay, c.delay);
-                var axis = coneAxis[cone];
-                c.velocity = axis * Random.Range(1.4f, 3.2f) * (1f + layer * 0.3f) + Vector3.up * Random.Range(0.3f, 1.6f) + Random.insideUnitSphere * 0.4f;
-                c.spinAxis = Random.onUnitSphere;
-                c.spin = Random.Range(30f, 140f);
+                c.cone = i / layers;
                 if (watch.Elapsed.TotalMilliseconds > budgetMs) { yield return null; watch.Restart(); }
             }
             Ready = true;
@@ -239,28 +230,37 @@ namespace ShootingGallery
             Shown = true;
         }
 
-        /// <summary>割れ始めてから t 秒の形 (1つの破片の動きは、飛び出してからの時間だけで決まる)</summary>
-        public void Pose(float t)
-        {
-            foreach (var c in active) Apply(c, Mathf.Clamp(t - c.delay, 0f, flyTime));
-        }
-
-        /// <summary>帰りの t 秒: 最後に割れた破片から順に、遠くから元の場所へ戻る (はじめ速く、はまる直前にゆっくり)</summary>
-        public void PoseReturning(float t, float returnTime, float returnSpread)
+        /// <summary>
+        /// 一片ごとの今の動き (rot = 頭を中心にした回転、scale = 頭から遠ざかる倍率、vanish = 消えていく大きさ。添え字はガラスの破片の番号) で、
+        /// 破片を置く。同じ一片 (錐) の破片は、手前・中ほど・奥のどれも、ガラスの破片とまったく同じに動く
+        /// </summary>
+        public void ApplyPieces(Quaternion[] rot, float[] scale, float[] vanish)
         {
             foreach (var c in active)
             {
-                float start = (maxDelay - c.delay) / maxDelay * returnSpread;
-                float u = Mathf.Clamp01((t - start) / Mathf.Max(0.05f, returnTime));
-                float e = 1f - (1f - u) * (1f - u) * (1f - u);
-                Apply(c, flyTime * (1f - e));
+                float v = vanish[c.cone];
+                if (v <= 0.002f)
+                {
+                    if (c.go.activeSelf) c.go.SetActive(false); // 消えきった (描かない)
+                    continue;
+                }
+                if (!c.go.activeSelf) c.go.SetActive(true);
+                var r = rot[c.cone];
+                float s = scale[c.cone];
+                c.t.SetPositionAndRotation(head + r * ((c.pos - head) * s), r);
+                c.t.localScale = Vector3.one * (s * v);
             }
         }
 
         /// <summary>全部の破片を元の場所に (組み上がった形)</summary>
         public void Home()
         {
-            foreach (var c in active) Apply(c, 0f);
+            foreach (var c in active)
+            {
+                if (!c.go.activeSelf) c.go.SetActive(true);
+                c.t.SetPositionAndRotation(c.pos, Quaternion.identity);
+                c.t.localScale = Vector3.one;
+            }
         }
 
         /// <summary>破片を全部しまって、プールに戻す</summary>
@@ -282,22 +282,6 @@ namespace ShootingGallery
             active.Clear();
             Ready = false;
             Shown = false;
-        }
-
-        // 飛び出してから ft 秒の破片: 外へ飛びながら回り、ゆっくり落ちる。終わり近くで小さくなって消える
-        void Apply(Chunk c, float ft)
-        {
-            if (ft >= flyTime)
-            {
-                if (c.go.activeSelf) c.go.SetActive(false); // 消えきった (描かない)
-                return;
-            }
-            if (!c.go.activeSelf) c.go.SetActive(true);
-            var pos = c.pos + c.velocity * ft + Vector3.down * (0.5f * gravity * ft * ft);
-            var rot = Quaternion.AngleAxis(c.spin * ft, c.spinAxis);
-            float s = 1f - Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.55f, 1f, ft / flyTime));
-            c.t.SetPositionAndRotation(pos, rot);
-            c.t.localScale = Vector3.one * Mathf.Max(0.001f, s);
         }
 
         // ---- 切り分け ----

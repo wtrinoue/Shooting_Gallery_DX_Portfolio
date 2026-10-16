@@ -34,8 +34,13 @@ namespace ShootingGallery
         [Tooltip("球を割る緯度・経度の数 (破片の数 ≒ rows × cols × 2)")]
         public int rows = 9;
         public int cols = 18;
-        [Tooltip("ガラスの破片が飛んで消えるまでの秒数")]
-        public float glassFlyTime = 2.4f;
+        [Tooltip("割れた景色の一片 (ガラスの破片と、その奥の屋台・地面の破片をひとかたまりで) が剥がれ落ちて消えるまでの秒数")]
+        public float glassFlyTime = 2.8f;
+        [Tooltip("剥がれ落ちる速さ: 頭を中心に回る、はじめの速さ / だんだん速くなる分 (度/秒, 度/秒²) / 自分の向きのまわりに回る速さ (度/秒) / 頭から遠ざかる強さ")]
+        public Vector2 fallSpeed = new Vector2(8f, 18f);
+        public Vector2 fallAccel = new Vector2(22f, 34f);
+        public Vector2 pieceSpin = new Vector2(20f, 70f);
+        public float recede = 0.45f;
 
         [Header("世界の割れ方")]
         [Tooltip("灰色にしない物 (プレイヤー・HUD)。この演出そのものは自動で除く")]
@@ -123,13 +128,19 @@ namespace ShootingGallery
         public event System.Action<UnknownObject> ObjectDown;
 
         // ガラスの破片 1枚
+        // 割れた景色の一片 = ガラスの破片 1枚と、その奥 (頭から見て同じ切れ目の中) の屋台・地面の破片。みな同じに動く
         struct Shard
         {
             public Vector3 home;      // 球の中心 (頭) からの、元の場所 (破片の真ん中)
+            public Vector3 axis;      // 頭から破片の真ん中への向き
             public int first;         // 頂点の始まり (1枚 4頂点)
-            public Vector3 velocity, spinAxis;
-            public float spin, delay; // delay = 割れ始めてから飛び出すまでの秒数 (正面ほど早い)
+            public Vector3 fallAxis;  // 頭を通る回す軸 (この軸で回すと、目から見て一片が下・外へずれていく)
+            public float fallSpeed, fallAccel, spin;
+            public float delay;       // 割れ始めてから剥がれ始めるまでの秒数 (正面ほど早い)
         }
+        // 一片ごとの、今の動き (頭を中心にした回転・遠ざかる倍率・消えていく大きさ)。ガラスと空間の破片で同じものを使う
+        Quaternion[] pieceRot;
+        float[] pieceScale, pieceVanish;
 
         Transform shell;
         Mesh mesh;
@@ -144,7 +155,6 @@ namespace ShootingGallery
         bool inside;
         Coroutine anim, gateRoutine, buildRoutine, holeRoutine;
         Vector3 holeScale;
-        float[] shardDelays; // ガラスの破片ごとの、飛び出すまでの秒数 (空間の破片も同じ順に割れる)
         bool[] groundWasActive;
         bool[] gateOpen;
         Vector3[] gateScale;
@@ -338,7 +348,7 @@ namespace ShootingGallery
             gray.Apply(WorldRoot(), grayExcludeSet);
             SetAmbienceGray(1f, RenderSettings.fogColor, RenderSettings.ambientLight, CameraBackground());
             graySky = CameraBackground();
-            buildRoutine = StartCoroutine(shatter.Build(roots, groundRenderer, head, shardDelays));
+            buildRoutine = StartCoroutine(shatter.Build(roots, groundRenderer, head));
             SetSolid(false);
             SetLook(0f, 0.7f, 1f);
             shell.gameObject.SetActive(true);
@@ -372,11 +382,10 @@ namespace ShootingGallery
             Sfx.Play("shatter");
             yield return null;
             ScreenFader.FadeTo(0f, 0.35f);
-            float total = 1.4f + Mathf.Max(shatter.flyTime, glassFlyTime);
+            float total = 1.4f + glassFlyTime;
             for (float t = 0f; t < total; t += Time.deltaTime)
             {
-                PoseShards(t);
-                shatter.Pose(t);
+                PoseShards(t); // (ガラスと、その奥の空間の破片をいっしょに動かす)
                 yield return null;
             }
             shell.gameObject.SetActive(false);
@@ -528,7 +537,6 @@ namespace ShootingGallery
             for (float t = 0f; t < total; t += Time.deltaTime)
             {
                 PoseShardsReturning(t);
-                shatter.PoseReturning(t, returnTime, returnSpread);
                 yield return null;
             }
             ResetShards();
@@ -633,7 +641,9 @@ namespace ShootingGallery
             var conePoints = new List<(Vector3 a, Vector3 b, Vector3 c)>(tris.Count);
             foreach (var (ta, tb, tc) in tris) conePoints.Add((OnShell(ta), OnShell(tb), OnShell(tc)));
             shatter.SetCones(conePoints, cells, rows, cols, shellRadius, shellDown);
-            shardDelays = new float[tris.Count];
+            pieceRot = new Quaternion[tris.Count];
+            pieceScale = new float[tris.Count];
+            pieceVanish = new float[tris.Count];
 
             // 破片 1枚 = ふちの3点 + 真ん中の1点 (ひびの線のために、ふちを 1、真ん中を 0 にした値を頂点の色の a に入れる)
             int n = tris.Count;
@@ -658,7 +668,7 @@ namespace ShootingGallery
                 indices[k] = v; indices[k + 1] = v + 1; indices[k + 2] = v + 2;
                 indices[k + 3] = v; indices[k + 4] = v + 2; indices[k + 5] = v + 3;
                 indices[k + 6] = v; indices[k + 7] = v + 3; indices[k + 8] = v + 1;
-                shards[i] = new Shard { home = center, first = v };
+                shards[i] = new Shard { home = center, axis = center.normalized, first = v };
             }
             mesh = new Mesh { name = "UnknownGlassShards" };
             mesh.MarkDynamic();
@@ -697,33 +707,38 @@ namespace ShootingGallery
         // 球の上の点 (下の半分は床にめり込まないように縦に縮める)
         Vector3 OnShell(Vector3 dir) => new Vector3(dir.x * shellRadius, dir.y * (dir.y < 0f ? shellDown : shellRadius), dir.z * shellRadius);
 
-        // 元の形に戻し、割れ方 (飛び出す順番・速さ・回り方) を決め直す。正面 (撃った的の方) から割れ始め、外側へ広がる
+        // 元の形に戻し、割れ方 (剥がれる順番・ずれていく向き・回り方) を決め直す。正面 (撃った的の方) から割れ始め、外側へ広がる
         void ResetShards()
         {
             var front = transform.forward;
             for (int i = 0; i < shards.Length; i++)
             {
                 var s = shards[i];
-                var outward = s.home.normalized;
-                s.delay = Vector3.Angle(front, outward) / 180f * 0.9f + Random.Range(0f, 0.12f);
-                s.velocity = outward * Random.Range(2.2f, 4.5f) + Random.insideUnitSphere * 0.8f + Vector3.up * 0.6f;
-                s.spinAxis = Random.onUnitSphere;
-                s.spin = Random.Range(120f, 420f);
+                var a = s.axis;
+                s.delay = Vector3.Angle(front, a) / 180f * 0.9f + Random.Range(0f, 0.12f);
+                // 目から見て、一片がずれていく向き: 下へ (落ちる) + 正面から外へ (割れ目が広がる)。少しずつばらつかせる
+                var away = a - front * Vector3.Dot(a, front);
+                var d = Vector3.down + away * 0.8f + Random.insideUnitSphere * 0.25f;
+                var tangent = d - a * Vector3.Dot(a, d);
+                if (tangent.sqrMagnitude < 0.0001f) tangent = Vector3.Cross(a, Vector3.right);
+                s.fallAxis = Vector3.Cross(a, tangent).normalized; // (この軸で正に回すと、a が tangent の方へ動く)
+                s.fallSpeed = Random.Range(fallSpeed.x, fallSpeed.y);
+                s.fallAccel = Random.Range(fallAccel.x, fallAccel.y);
+                s.spin = Random.Range(pieceSpin.x, pieceSpin.y) * (Random.value < 0.5f ? -1f : 1f);
                 shards[i] = s;
-                shardDelays[i] = s.delay;
-                for (int j = 0; j < 4; j++) verts[s.first + j] = s.home + localVerts[s.first + j];
+                PoseShard(i, 0f);
             }
             mesh.vertices = verts;
         }
 
-        // 割れ始めてから t 秒のガラスの形。1枚の動きは飛び出してからの時間だけで決まる (帰りは同じ道を逆にたどる)
+        // 割れ始めてから t 秒の形。1つの一片の動きは剥がれ始めてからの時間だけで決まる (帰りは同じ道を逆にたどる)
         void PoseShards(float t)
         {
             for (int i = 0; i < shards.Length; i++) PoseShard(i, Mathf.Clamp(t - shards[i].delay, 0f, glassFlyTime));
-            mesh.vertices = verts;
+            ApplyPieces();
         }
 
-        // 帰りの t 秒: 最後に割れた破片から順に、遠くから元の場所へ戻る (はじめ速く、はまる直前にゆっくり)
+        // 帰りの t 秒: 最後に割れた一片から順に、遠くから元の場所へ戻る (はじめ速く、はまる直前にゆっくり)
         void PoseShardsReturning(float t)
         {
             for (int i = 0; i < shards.Length; i++)
@@ -733,20 +748,33 @@ namespace ShootingGallery
                 float e = 1f - (1f - u) * (1f - u) * (1f - u);
                 PoseShard(i, glassFlyTime * (1f - e));
             }
-            mesh.vertices = verts;
+            ApplyPieces();
         }
 
-        // 飛び出してから ft 秒の破片 1枚: 外へ飛びながら回り、少しずつ落ちる。終わり近くで小さくなって消える
+        // 剥がれ始めてから ft 秒の一片 i: 頭を中心に回って (目から見て、割れた景色の一片が下・外へずれて落ちていく)、
+        // 自分の向きのまわりにも少し回り、頭から遠ざかる (目から見た形は変わらないまま奥へ離れる)。終わり近くで小さくなって消える。
+        // どれも頭を中心にした動きなので、奥にある屋台・地面の破片も、目から見てガラスの一片とぴったりいっしょに動く
         void PoseShard(int i, float ft)
         {
             var s = shards[i];
-            var pos = s.home + s.velocity * ft + 0.5f * new Vector3(0f, -1.6f, 0f) * ft * ft;
-            var rot = Quaternion.AngleAxis(s.spin * ft, s.spinAxis);
+            float angle = s.fallSpeed * ft + 0.5f * s.fallAccel * ft * ft;
+            var rot = Quaternion.AngleAxis(angle, s.fallAxis) * Quaternion.AngleAxis(s.spin * ft, s.axis);
+            float scale = 1f + recede * ft * ft;
             float k = ft / Mathf.Max(0.01f, glassFlyTime);
-            float scale = 1f - Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.55f, 1f, k));
-            for (int j = 0; j < 4; j++) verts[s.first + j] = pos + rot * (localVerts[s.first + j] * scale);
+            float vanish = 1f - Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.55f, 1f, k));
+            pieceRot[i] = rot;
+            pieceScale[i] = scale;
+            pieceVanish[i] = vanish;
+            var center = rot * (s.home * scale);
+            for (int j = 0; j < 4; j++) verts[s.first + j] = center + rot * (localVerts[s.first + j] * (scale * vanish));
         }
 
+        // ガラスの形を書き直し、奥の空間の破片も同じ一片の動きで置く
+        void ApplyPieces()
+        {
+            mesh.vertices = verts;
+            shatter.ApplyPieces(pieceRot, pieceScale, pieceVanish);
+        }
         void SetLook(float crack, float crackGlow, float fade)
         {
             mat.SetFloat(CrackId, crack);
