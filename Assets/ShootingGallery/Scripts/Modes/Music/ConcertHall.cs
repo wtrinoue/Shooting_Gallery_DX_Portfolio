@@ -42,10 +42,10 @@ namespace ShootingGallery
         [Tooltip("ステージを照らす明かり (演奏前は dimLevel の明るさ、演奏中はビルダーで決めた明るさの playBright 倍)")]
         public Light[] stageLights;
         [Range(0f, 1f)] public float dimLevel = 0.12f;
-        public float playBright = 1.8f;
-        [Tooltip("客席を照らす明かり (演奏中はビルダーで決めた明るさの housePlay 倍。1 より大きいとホール全体も明るくなる)")]
+        public float playBright = 2.6f; // (客席を暗くするためにホールの環境光を下げた分、ステージは明るく。前は 1.8)
+        [Tooltip("客席を照らす明かり (演奏中はビルダーで決めた明るさの houseDuringPlay 倍。1 より小さいと、演奏中は客席が暗くなってステージが目立つ)")]
         public Light houseLight;
-        public float housePlay = 1.6f; // 前は houseDim 0.45 (演奏中は客席を暗くしていた)
+        public float houseDuringPlay = 0.35f; // 名前を変えて、シーンに保存された前の値 (housePlay 1.6) を使わない
         [Tooltip("ソロの楽器を照らすスポットライトと、その光の筋 (光と同じ向きに伸ばす。長さ 1 の円すい)。ソロ1つに1台ずつ、その楽器の斜め上前に固定して照らす。ソロの数より少なければ、始める時に1台目を複製して足す")]
         public Light[] followSpots;
         public Transform[] followBeams;
@@ -616,7 +616,7 @@ namespace ShootingGallery
         {
             for (int i = 0; i < stageLights.Length; i++)
                 if (stageLights[i] != null) stageLights[i].intensity = stageBase[i] * Mathf.Lerp(dimLevel, playBright, k);
-            if (houseLight != null) houseLight.intensity = houseBase * Mathf.Lerp(1f, housePlay, k);
+            if (houseLight != null) houseLight.intensity = houseBase * Mathf.Lerp(1f, houseDuringPlay, k);
             if (showWhilePlaying != null)
                 foreach (var go in showWhilePlaying) if (go != null) go.SetActive(k > 0.3f);
             lightLevel = k;

@@ -29,7 +29,7 @@ namespace ShootingGallery
         public Material shardSolidMaterial;
         public Material shardDepthMaterial;
         [Tooltip("球の横・上の半径 (m) / 下の半径 (床にめり込まないように、頭の高さより少し小さく)")]
-        public float shellRadius = 2.4f;
+        public float shellRadius = 1.7f; // (屋台のカウンターの手前 (頭から約 2.05m) に食い込まないように。手に持った銃よりは外)
         public float shellDown = 1.45f;
         [Tooltip("球を割る緯度・経度の数 (破片の数 ≒ rows × cols × 2)")]
         public int rows = 9;
@@ -82,7 +82,7 @@ namespace ShootingGallery
         public Vector2 launchInterval = new Vector2(0.7f, 1.3f);
         [Tooltip("ゲートの奥から出てきて、止まる所までの秒数")]
         public float travelTime = 2.6f;
-        [Tooltip("止まる所: プレイヤーからの距離 / 高さ (m) / そこで漂っている秒数")]
+        [Tooltip("止まる所: プレイヤーからの距離 / 床からの高さ (m) / そこで漂っている秒数")]
         public Vector2 hoverDistance = new Vector2(3.5f, 6.5f);
         public Vector2 hoverHeight = new Vector2(0.8f, 3.2f);
         public Vector2 hoverTime = new Vector2(3.5f, 6f);
@@ -91,8 +91,8 @@ namespace ShootingGallery
         [Tooltip("Unknown ステージの長さ (秒。始めてから)")]
         public float duration = 45f;
         [Tooltip("灰色に止まったまま待つ / ひびが広がる 秒数")]
-        public float grayHold = 1.1f;
-        public float crackTime = 1.4f;
+        public float grayHold = 1.8f;  // (前は 1.1。急ぎすぎないように、止まった世界を少し見せる)
+        public float crackTime = 2.6f; // (前は 1.4。ひびがゆっくり広がっていく)
         [Tooltip("帰り: 部品が戻ってくる (1つ) / 正面から真後ろまでの時間のずれ / ひびがふさがる / 色が戻る 秒数")]
         public float returnTime = 1.3f;
         public float returnSpread = 1.2f;
@@ -285,13 +285,21 @@ namespace ShootingGallery
         }
 
         // ゲートの奥の世界から出てきて、入り口をくぐり、プレイヤーのまわりへ来る (時計・ドアは、プレイヤーのまわりにその場で現れる)
+        // 漂う所の高さの基準 (ふしぎな空間の床の高さ = このステージの高さ)。世界の原点 (y = 0) ではなく、床から測る
+        // (世界の高さがずれていると、止まる所が床より下になり、ゲートから出た物がゆっくり床下へ沈んでいってしまうので)
+        float FloorY => transform.position.y;
+
+        // 止まる所の高さ: 床から hoverHeight の範囲 (床より下にはしない)
+        float HoverY() => FloorY + Mathf.Max(0.5f, Random.Range(hoverHeight.x, hoverHeight.y));
+
         void Launch(UnknownObject o)
         {
             var head = HeadPosition();
             if (o.gateIndex < 0)
             {
                 var around = Quaternion.Euler(0f, Random.Range(0f, 360f), 0f) * Vector3.forward * Random.Range(hoverDistance.x, hoverDistance.y);
-                var spot = new Vector3(head.x, 0f, head.z) + around + Vector3.up * Random.Range(hoverHeight.x, hoverHeight.y);
+                var spot = new Vector3(head.x, 0f, head.z) + around;
+                spot.y = HoverY();
                 o.Launch(spot, spot, spot, 0.01f, Random.Range(hoverTime.x, hoverTime.y) + 1f, OnObjectDown);
                 return;
             }
@@ -306,7 +314,8 @@ namespace ShootingGallery
             var toGate = g.position - flatHead;
             toGate.y = 0f;
             var dir = Quaternion.Euler(0f, Random.Range(-55f, 55f), 0f) * (toGate.sqrMagnitude > 0.01f ? toGate.normalized : Vector3.forward);
-            var dest = flatHead + dir * Random.Range(hoverDistance.x, hoverDistance.y) + Vector3.up * Random.Range(hoverHeight.x, hoverHeight.y);
+            var dest = flatHead + dir * Random.Range(hoverDistance.x, hoverDistance.y);
+            dest.y = HoverY();
             o.Launch(start, mouth, dest, travelTime, Random.Range(hoverTime.x, hoverTime.y), OnObjectDown);
         }
 

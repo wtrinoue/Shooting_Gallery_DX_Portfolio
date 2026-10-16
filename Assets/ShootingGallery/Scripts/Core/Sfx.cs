@@ -131,7 +131,7 @@ namespace ShootingGallery
                 () => { if (flash == null) flash = Flash(); }, // シュワーッ…パァーン (白い閃光)
                 () => { if (clay == null) clay = Clay(); }, // ぺちゃっ…むにゅ (粘土)
                 () => { if (freeze == null) freeze = FreezeRing(); }, // キーン (世界が止まる)
-                () => { if (crack == null) crack = Cracks("Crack", 1.4f, 70); }, // ピキッ、ピキピキッ…
+                () => { if (crack == null) crack = Cracks("Crack", 2.6f, 110); }, // ピキッ、ピキピキッ…
                 () => { if (shatter == null) shatter = Shatter("Shatter", 2f, 1f, false); }, // ガシャーン (ガラスが割れて散らばる)
                 () => { if (reassemble == null) reassemble = Shatter("Reassemble", 2.2f, 0.7f, true); }, // カシャ、カシャカシャ… (破片が集まってくる)
                 () => { if (glass == null) glass = Shatter("Glass", 0.55f, 0.6f, false); }, // パリン (的が砕ける)

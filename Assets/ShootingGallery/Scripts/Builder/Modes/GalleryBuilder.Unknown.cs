@@ -81,6 +81,9 @@ namespace ShootingGallery
 
             var stage = go.AddComponent<UnknownStage>();
             stage.shardMaterial = UnknownShardMaterial();
+            stage.shellRadius = 1.7f; // ひびが入るガラスの球の半径 (屋台のカウンターの手前 約 2.05m より内側)
+            stage.grayHold = 1.8f;    // 灰色に止まったまま待つ秒数
+            stage.crackTime = 2.6f;   // ひびが広がる秒数 (Sfx の crack の長さと同じ)
             stage.shardSolidMaterial = ShaderMaterial("Unknown_ShardSolid", "ShootingGallery/Unknown Shard Solid");
             stage.shardDepthMaterial = ShaderMaterial("Unknown_ShardDepth", "ShootingGallery/Unknown Shard Depth");
             stage.space = space.gameObject;
