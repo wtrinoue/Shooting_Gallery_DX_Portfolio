@@ -69,10 +69,7 @@ namespace ShootingGallery
             museum.introBrush = brush;
             museum.introPainting = painting;
             museum.hall = hall.gameObject;
-#if UNITY_EDITOR
-            // BGM (エディターで「シーンに生成」する時だけ結びつける)
-            museum.bgmClip = UnityEditor.AssetDatabase.LoadAssetAtPath<AudioClip>(MuseumBgmPath);
-#endif
+            museum.bgmClip = LoadSourceAsset(MuseumBgmPath, a => a.museumBgm); // BGM (実機では GalleryRuntimeAssets から)
             museum.artworks = works.ToArray();
             hall.gameObject.SetActive(false);
             go.SetActive(true);

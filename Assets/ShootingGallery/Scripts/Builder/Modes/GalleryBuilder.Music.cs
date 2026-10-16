@@ -70,11 +70,9 @@ namespace ShootingGallery
             concert.lift = lift;
             concert.platform = platform;
             concert.liftHeight = ConcertLiftH;
-#if UNITY_EDITOR
-            // BGM: 魔王魂 の曲 (エディターで「シーンに生成」する時だけ結びつける。無ければコードで作った曲。クレジットは Resources/THIRD_PARTY_NOTICES.txt)
-            concert.bgmClip = UnityEditor.AssetDatabase.LoadAssetAtPath<AudioClip>(ConcertBgmPath);
-            concert.beatMap = UnityEditor.AssetDatabase.LoadAssetAtPath<TextAsset>(ConcertBeatMapPath); // 人が曲に合わせて打った拍の表 (指揮棒・楽器の拍)
-#endif
+            // BGM: 魔王魂 の曲 (実機では GalleryRuntimeAssets から。無ければコードで作った曲。クレジットは Resources/THIRD_PARTY_NOTICES.txt)
+            concert.bgmClip = LoadSourceAsset(ConcertBgmPath, a => a.concertBgm);
+            concert.beatMap = LoadSourceAsset(ConcertBeatMapPath, a => a.concertBeatMap); // 人が曲に合わせて打った拍の表 (指揮棒・楽器の拍)
             concert.staffStartZ = HallBack + HallShiftZ - 2f;    // 五線譜が出てくる所: ステージの左右の端の上空、奥から
             concert.staffNearZ = HallFront + HallShiftZ + 4.6f;  //   手前まで (端の手前のコントラバス・第1バイオリンより奥)
             concert.staffEdgeX = OpeningHalfW - 1.8f;            //   舞台の両わきの幕 (OpeningHalfW - 1.6 〜 OpeningHalfW) より内側

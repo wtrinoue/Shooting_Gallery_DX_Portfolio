@@ -71,10 +71,8 @@ namespace ShootingGallery
 
             var battle = go.AddComponent<SkyBattle>();
             battle.plane = plane;
-#if UNITY_EDITOR
-            // BGM (エディターで「シーンに生成」する時だけ結びつける)。プロペラ機に乗った時から流れる
-            battle.bgmClip = UnityEditor.AssetDatabase.LoadAssetAtPath<AudioClip>(SkyBgmPath);
-#endif
+            // BGM (実機では GalleryRuntimeAssets から)。プロペラ機に乗った時から流れる
+            battle.bgmClip = LoadSourceAsset(SkyBgmPath, a => a.skyBgm);
             var ground = new List<Transform>();
             foreach (var name in new[] { "Ground", "PitRim" })
             {
