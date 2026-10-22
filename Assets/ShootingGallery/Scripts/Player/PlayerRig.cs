@@ -18,14 +18,19 @@ namespace ShootingGallery
         public Transform leftHand;
         public GunController rightGun;
         public GunController leftGun;
+        [Tooltip("手に持つコントローラーの模型 (タイトルで操作方法の看板を見ている間だけ、銃の代わりに出す)")]
+        public GameObject rightControllerModel, leftControllerModel;
+        [Tooltip("コントローラーの間に引き金を引くと出る白い玉の材質")]
+        public Material pointerBallMaterial;
 
         public float standingEyeHeight = 1.6f;
-        [Tooltip("VRの時に視点をこの分 (m) だけ実際より高くする (START を撃つまでの間だけ。撃った後は referenceHeightCm の人の視点に合わせる)")]
-        public float xrHeightBoost = 0.85f;
+        // (以前は 0.85 で、START を撃つまでずっと 0.85m 高く、撃った瞬間に身長の高さへ下がっていた。今は起動してすぐ身長に合わせる: AutoCalibrate)
+        [Tooltip("VRの時に視点をこの分 (m) だけ実際より高くする (身長に合わせる前の、ほんの一瞬だけ。0 = 実際の高さのまま)")]
+        public float xrHeightBoost = 0f;
         [Tooltip("身長に対する目の高さの割合 (目の高さ = 身長 × この値)")]
         public float eyeHeightRatio = 0.935f;
         [Tooltip("視点を合わせる身長 (cm)。誰が遊んでも、この身長の人と同じ高さから屋台が見える")]
-        public int referenceHeightCm = 180;
+        public int referenceHeightCm = 170;
         public float mouseSensitivity = 0.15f;
         [Tooltip("PC: WASD キーで視点を回す速さ (度/秒)。A / D で左右、W / S で上下")]
         public float keyLookSpeed = 90f;
@@ -66,6 +71,7 @@ namespace ShootingGallery
         bool debugFired;
 
         float? calibratedOffsetY; // 身長に合わせた CameraOffset の高さ (選ぶまでは null)
+        float xrStartedAt = -1f;  // VR になった時刻 (起動してすぐ身長に合わせる時に、頭の追跡が始まるのを少し待つ)
 
         InputAction rightTrigger;
         InputAction leftTrigger;
@@ -74,6 +80,7 @@ namespace ShootingGallery
         float weaponTimeLeft;
         float weaponDuration;
         bool stageWeapon; // モード専用の武器 (時間が来ても自動では戻らない。GameManager が屋台が見えてから戻す)
+        bool stageGaugeFresh; // モード専用の武器を渡したばかり (次にモードの残り時間に合わせる時、その時間をゲージの満タンにする)
         bool dualWield;
 
         bool? xrModeApplied;
@@ -223,17 +230,26 @@ namespace ShootingGallery
             if (xrModeApplied != xr) ApplyMode(xr);
             if (!xr) UpdateDesktop();
             else UpdateHandsFallback();
+            if (xr) AutoCalibrate();
 
             UpdateReset();
 
             // 射撃
-            bool rPressed = rightTrigger.WasPressedThisFrame();
-            bool rHeld = rightTrigger.IsPressed();
+            // (手元がコントローラーの模型の間は、どちらの手からも撃たない)
+            bool rPressed = !controllerView && rightTrigger.WasPressedThisFrame();
+            bool rHeld = !controllerView && rightTrigger.IsPressed();
             rightGun.TriggerInput(rPressed, rHeld);
+
+            // コントローラーの間は弾を撃たない代わりに、コントローラーの先から白い玉が出る (看板のボタン (CREDITS・ページ送り) だけを押せる。PointerBall)
+            if (controllerView)
+            {
+                if (rightTrigger.WasPressedThisFrame()) ShootPointerBall(rightHand);
+                if (leftTrigger.WasPressedThisFrame()) ShootPointerBall(leftHand);
+            }
 
             if (dualWield && leftGun != null)
             {
-                leftGun.TriggerInput(leftTrigger.WasPressedThisFrame(), leftTrigger.IsPressed());
+                leftGun.TriggerInput(!controllerView && leftTrigger.WasPressedThisFrame(), !controllerView && leftTrigger.IsPressed());
             }
 
             // 特殊武器の残り時間
@@ -247,7 +263,8 @@ namespace ShootingGallery
                 }
             }
             var def = Weapons.Get(weapon);
-            rightGun.SetInfo(rightGun.IsCharging ? "CHARGING..." : rightGun.IsReloading ? (weapon == WeaponType.Poi ? "NEXT POI..." : "RELOADING...") : def.displayName); // 残りの弾は銃の上の弾の列で見せる
+            if (controllerView) rightGun.SetInfo(""); // (銃を隠している間は、武器の名前も出さない)
+            else rightGun.SetInfo(rightGun.IsCharging ? "CHARGING..." : rightGun.NeedsReload ? $"RELOAD {rightGun.Loaded}/{def.magazine} : PULL TRIGGER" :rightGun.IsReloading ? (weapon == WeaponType.Poi ? "NEXT POI..." : "RELOADING...") : def.displayName); // 残りの弾は銃の上の弾の列で見せる
             if (leftGun != null) leftGun.SetInfo("");
 
             // 弾込めのゲージで見せる武器 (コルク銃・ポイ): 撃つと空になり、たまっていく。満タンになったら撃てる (武器の色に変わる)
@@ -301,6 +318,31 @@ namespace ShootingGallery
         {
             GiveWeapon(type, duration);
             stageWeapon = true;
+            stageGaugeFresh = true;
+        }
+
+        /// <summary>
+        /// モード専用の武器を、別のモード専用の武器に持ち替える (狙った先で武器が変わる時)。ゲージ (残り時間と満タンの長さ) はそのまま続ける
+        /// </summary>
+        public void SwitchStageWeapon(WeaponType type)
+        {
+            float left = weaponTimeLeft, full = weaponDuration;
+            GiveWeapon(type, left);
+            weaponDuration = full;
+            stageWeapon = true;
+        }
+
+        /// <summary>
+        /// モード専用の武器のゲージを、モードの残り時間 (timeLeft) に合わせる (GameManager が毎フレーム呼ぶ)。
+        /// モードはこの残り時間が 0 になった瞬間に元の世界へ戻り始めるので、ゲージが空になった瞬間に戻り始める
+        /// </summary>
+        public void SyncStageWeaponTime(float timeLeft)
+        {
+            if (!stageWeapon) return;
+            timeLeft = Mathf.Max(0f, timeLeft);
+            weaponDuration = stageGaugeFresh ? timeLeft : Mathf.Max(weaponDuration, timeLeft);
+            stageGaugeFresh = false;
+            weaponTimeLeft = timeLeft;
         }
 
         public void GiveWeapon(WeaponType type, float duration)
@@ -320,6 +362,27 @@ namespace ShootingGallery
             stageWeapon = false;
             rightGun.SetWeapon(weapon);
             if (leftGun != null) leftGun.SetWeapon(weapon);
+        }
+
+        bool controllerView;
+
+        // コントローラーの先から白い玉を出す
+        void ShootPointerBall(Transform hand)
+        {
+            if (hand == null || pointerBallMaterial == null) return;
+            PointerBall.Spawn(hand.position + hand.forward * 0.06f, hand.forward, pointerBallMaterial);
+        }
+
+
+        /// <summary>手元を銃の代わりにコントローラーの模型にする / 銃に戻す (操作方法の看板を見ている間。撃つことはできる)</summary>
+        public void SetControllerView(bool on)
+        {
+            if (controllerView == on) return;
+            controllerView = on;
+            if (rightControllerModel != null) rightControllerModel.SetActive(on);
+            if (leftControllerModel != null) leftControllerModel.SetActive(on);
+            if (rightGun != null) rightGun.SetModelHidden(on);
+            if (leftGun != null) leftGun.SetModelHidden(on);
         }
 
         public void SetDualWield(bool value)
@@ -373,6 +436,17 @@ namespace ShootingGallery
             Debug.Log($"[PlayerRig] 身長 {referenceHeightCm}cm の人の視点に合わせました (目の高さ {eye:0.00}m, CameraOffset {calibratedOffsetY.Value:0.00}m)");
         }
 
+        /// <summary>
+        /// 起動してすぐ (VR になって頭の追跡が始まったら1回だけ)、身長 referenceHeightCm の人の視点に合わせる。
+        /// これで、タイトルの間から START を撃った後まで、ずっと同じ高さから見える (START を撃った時にも合わせ直すが、同じ人なら高さはほとんど変わらない)
+        /// </summary>
+        void AutoCalibrate()
+        {
+            if (calibratedOffsetY.HasValue || xrStartedAt < 0f || Time.unscaledTime < xrStartedAt + 0.3f) return;
+            if (head == null || head.transform.localPosition.sqrMagnitude < 0.0001f) return; // (頭の追跡がまだ始まっていない)
+            CalibrateHeight();
+        }
+
         // ---- XR / デスクトップの切り替え ----
 
         void ApplyMode(bool xr)
@@ -384,6 +458,7 @@ namespace ShootingGallery
             if (xr)
             {
                 handCheckAt = Time.unscaledTime + 3f;
+                xrStartedAt = Time.unscaledTime;
                 bool floor = XRBridge.TrySetFloorOrigin();
                 floorOrigin = floor;
                 cameraOffset.localPosition = Vector3.up * (calibratedOffsetY ?? (floor ? 0f : standingEyeHeight) + xrHeightBoost);

@@ -11,7 +11,7 @@ namespace ShootingGallery
     {
         const float CityBlock = 6f;      // 道路の間隔 (1区画の大きさ)
         const float CityRoad = 1.2f;     // 道路の幅
-        const int CityCells = 7;         // 中心から片側に並ぶ区画の数 (7 × 6m = 42m 先まで街が続く)
+        const int CityCells = 8;         // 中心から片側に並ぶ区画の数 (8 × 6m = 48m 先まで街が続く。街は最後に 0.6 倍になるので、約 29m 先まで)
         const float CityY = 0.03f;       // 街の地面の上面の高さ
         const float CityHeight = 0.7f;   // ビルの高さの倍率 (小さいほどプレイヤーが大きく感じる)
 
@@ -22,10 +22,10 @@ namespace ShootingGallery
             go.transform.SetParent(world, false);
             var root = go.transform;
 
-            var asphalt = Mat("City_Ground", new Color(0.42f, 0.45f, 0.42f));
+            var asphalt = Mat("City_Ground", new Color(0.44f, 0.44f, 0.45f));
             var road = Mat("City_Road", new Color(0.18f, 0.18f, 0.2f));
-            var line = Mat("City_RoadLine", new Color(0.95f, 0.9f, 0.6f));
-            var grass = Mat("City_Grass", new Color(0.3f, 0.62f, 0.28f));
+            var line = Mat("City_RoadLine", new Color(0.62f, 0.62f, 0.6f));
+            var grass = Mat("City_Grass", new Color(0.42f, 0.47f, 0.41f));
             float extent = CityCells * CityBlock;
 
             // ---- 地面・道路・真ん中の公園 (伸びてこない。街といっしょに表示される) ----
@@ -46,7 +46,7 @@ namespace ShootingGallery
 
             // ---- 的のビルを置く区画を先に決める (いろいろな方向・距離に散らす) ----
             var targetCells = new Dictionary<(int, int), int>();
-            int targetCount = 16;
+            int targetCount = 20;
             for (int i = 0; i < targetCount; i++)
             {
                 float a = (i + Random.Range(-0.3f, 0.3f)) * Mathf.PI * 2f / targetCount;
@@ -70,7 +70,7 @@ namespace ShootingGallery
                     float dist = new Vector2(center.x, center.z).magnitude;
                     if (targetCells.TryGetValue((cx, cz), out int ti))
                     {
-                        targets.Add(KaijuTargetBuilding(root, lots, center, dist, ti, explosion, dust));
+                        targets.Add(KaijuTargetBuilding(root, lots, center, dist, ti, ti == targetCells.Count - 1, explosion, dust));
                         continue;
                     }
                     float r = Random.value;
@@ -81,9 +81,9 @@ namespace ShootingGallery
 
             // ---- 動く的: 道路を走る車・街の上を横切る飛行機・まわりを回るヘリコプター ----
             var vehicles = new List<KaijuVehicle>();
-            for (int i = 0; i < 7; i++) vehicles.Add(KaijuCar(root, i, explosion, dust));
-            for (int i = 0; i < 2; i++) vehicles.Add(KaijuPlane(root, i, explosion, dust));
-            for (int i = 0; i < 2; i++) vehicles.Add(KaijuHelicopter(root, i, explosion, dust));
+            for (int i = 0; i < 12; i++) vehicles.Add(KaijuCar(root, i, explosion, dust));
+            for (int i = 0; i < 4; i++) vehicles.Add(KaijuPlane(root, i, explosion, dust));
+            for (int i = 0; i < 4; i++) vehicles.Add(KaijuHelicopter(root, i, explosion, dust));
 
             // ---- 空: 流れる雲と太陽 ----
             var cloud = Mat("Cloud", new Color(0.96f, 0.97f, 1f), new Color(0.32f, 0.34f, 0.38f));
@@ -146,10 +146,10 @@ namespace ShootingGallery
             var colors = new[]
             {
                 Mat("City_Gray1", new Color(0.62f, 0.63f, 0.66f)), Mat("City_Gray2", new Color(0.5f, 0.52f, 0.56f)),
-                Mat("City_Gray3", new Color(0.72f, 0.72f, 0.72f)), Mat("City_Beige", new Color(0.78f, 0.72f, 0.62f)),
-                Mat("City_White", new Color(0.86f, 0.86f, 0.88f))
+                Mat("City_Gray3", new Color(0.72f, 0.72f, 0.72f)), Mat("City_Gray4", new Color(0.56f, 0.56f, 0.57f)),
+                Mat("City_Gray5", new Color(0.67f, 0.67f, 0.68f))
             };
-            var window = Mat("City_Window", new Color(0.22f, 0.27f, 0.35f), null, false, 0.8f);
+            var window = Mat("City_Window", new Color(0.36f, 0.37f, 0.39f), null, false, 0.6f);
             var roof = Mat("City_Roof", new Color(0.35f, 0.36f, 0.38f));
             float inner = CityBlock - CityRoad - 0.4f;
             int n = Random.Range(1, 5);
@@ -176,12 +176,12 @@ namespace ShootingGallery
         {
             var awnings = new[]
             {
-                Mat("Shop_Red", new Color(0.85f, 0.2f, 0.18f)), Mat("Shop_Yellow", new Color(0.95f, 0.8f, 0.2f)),
-                Mat("Shop_Green", new Color(0.2f, 0.65f, 0.35f)), Mat("Shop_Blue", new Color(0.2f, 0.45f, 0.85f)),
-                Mat("Shop_Orange", new Color(0.95f, 0.5f, 0.15f))
+                Mat("Shop_Gray1", new Color(0.45f, 0.45f, 0.47f)), Mat("Shop_Gray2", new Color(0.55f, 0.55f, 0.56f)),
+                Mat("Shop_Gray3", new Color(0.38f, 0.38f, 0.4f)), Mat("Shop_Gray4", new Color(0.62f, 0.62f, 0.63f)),
+                Mat("Shop_Gray5", new Color(0.5f, 0.5f, 0.52f))
             };
-            var wall = Mat("Shop_Wall", new Color(0.85f, 0.8f, 0.72f));
-            var glass = Mat("Shop_Glass", new Color(0.7f, 0.85f, 0.95f), new Color(0.25f, 0.3f, 0.32f), false, 0.9f);
+            var wall = Mat("Shop_Wall", new Color(0.7f, 0.7f, 0.7f));
+            var glass = Mat("Shop_Glass", new Color(0.4f, 0.42f, 0.45f), null, false, 0.8f);
             float inner = CityBlock - CityRoad - 0.4f;
             int shops = 5;
             float sw = inner / shops;
@@ -217,16 +217,16 @@ namespace ShootingGallery
         {
             var lot = CityLot(parent, lots, center);
             float inner = CityBlock - CityRoad - 0.3f;
-            Prim(PrimitiveType.Cube, "Lawn", lot, new Vector3(0f, 0.01f, 0f), new Vector3(inner, 0.02f, inner), Mat("City_Grass", new Color(0.3f, 0.62f, 0.28f)), false);
+            Prim(PrimitiveType.Cube, "Lawn", lot, new Vector3(0f, 0.01f, 0f), new Vector3(inner, 0.02f, inner), Mat("City_Grass", new Color(0.42f, 0.47f, 0.41f)), false);
             Prim(PrimitiveType.Cylinder, "Pond", lot, new Vector3(Random.Range(-0.8f, 0.8f), 0.025f, Random.Range(-0.8f, 0.8f)), new Vector3(1.6f, 0.005f, 1.1f),
-                 Mat("City_Pond", new Color(0.25f, 0.5f, 0.8f), null, false, 0.9f), false);
+                 Mat("City_Pond", new Color(0.4f, 0.44f, 0.5f), null, false, 0.9f), false);
             CityTrees(parent, lots, center, Random.Range(5, 9));
         }
 
         void CityTrees(Transform parent, List<Transform> lots, Vector3 center, int count)
         {
-            var trunk = Mat("Trunk", new Color(0.45f, 0.3f, 0.15f));
-            var leaves = new[] { Mat("Tree_Green1", new Color(0.2f, 0.55f, 0.22f)), Mat("Tree_Green2", new Color(0.28f, 0.62f, 0.25f)), Mat("Tree_Green3", new Color(0.18f, 0.45f, 0.2f)) };
+            var trunk = Mat("City_Trunk", new Color(0.38f, 0.36f, 0.34f));
+            var leaves = new[] { Mat("City_Tree1", new Color(0.36f, 0.42f, 0.36f)), Mat("City_Tree2", new Color(0.42f, 0.47f, 0.41f)), Mat("City_Tree3", new Color(0.32f, 0.37f, 0.33f)) };
             float inner = CityBlock - CityRoad - 0.8f;
             for (int i = 0; i < count; i++)
             {
@@ -239,49 +239,6 @@ namespace ShootingGallery
             }
         }
 
-        /// <summary>
-        /// 的のビル: 普通のビルより一回り大きく、黄色か青 (一番遠くの1棟は金) で、窓が光っている。屋上の看板に大きく点数 (いつもプレイヤーの方を向く)。
-        /// 遠いほど高い点数。炎の玉が当たると崩れ、しばらくすると建て直される (KaijuBuilding)。
-        /// </summary>
-        KaijuBuilding KaijuTargetBuilding(Transform parent, List<Transform> lots, Vector3 center, float dist, int index, Material explosion, Material dust)
-        {
-            int points = dist < 12f ? 100 : dist < 22f ? 200 : dist < 32f ? 300 : 500;
-            bool gold = index == 15;
-            if (gold) points = 1000;
-            Color c = gold ? new Color(1f, 0.78f, 0.25f) : index % 2 == 0 ? new Color(1f, 0.85f, 0.25f) : new Color(0.3f, 0.6f, 1f);
-            var body = Mat(gold ? "KaijuTarget_Gold" : index % 2 == 0 ? "KaijuTarget_Yellow" : "KaijuTarget_Blue", c, c * 0.25f, false, gold ? 0.8f : 0.4f);
-            var glow = Mat(index % 2 == 0 || gold ? "KaijuTarget_WindowY" : "KaijuTarget_WindowB", Color.white, (gold || index % 2 == 0 ? new Color(1f, 0.85f, 0.4f) : new Color(0.5f, 0.75f, 1f)) * 1.2f);
-
-            var lot = CityLot(parent, lots, center);
-            var root = Group(lot, $"TargetBuilding_{points}");
-            var bodyRoot = Group(root, "Body");
-            float w = 1.9f, d = 1.9f, h = (Mathf.Lerp(3.2f, 5.5f, Mathf.Clamp01(dist / 45f)) + (gold ? 1.5f : 0f)) * CityHeight;
-            Prim(PrimitiveType.Cube, "Tower", bodyRoot, new Vector3(0f, h / 2f, 0f), new Vector3(w, h, d), body);
-            Prim(PrimitiveType.Cube, "RoofTop", bodyRoot, new Vector3(0f, h + 0.15f, 0f), new Vector3(w * 0.6f, 0.3f, d * 0.6f), body);
-            for (float y = 0.3f; y < h - 0.25f; y += 0.35f)
-                Prim(PrimitiveType.Cube, "Windows", bodyRoot, new Vector3(0f, y, 0f), new Vector3(w + 0.02f, 0.12f, d + 0.02f), glow, false);
-            // 屋上の看板 (いつもプレイヤーの方を向く)。遠いほど大きな文字
-            var sign = Group(bodyRoot, "Sign");
-            sign.localPosition = new Vector3(0f, h + 0.9f, 0f);
-            sign.gameObject.AddComponent<FaceCenter>();
-            float size = 0.7f + dist * 0.025f;
-            Prim(PrimitiveType.Cube, "SignBoard", sign, Vector3.zero, new Vector3(size * 2.2f, size * 0.9f, 0.05f), Mat("KaijuSign", new Color(0.08f, 0.08f, 0.1f), new Color(0.04f, 0.04f, 0.05f)), false);
-            MakeText(sign, "Points", points.ToString(), new Vector3(0f, 0f, -0.04f), size * 0.7f, c);
-
-            var target = root.gameObject.AddComponent<Target>();
-            target.kind = TargetKind.KaijuBuilding;
-            target.points = points;
-            target.manualControl = true;
-            target.visual = Group(root, "HitMarker");
-            target.SetAvailable(false);
-            var building = root.gameObject.AddComponent<KaijuBuilding>();
-            building.target = target;
-            building.body = bodyRoot;
-            building.size = new Vector3(w, h, d);
-            building.explosionMaterial = explosion;
-            building.dustMaterial = dust;
-            return building;
-        }
 
         // ---- 動く的 (KaijuVehicle) ----
 
@@ -319,8 +276,9 @@ namespace ShootingGallery
         KaijuVehicle KaijuCar(Transform parent, int index, Material explosion, Material smoke)
         {
             int type = index % 4; // 0 セダン / 1 タクシー / 2 バス / 3 トラック
-            var colors = new[] { new Color(0.85f, 0.15f, 0.12f), new Color(1f, 0.8f, 0.15f), new Color(0.2f, 0.55f, 0.35f), new Color(0.92f, 0.92f, 0.95f) };
-            var paint = Mat($"KaijuCar_{type}", colors[type], null, false, 0.7f);
+            var colors = KaijuTargetColors; // (的はカラフルに)
+            int ci = (index * 3) % colors.Length;
+            var paint = Mat($"KaijuCar_{ci}", colors[ci], colors[ci] * 0.25f, false, 0.7f);
             var glass = Mat("KaijuCar_Glass", new Color(0.25f, 0.35f, 0.45f), null, false, 0.9f);
             var tire = Mat("KaijuCar_Tire", new Color(0.08f, 0.08f, 0.08f));
             var lamp = Mat("KaijuCar_Lamp", new Color(1f, 0.95f, 0.7f), new Color(1.5f, 1.3f, 0.8f));
@@ -355,11 +313,12 @@ namespace ShootingGallery
                 }
             }
             v.pointChoices = type >= 2 ? new[] { 200, 300 } : new[] { 100, 200 };
-            v.speed = type >= 2 ? 2.4f : Random.Range(3f, 4f);
+            v.speed = type >= 2 ? 3.2f : Random.Range(4f, 5.2f);
+            v.transform.localScale = Vector3.one * 2f; // (的なので大きめに)
             v.size = 0.45f;
             v.explosionMaterial = explosion;
             v.smokeMaterial = smoke;
-            v.respawnDelay = new Vector2(1.5f, 3.5f);
+            v.respawnDelay = new Vector2(0.6f, 1.6f);
             return v;
         }
 
@@ -372,6 +331,8 @@ namespace ShootingGallery
             var dark = Mat("KaijuPlane_Prop", new Color(0.12f, 0.12f, 0.14f));
             var v = VehicleRoot(parent, $"KaijuPlane_{index}", KaijuVehicle.Kind.Plane, 1.1f, 0.45f, new Color(1f, 0.85f, 0.35f), out var body, out _);
             const float L = 2.2f;
+            int pc = (index * 3 + 1) % KaijuTargetColors.Length; // (的なので胴体と翼はカラフルに)
+            white = Mat($"KaijuPlane_{pc}", KaijuTargetColors[pc], KaijuTargetColors[pc] * 0.25f, false, 0.6f);
             var hull = Prim(PrimitiveType.Capsule, "Fuselage", body, Vector3.zero, new Vector3(0.36f, L / 2f, 0.36f), white);
             hull.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
             var line = Prim(PrimitiveType.Capsule, "Stripe", body, new Vector3(0f, 0.02f, 0f), new Vector3(0.37f, L / 2f * 0.92f, 0.1f), stripe, false);
@@ -399,20 +360,22 @@ namespace ShootingGallery
             v.rotorAxes = new[] { Vector3.forward, Vector3.forward };
             v.rotorSpeed = 1400f;
             v.pointChoices = new[] { 300, 500 };
-            v.speed = 6.5f;
+            v.speed = 7.5f;
+            v.transform.localScale = Vector3.one * 1.6f;
             v.altitude = new Vector2(3.2f, 5f);
             v.distance = new Vector2(6f, 20f);
             v.size = 0.9f;
             v.explosionMaterial = explosion;
             v.smokeMaterial = smoke;
-            v.respawnDelay = new Vector2(2f, 4f);
+            v.respawnDelay = new Vector2(0.8f, 2f);
             return v;
         }
 
         /// <summary>怪獣のまわりを回るヘリコプター (報道ヘリ: 青と白、大きな回転翼)</summary>
         KaijuVehicle KaijuHelicopter(Transform parent, int index, Material explosion, Material smoke)
         {
-            var paint = Mat(index % 2 == 0 ? "KaijuHeli_Blue" : "KaijuHeli_Red", index % 2 == 0 ? new Color(0.2f, 0.4f, 0.85f) : new Color(0.85f, 0.2f, 0.15f), null, false, 0.6f);
+            int hc = (index * 3 + 2) % KaijuTargetColors.Length;
+            var paint = Mat($"KaijuHeli_{hc}", KaijuTargetColors[hc], KaijuTargetColors[hc] * 0.25f, false, 0.6f);
             var white = Mat("KaijuPlane_White", new Color(0.93f, 0.94f, 0.96f), null, false, 0.6f);
             var glass = Mat("KaijuCar_Glass", new Color(0.25f, 0.35f, 0.45f), null, false, 0.9f);
             var dark = Mat("KaijuPlane_Prop", new Color(0.12f, 0.12f, 0.14f));
@@ -441,13 +404,14 @@ namespace ShootingGallery
             v.rotorAxes = new[] { Vector3.up, Vector3.right };
             v.rotorSpeed = 1500f;
             v.pointChoices = new[] { 300, 500 };
-            v.speed = 3f;
+            v.speed = 3.5f;
+            v.transform.localScale = Vector3.one * 1.7f;
             v.altitude = new Vector2(2.2f, 3.6f);
             v.distance = new Vector2(7f, 14f);
             v.size = 0.7f;
             v.explosionMaterial = explosion;
             v.smokeMaterial = smoke;
-            v.respawnDelay = new Vector2(2.5f, 5f);
+            v.respawnDelay = new Vector2(1f, 2.5f);
             return v;
         }
 

@@ -38,6 +38,18 @@ namespace ShootingGallery
         [Header("ふわふわ漂う鬼火 (的ではない)")]
         public Transform[] wisps;
 
+        [Header("空 (月に近いほど明るく、離れるほど暗い紫になるドーム。幽霊の世界の間だけ、すっと現れる)")]
+        public Renderer skyDome;
+        public float skyFadeTime = 2.5f;
+
+        [Header("魔女の鍋 (ぶくぶく泡が上がり、下で火が燃える)")]
+        [Tooltip("鍋の中から上がって消える泡")]
+        public Transform[] cauldronBubbles;
+        [Tooltip("泡が出てくる高さ (鍋の中の液の面。泡の親のローカル)")]
+        public float cauldronSurfaceY = 1f;
+        [Tooltip("鍋の下で燃える火 (大きさがゆらゆら揺れる)")]
+        public Transform[] cauldronFlames;
+
         [Header("的 (時間切れまで、種類ごとに決まった間隔で出てくる)")]
         public GhostSpook[] ghosts;
         public GhostSpook[] witches;
@@ -113,8 +125,53 @@ namespace ShootingGallery
                 wispPhase[i] = Random.value * 10f;
             }
             soilScale = soil != null ? soil.localScale : Vector3.one;
+            if (skyDome != null) skyMat = skyDome.material; // (実行中だけの複製。透明度を変えても元の材質は変えない)
+            if (cauldronBubbles == null) cauldronBubbles = new Transform[0];
+            if (cauldronFlames == null) cauldronFlames = new Transform[0];
+            bubbleHome = new Vector3[cauldronBubbles.Length];
+            bubblePhase = new float[cauldronBubbles.Length];
+            for (int i = 0; i < cauldronBubbles.Length; i++)
+            {
+                bubbleHome[i] = cauldronBubbles[i].localPosition;
+                bubblePhase[i] = Random.value;
+            }
             CollectParts();
             SetStageVisible(false);
+            SetSky(0f);
+        }
+
+        // ---- 空のドーム ----
+        Material skyMat;
+        float skyLevel, skyTarget;
+
+        void SetSky(float a)
+        {
+            skyLevel = a;
+            if (skyMat == null) return;
+            skyMat.SetColor("_BaseColor", new Color(1f, 1f, 1f, a));
+            if (skyDome != null) skyDome.enabled = a > 0.001f;
+        }
+
+        // ---- 魔女の鍋 ----
+        Vector3[] bubbleHome;
+        float[] bubblePhase;
+
+        // 泡が液の面からぷくっと出て、ふくらみながら上がって消える (泡ごとにずらして)。火はゆらゆら伸び縮みする
+        void UpdateCauldron()
+        {
+            float time = Time.time;
+            for (int i = 0; i < cauldronBubbles.Length; i++)
+            {
+                float k = Mathf.Repeat(time * 0.6f + bubblePhase[i], 1f);
+                var home = bubbleHome[i];
+                cauldronBubbles[i].localPosition = new Vector3(home.x + Mathf.Sin(time * 3f + i) * 0.03f, cauldronSurfaceY + k * 0.55f, home.z);
+                cauldronBubbles[i].localScale = Vector3.one * (0.06f + 0.12f * Mathf.Sin(k * Mathf.PI));
+            }
+            for (int i = 0; i < cauldronFlames.Length; i++)
+            {
+                float n = Mathf.PerlinNoise(time * 6f, i * 2.7f);
+                cauldronFlames[i].localScale = new Vector3(0.9f + 0.2f * Mathf.PerlinNoise(time * 5f, i + 9f), 0.75f + 0.5f * n, 0.9f + 0.2f * Mathf.PerlinNoise(time * 5f + 4f, i));
+            }
         }
 
         // ---- 組み上げる部品 ----
@@ -239,6 +296,7 @@ namespace ShootingGallery
             SetSoil(0f);
             SetStageVisible(true);
             inWorld = true;
+            skyTarget = 1f; // 空がすっと現れる (Update)
             Arrived?.Invoke();
             Sfx.Play("ghost");
             bool groundHidden = false, rumble = false;
@@ -260,6 +318,7 @@ namespace ShootingGallery
         IEnumerator Leave()
         {
             Left?.Invoke();
+            skyTarget = 0f; // 空はすっと消えていく (Update)
             Sfx.Play("ghost");
             float total = Mathf.Max(0.1f, BuildTime);
             for (float t = 0f; t < disassembleTime; t += Time.deltaTime)
@@ -297,7 +356,10 @@ namespace ShootingGallery
             {
                 UpdateWell();
                 UpdateWisps();
+                UpdateCauldron();
             }
+            if (!Mathf.Approximately(skyLevel, skyTarget))
+                SetSky(Mathf.MoveTowards(skyLevel, skyTarget, Time.deltaTime / Mathf.Max(0.1f, skyFadeTime)));
             if (!IsActive || Time.time < launchStart || TimeLeft < stopLaunchBefore) return;
             float now = Time.time;
             if (now >= nextGhost)
@@ -413,6 +475,7 @@ namespace ShootingGallery
         void SetInWorld(bool on)
         {
             inWorld = on;
+            if (!on) { skyTarget = 0f; SetSky(0f); }
             if (!on && groundHiddenNow) HideGround(false);
             SetStageVisible(on);
             if (!on) SetSoil(1f); // 次に出す時のために、元の大きさへ (出す時に 0 から広げる)

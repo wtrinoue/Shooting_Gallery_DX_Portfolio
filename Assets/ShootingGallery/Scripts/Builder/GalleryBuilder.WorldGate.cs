@@ -19,19 +19,20 @@ namespace ShootingGallery
         Target BuildWorldGateTarget(Transform stall)
         {
             var root = Group(stall, "Target_WorldGate");
-            root.localPosition = new Vector3(0.5f, 1.1f, -0.6f);
+            root.localPosition = new Vector3(TitleTargetGap, 0f, -0.6f); // 屋台の床から立てる (タイトルの的の右。左から 2 MIN / 100,000 POINTS / WORLD GATE)
             var target = root.gameObject.AddComponent<Target>();
             target.kind = TargetKind.WorldGate;
             target.points = 0;
             target.respawnDelay = 1f;
             var pivot = Group(root, "Pivot");
             target.visual = pivot;
-            Prim(PrimitiveType.Cube, "Stand", pivot, new Vector3(0f, 0.15f, 0f), new Vector3(0.05f, 0.3f, 0.05f), Mat("Target_Stand", new Color(0.3f, 0.3f, 0.32f)));
+            const float y = TitleTargetY;
+            TitleTargetStand(pivot, y + 0.62f - 0.55f / 2f);
             var blue = Mat("Target_GateBlue", new Color(0.2f, 0.25f, 0.85f), new Color(0.05f, 0.06f, 0.3f));
-            Bullseye(pivot, 0.62f, 0.55f, blue, Mat("Target_White", Color.white), Mat("Target_GatePurple", new Color(0.6f, 0.2f, 0.85f), new Color(0.2f, 0.05f, 0.3f)));
+            Bullseye(pivot, y + 0.62f, 0.55f, blue, Mat("Target_White", Color.white), Mat("Target_GatePurple", new Color(0.6f, 0.2f, 0.85f), new Color(0.2f, 0.05f, 0.3f)));
             var ink = new Color(0.08f, 0.08f, 0.2f);
-            MakeText(pivot, "LabelWorld", "WORLD", new Vector3(0f, 0.685f, -0.03f), 0.1f, ink);
-            MakeText(pivot, "LabelGate", "GATE", new Vector3(0f, 0.555f, -0.03f), 0.1f, ink);
+            MakeText(pivot, "LabelWorld", "WORLD", new Vector3(0f, y + 0.685f, -0.03f), 0.1f, ink);
+            MakeText(pivot, "LabelGate", "GATE", new Vector3(0f, y + 0.555f, -0.03f), 0.1f, ink);
             return target;
         }
 

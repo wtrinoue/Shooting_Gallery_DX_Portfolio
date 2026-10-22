@@ -59,6 +59,8 @@ namespace ShootingGallery
         /// <summary>今回倒した忍者の数</summary>
         public int Hits { get; private set; }
         /// <summary>ふすまが開いた瞬間 (GameManager がメッセージを出す)</summary>
+        /// <summary>正面のふすまが開き始めた (GameManager が忍者の BGM を流し始める)</summary>
+        public event System.Action DoorsOpening;
         public event System.Action Opened;
         /// <summary>片付け (ふすまが閉じて天井が上がり、壁が倒れる) にかかる秒数</summary>
         public float CloseTime => doorTime * 0.6f + ceilingTime * 0.75f + wallTime;
@@ -161,6 +163,7 @@ namespace ShootingGallery
             foreach (var p in panels) p.SetAvailable(true);
             for (int i = 0; i < cooldown.Length; i++) cooldown[i] = 0f;
             yield return new WaitForSeconds(0.4f);
+            DoorsOpening?.Invoke();
             Sfx.Play("fusuma");
             for (float t = 0f; t < 1f; t += Time.deltaTime / doorTime)
             {

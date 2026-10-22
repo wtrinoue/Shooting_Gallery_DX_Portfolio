@@ -36,6 +36,7 @@ namespace ShootingGallery
             foreach (var s in stageStalls) unknownBreakables.Add(s.transform);
             if (bonusStage != null) unknownBreakables.Add(bonusStage.transform);
             unknownStage.Begin(yaw, UnknownFreezeDelay, unknownBreakables);
+            PauseRoundBgmNow(); // 的を撃った瞬間に、それまでの曲を消す (アンノウンの曲は、割れて別の世界が見えた時から。OnUnknownShattered)
             ShowMessage("UNKNOWN STAGE...", 2f, new Color(0.75f, 0.85f, 1f));
         }
 
@@ -54,6 +55,7 @@ namespace ShootingGallery
             RenderSettings.fogStartDistance = 50f; // ゲートの奥 (45m) まで広がる世界や、大きなホールの奥が見えるように、霧はずっと遠くから
             RenderSettings.fogEndDistance = 140f;
             FadeAmbience(unknownFogColor, unknownAmbient, unknownSkyColor, 0.3f);
+            PlayStageBgm(unknownBgm); // 別の世界が見えた: アンノウンの曲を流し始める
         }
 
         // 割れ終わった: 遊び始める (ゲートが順に開く)
@@ -75,6 +77,7 @@ namespace ShootingGallery
         void EndUnknown()
         {
             if (!UnknownActive) return;
+            if (State != GameState.Playing) StopStageBgm(unknownBgm, true); // (ラウンドの終わり・リセットの時はすぐ止める。ふだんは戻りきってから OnUnknownClosed で)
             int hits = unknownStage.Hits;
             bool immediate = State != GameState.Playing;
             unknownStage.End(immediate);
@@ -109,6 +112,7 @@ namespace ShootingGallery
         // 色が戻った: もう屋台の前にいる。屋台の的を出す
         void OnUnknownClosed()
         {
+            StopStageBgm(unknownBgm); // 元の世界に戻りきった: BGM をふわっと止める
             if (State == GameState.Playing && !ChallengeActive) SetShownStallTargets(true);
         }
     }

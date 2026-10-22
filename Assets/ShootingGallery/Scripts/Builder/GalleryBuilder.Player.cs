@@ -32,7 +32,9 @@ namespace ShootingGallery
             cam.backgroundColor = new Color(0.05f, 0.05f, 0.14f);
             camGo.AddComponent<AudioListener>();
             camGo.AddComponent<AudioSource>();
-            camGo.AddComponent<Sfx>();
+            var sfx = camGo.AddComponent<Sfx>();
+            sfx.revolverShot = LoadSourceAsset(RevolverShotPath, a => a.revolverShot);     // 西部劇の銃声 (音源)
+            sfx.revolverReload = LoadSourceAsset(RevolverReloadPath, a => a.revolverReload); // 西部劇の弾を込める音 (音源)
             AddPoseDriver(camGo, "<XRHMD>/centerEyePosition", "<XRHMD>/centerEyeRotation");
             // 目の前の黒い板 (場面の切り替えで暗くする。ふだんは透明で表示しない)
             var fadeMat = TransparentMat("ScreenFade", Color.black);
@@ -57,6 +59,9 @@ namespace ShootingGallery
             rig.rightGun = BuildGun(right, "RightGun", XRNode.RightHand);
             builtGun = rig.rightGun; // 武器の的のカプセルの中のフィギュアに使う
             rig.leftGun = BuildGun(left, "LeftGun", XRNode.LeftHand);
+            rig.rightControllerModel = HandControllerModel(right, true); // 操作方法の看板を見ている間だけ、銃の代わりに出すコントローラー
+            rig.leftControllerModel = HandControllerModel(left, false);
+            rig.pointerBallMaterial = Mat("Controller_PointerBall", Color.white, new Color(1.2f, 1.2f, 1.2f), true);
             rig.resetIndicator = BuildResetIndicator(camGo.transform);
             rig.endlessIndicator = BuildResetIndicator(camGo.transform, "EndlessIndicator", "HOLD B : ENDLESS", "ENDLESS!", new Color(0.3f, 1f, 0.85f));
             rig.debugIndicator = BuildResetIndicator(camGo.transform, "DebugIndicator", "HOLD X : DEBUG", "DEBUG!", new Color(0.6f, 1f, 0.3f));
@@ -243,7 +248,8 @@ namespace ShootingGallery
             // 光の筋 (先が広がる透ける円すいを2重に) とスポットライト。光っている間だけ出す
             var beam = Group(fl, "Beam");
             beam.localPosition = new Vector3(0f, 0f, 0.16f);
-            foreach (var (radius, length, alpha, name2) in new[] { (0.9f, 7f, 0.1f, "Flashlight_Beam"), (0.4f, 5f, 0.12f, "Flashlight_BeamCore") })
+            // (遠くまで届いて見えるように長く。先の広がりは前と同じくらいの角度)
+            foreach (var (radius, length, alpha, name2) in new[] { (1.7f, 17f, 0.08f, "Flashlight_Beam"), (0.7f, 12f, 0.1f, "Flashlight_BeamCore") })
             {
                 var cone = new GameObject("BeamCone");
                 cone.transform.SetParent(beam, false);
@@ -259,10 +265,10 @@ namespace ShootingGallery
             lightGo.transform.localPosition = new Vector3(0f, 0f, 0.16f);
             var spot = lightGo.AddComponent<Light>();
             spot.type = LightType.Spot;
-            spot.range = 30f;
-            spot.spotAngle = 30f;
-            spot.innerSpotAngle = 16f;
-            spot.intensity = 8f;
+            spot.range = 42f;   // 遠くの敵や家まで照らす
+            spot.spotAngle = 26f;
+            spot.innerSpotAngle = 14f;
+            spot.intensity = 11f;
             spot.color = new Color(1f, 0.95f, 0.8f);
             spot.shadows = LightShadows.None;
             spot.enabled = false;
@@ -464,7 +470,10 @@ namespace ShootingGallery
             gun.poiFrameMaterial = poiFrame;
             gun.poiPaperMaterial = poiPaper;
             gun.coinMaterial = coinGold;
-            gun.fireballMaterial = Mat("Fireball", new Color(1f, 0.55f, 0.1f), new Color(3f, 1.2f, 0.2f));
+            gun.fireballMaterial = Mat("Fireball_Core", new Color(1f, 0.92f, 0.6f), new Color(3.2f, 2.4f, 0.9f), true);
+            gun.fireballOuterMaterial = TransparentMat("Fireball_Outer", new Color(1f, 0.42f, 0.05f, 0.72f));
+            gun.fireballTrailMaterial = VertexColorMat("Fireball_Trail", Color.white);
+            gun.cannonballMaterial = Mat("Cannonball", new Color(0.05f, 0.05f, 0.06f), null, false, 0.55f);
             gun.fireballExplosionMaterial = TransparentMat("Fire_Explosion", new Color(1f, 0.45f, 0.08f, 0.85f));
             gun.dartShaftMaterial = dartShaft;
             gun.dartFlightMaterial = dartFlight;
@@ -518,6 +527,7 @@ namespace ShootingGallery
             gun.ammoBullets = bullets.ToArray();
             gun.ammoFullMaterial = ammoFull;
             gun.ammoEmptyMaterial = ammoEmpty;
+            gun.ammoLoadingMaterial = Mat("Ammo_Loading", new Color(0.3f, 1f, 0.35f), null, true); // リボルバーの弾込めの途中 (緑)
             gun.flashlightBeam = beam.gameObject;
             gun.flashlightLight = spot;
             gun.flashlightLens = lens.GetComponent<Renderer>();

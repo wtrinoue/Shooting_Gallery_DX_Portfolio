@@ -19,6 +19,20 @@ namespace ShootingGallery
         public AudioClip museumBgm;
         public AudioClip concertBgm;
         public AudioClip skyBgm;
+        public AudioClip festivalBgm;
+        public AudioClip ghostBgm;
+        public AudioClip kaijuBgm;
+        public AudioClip mineBgm;
+        public AudioClip navalBgm;
+        public AudioClip westernBgm;
+        public AudioClip spaceBgm;
+        public AudioClip submarineBgm;
+        public AudioClip ninjaBgm;
+        public AudioClip unknownBgm;
+        public AudioClip revolverShot, revolverReload;
+        public AudioClip roundBgm;
+        [Tooltip("タイトルのモードの看板の右に飾る絵 (GalleryBuilder.PocochiImagePath)")]
+        public Texture2D pocochiImage;
         public TextAsset concertBeatMap;
 
         [Header("ビルドに入れておくもの (実行時に Shader.Find で探すシェーダーと、ビルダーが作った材質)")]

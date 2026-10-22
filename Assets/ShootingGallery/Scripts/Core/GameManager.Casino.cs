@@ -52,7 +52,7 @@ namespace ShootingGallery
             FadeAmbience(normalFogColor, casinoAmbient, null, 1.6f);
             if (State != GameState.Playing) return;
             player.GiveStageWeapon(WeaponType.Dart, casinoHall.TimeLeft);
-            ShowMessage("WELCOME TO THE CASINO!\nHIT THE SLOT & ROULETTES!", 3f, new Color(1f, 0.85f, 0.3f));
+            ShowMessage("WELCOME TO THE CASINO!\nSHOOT THE SLOTS, ROULETTES & DARTS!", 3f, new Color(1f, 0.85f, 0.3f));
         }
 
         // 片付けで天井が上がり始めた: いつもの夜の明るさに戻す
@@ -87,7 +87,8 @@ namespace ShootingGallery
         {
             if (!CasinoActive) return;
             casinoHall.End();
-            ReleaseStageWeapon(WeaponType.Dart);
+            // (ダーツ・コインのどちらを持っていても、元に戻す)
+            if (player.Weapon == WeaponType.Dart || player.Weapon == WeaponType.Coin) ReleaseStageWeapon(player.Weapon);
             StartCoroutine(RiseStallsAfter(new List<Stall>(stageStalls), casinoHall.CloseTime + 0.1f));
             stageStalls.Clear();
             if (State == GameState.Playing)
@@ -101,10 +102,16 @@ namespace ShootingGallery
         /// スロットのリールが全部止まった: 出目の点数を入れ、出目の強さに合わせた演出を出す
         /// (そろわない → 小さく / 2つそろう → コイン / そろう → ファンファーレとコインの山 / 777 → 大当たりの花火)
         /// </summary>
-        void OnSlotResult(int points, SlotMachine.Tier tier, string face)
+        void OnSlotResult(SlotMachine machine, int points, SlotMachine.Tier tier, string face)
         {
-            if (State != GameState.Playing || !CasinoActive) return;
-            var slotPos = casinoHall.slot.transform.position + Vector3.up * 3.6f;
+            if (State != GameState.Playing || !CasinoActive || machine == null) return;
+            float size = machine.transform.lossyScale.y;
+            var slotPos = machine.transform.position + Vector3.up * 3.6f * size;
+            // 当たると、スロットのコイン受けから金色のコインが飛び散る (当たりが大きいほどたくさん)
+            int coins = tier switch { SlotMachine.Tier.Jackpot => 60, SlotMachine.Tier.BigWin => 35, SlotMachine.Tier.Win => 20, SlotMachine.Tier.Pair => 6, _ => 0 };
+            if (coins > 0)
+                CoinBurst.Spawn(machine.transform.position + Vector3.up * 0.4f * size - machine.transform.forward * 0.9f * size, -machine.transform.forward, coins,
+                                casinoHall.coinMaterial, casinoHall.transform.position.y, tier >= SlotMachine.Tier.BigWin ? 6f : 4.5f);
             switch (tier)
             {
                 case SlotMachine.Tier.Miss:
@@ -122,17 +129,51 @@ namespace ShootingGallery
                     Sfx.Play("complete");
                     AwardPoints(points, slotPos, new Color(1f, 0.85f, 0.3f), tier == SlotMachine.Tier.BigWin ? 0.8f : 0.6f);
                     ShowMessage($"{face}\n{(tier == SlotMachine.Tier.BigWin ? "BIG WIN!!" : "WIN!")} +{points}", 2.5f, new Color(1f, 0.85f, 0.3f));
-                    StartCoroutine(CoinShower(casinoHall.slot.transform.position + Vector3.up * 1.5f, tier == SlotMachine.Tier.BigWin ? 16 : 8));
+                    StartCoroutine(CoinShower(machine.transform.position + Vector3.up * 1.5f * size, tier == SlotMachine.Tier.BigWin ? 16 : 8));
                     break;
                 case SlotMachine.Tier.Jackpot:
                     Sfx.Play("deluxe");
                     Sfx.Play("complete");
                     AwardPoints(points, slotPos, new Color(1f, 0.3f, 0.6f), 1.1f);
                     ShowMessage($"7 7 7\nJACKPOT!!!  +{points}", 4f, new Color(1f, 0.3f, 0.6f));
-                    StartCoroutine(CoinShower(casinoHall.slot.transform.position + Vector3.up * 1.5f, 30));
-                    for (int i = 0; i < 8; i++) LaunchFireworkAt(casinoHall.slot.transform.position + Random.insideUnitSphere * 3f + Vector3.up * 5f);
+                    StartCoroutine(CoinShower(machine.transform.position + Vector3.up * 1.5f * size, 30));
+                    for (int i = 0; i < 8; i++) LaunchFireworkAt(machine.transform.position + Random.insideUnitSphere * 3f + Vector3.up * 5f * size);
                     break;
             }
+        }
+
+        /// <summary>ボールのルーレットのボールがポケットに入った: そのポケットの点数を入れる。緑の 0 (1000) は大当たりで、コインが飛び散る</summary>
+        void OnRouletteResult(BallRoulette wheel, int points, int pocket)
+        {
+            if (State != GameState.Playing || !CasinoActive || wheel == null) return;
+            var pos = wheel.ball != null ? wheel.ball.position + Vector3.up * 0.4f : wheel.transform.position + Vector3.up * 2f;
+            bool big = points >= 1000;
+            Sfx.Play(big ? "complete" : points >= 300 ? "bonus" : "coin");
+            AwardPoints(points, pos, big ? new Color(0.3f, 1f, 0.5f) : new Color(1f, 0.85f, 0.4f), big ? 0.8f : 0.45f);
+            ShowMessage(big ? $"ZERO!! JACKPOT!\n+{points}" : $"ROULETTE\n+{points}", big ? 2.5f : 1.3f, big ? new Color(0.4f, 1f, 0.55f) : new Color(1f, 0.85f, 0.4f));
+            int coins = big ? 40 : points >= 500 ? 18 : points >= 300 ? 10 : 4;
+            CoinBurst.Spawn(pos, -wheel.transform.forward, coins, casinoHall.coinMaterial, casinoHall.transform.position.y, big ? 5.5f : 4f);
+            if (big) for (int i = 0; i < 5; i++) LaunchFireworkAt(pos + Random.insideUnitSphere * 2f + Vector3.up * 3f);
+        }
+
+        // ---- 狙った先で、武器を持ち替える ----
+
+        /// <summary>
+        /// カジノで遊んでいる間、銃の向きの先にあるゲームの武器に持ち替える (スロット・ルーレット = コイン、ダーツボード = ダーツ)。
+        /// 何もない方向を向いている時は、持っている武器のまま
+        /// </summary>
+        void UpdateCasinoAim()
+        {
+            if (!CasinoActive || !casinoHall.IsOpen || State != GameState.Playing || player == null || player.rightGun == null) return;
+            if (player.Weapon != WeaponType.Dart && player.Weapon != WeaponType.Coin) return; // (ほかの武器の的を取った時などは、そのまま)
+            var gun = player.rightGun.transform;
+            if (!Physics.Raycast(gun.position, gun.forward, out var hit, 40f, ~0, QueryTriggerInteraction.Ignore)) return;
+            WeaponType? want = null;
+            if (hit.collider.GetComponentInParent<SlotMachine>() != null || hit.collider.GetComponentInParent<BallRoulette>() != null) want = WeaponType.Coin;
+            else if (hit.collider.GetComponentInParent<RouletteWheel>() != null) want = WeaponType.Dart;
+            if (!want.HasValue || player.Weapon == want.Value) return;
+            player.SwitchStageWeapon(want.Value);
+            Sfx.Play("click");
         }
 
         // スロットから金色のコインがあふれ出る (光の玉が次々にはじける)
@@ -143,7 +184,7 @@ namespace ShootingGallery
             {
                 Explosion.Spawn(center + new Vector3(Random.Range(-1.2f, 1.2f), Random.Range(-0.3f, 1.5f), Random.Range(-0.6f, 0.2f)), Random.Range(0.12f, 0.25f), mat);
                 if (i % 3 == 0) Sfx.Play("coin");
-                yield return new WaitForSeconds(0.05f);
+                yield return new WaitForSeconds(0.025f); // (30 個でも 0.75 秒で出しきる)
             }
         }
 

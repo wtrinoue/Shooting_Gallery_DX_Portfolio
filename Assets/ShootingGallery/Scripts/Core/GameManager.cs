@@ -25,12 +25,17 @@ namespace ShootingGallery
         public Stall[] debugStalls;
         [Tooltip("WORLD GATE の輪の屋台 (1段だけの屋台 6軒。1軒目が正面)。WORLD GATE の間はメイン屋台・フィーバー屋台の代わりにこれを使う")]
         public Stall[] gateStalls;
-        [Tooltip("プレイヤー(中心)からメイン屋台までの距離。最初のステージの輪の半径")]
+        [Tooltip("プレイヤー(中心)からメイン屋台までの距離 (フィーバー外)。輪の半径はこれより小さくならない")]
         public float stallRadius = 3.5f;
+        [Tooltip("輪に並べた時の、隣どうしの屋台 (屋根の手前の角・提灯) の間のすき間 (m)。輪の半径はこれが空くように決まる")]
+        public float stallGap = 0.05f;
+        [Tooltip("タイトルの真ん中の 100,000 POINTS の的 (100,000 点を取るまでの時間を競う)")]
         public Target startTarget;
+        [Tooltip("タイトルの左の 2 MIN の的 (2分間でどれだけ点を取れるかのタイムアタック)")]
+        public Target timeAttackTarget;
         [Tooltip("タイトルの WORLD GATE の的 (START の横)。撃つと、別の世界へ飛ぶ的が並んだ6軒の屋台に囲まれる")]
         public Target worldGateTarget;
-        [Tooltip("操作方法の看板 (プレイヤーの背中側)。タイトルの間だけ表示する (ゲーム中はフィーバーの屋台が並ぶ場所なので隠す)")]
+        [Tooltip("タイトルの看板 (メイン屋台の左に操作方法、右にクレジット)。タイトルの間だけ表示する (ゲーム中はフィーバーの屋台が並ぶ場所なので隠す)")]
         public GameObject controlsBoard;
         [Tooltip("タイトルの間だけ穴をふさぐ平らな床のふたと、穴のふち (ラウンドが始まるとふたが消え、ふちとハッチが出る)")]
         public GameObject pitCover;
@@ -118,7 +123,7 @@ namespace ShootingGallery
         public MineCave mineCave;
         public Color mineSkyColor = new Color(0.02f, 0.015f, 0.01f);
         public Color mineFogColor = new Color(0.04f, 0.03f, 0.025f);
-        public Color mineAmbient = new Color(0.24f, 0.2f, 0.18f); // 暗め (ランプと結晶の明かりで照らされた所が浮かび上がるように)
+        public Color mineAmbient = new Color(0.035f, 0.03f, 0.03f); // 真っ暗に近い (光る宝石・鉱脈と、ランプの明かりで照らされた所だけが浮かび上がるように)
 
         [Header("Submarine (潜水艦モード: 潜水艦の的を撃つと、床が砂になって屋台が斜めに埋もれ、あたりが海に。丸い潜水艦に包まれて海の底へ沈み、魚雷で撃つ)")]
         public SubmarineDive submarineDive;
@@ -159,7 +164,16 @@ namespace ShootingGallery
         public Transform festivalTimeBar;
 
         [Header("Rules")]
+        [Tooltip("(使わない。ラウンドは時間切れではなく、GoalScore 点を取ったら終わる)")]
         public float roundDuration = 90f;
+        /// <summary>この点数を取ったらラウンドが終わる (クリア)。かかった時間を競う</summary>
+        public const int GoalScore = 100000;
+        /// <summary>タイムアタック (2 MIN) の制限時間 (秒)</summary>
+        public const float TimeAttackTime = 120f;
+        /// <summary>今のラウンドがタイムアタック (2 MIN) か</summary>
+        public bool TimeAttack { get; private set; }
+        [Tooltip("ラウンドの始まりに降りてきて 3, 2, 1, GO!! と数える、プロペラの付いた看板")]
+        public GoalSign goalSign;
         public float feverDuration = 20f;
         public float specialWeaponDuration = 3f;
         public float stallMoveDuration = 1.2f;
@@ -194,6 +208,29 @@ namespace ShootingGallery
         void HoldStallsFor(float seconds) => stallsReturnUntil = Mathf.Max(stallsReturnUntil, Time.time + seconds);
 
         // ---- モード専用の武器の戻し方 ----
+
+        /// <summary>
+        /// 今遊んでいる別の世界のモードの残り時間 (どのモードでもなければ -1)。各モードはこれが 0 になった瞬間に終わって戻り始める (Update)。
+        /// 終わった後 (帰りの演出の間) は 0
+        /// </summary>
+        float ActiveStageTimeLeft()
+        {
+            if (NavalActive) return navalBattle.TimeLeft;
+            if (SkyActive) return skyBattle.TimeLeft;
+            if (NinjaActive) return ninjaDojo.TimeLeft;
+            if (KaijuActive) return kaijuCity.TimeLeft;
+            if (CasinoActive) return casinoHall.TimeLeft;
+            if (WesternActive) return westernTrain.TimeLeft;
+            if (SpaceActive) return spaceStage.TimeLeft;
+            if (GhostActive) return ghostManor.TimeLeft;
+            if (MineActive) return mineCave.TimeLeft;
+            if (SubmarineActive) return submarineDive.TimeLeft;
+            if (MusicActive) return concertHall.TimeLeft;
+            if (MuseumActive) return artMuseum.TimeLeft;
+            if (UnknownActive) return unknownStage.TimeLeft;
+            if (FestivalActive) return festivalStage.TimeLeft;
+            return -1f;
+        }
 
         bool stageWeaponPending;          // モードが終わって、専用の武器をハンドガンに戻すのを待っている
         WeaponType pendingStageWeapon;
@@ -314,11 +351,25 @@ namespace ShootingGallery
         Quaternion mainHomeRot;
 
         const string HighScoreKey = "ShootingGalleryDX_HighScore";
+        const string BestTimeKey = "ShootingGalleryDX_BestTime"; // GoalScore 点を取るまでの一番速い時間 (秒)
+        float bestTime;          // (0 = まだクリアしていない)
+
+        /// <summary>目標の点数に対する今の点数の割合 (0〜1。エンドレス・デバッグでは 0)</summary>
+        public float GoalProgress => State == GameState.Playing && !Endless && !TimeAttack ? Mathf.Clamp01(Score / (float)GoalScore) : 0f;
+
+        static string Clock(float seconds)
+        {
+            int s = Mathf.FloorToInt(seconds);
+            return $"{s / 60}:{s % 60:00}";
+        }
+
+        static string Points(int n) => n.ToString("N0", System.Globalization.CultureInfo.InvariantCulture);
 
         void Awake()
         {
             I = this;
             highScore = PlayerPrefs.GetInt(HighScoreKey, 0);
+            bestTime = PlayerPrefs.GetFloat(BestTimeKey, 0f);
             Stall.TargetsShowing += OnStallTargetsShowing;
         }
 
@@ -361,13 +412,18 @@ namespace ShootingGallery
             }
             if (navalBattle != null) navalBattle.ShipSunk += OnShipSunk;
             if (skyBattle != null) skyBattle.EnemyDown += OnEnemyDown;
-            if (ninjaDojo != null) ninjaDojo.Opened += OnDojoOpened;
+            if (ninjaDojo != null)
+            {
+                ninjaDojo.Opened += OnDojoOpened;
+                ninjaDojo.DoorsOpening += OnDojoDoorsOpening;
+            }
             if (casinoHall != null)
             {
                 casinoHall.LightUp += OnCasinoOpened;
                 casinoHall.Darken += OnCasinoDarken;
                 casinoHall.Restore += OnCasinoRestore;
-                if (casinoHall.slot != null) casinoHall.slot.Result += OnSlotResult;
+                foreach (var s in casinoHall.AllSlots()) s.Result += OnSlotResult;
+                foreach (var r in casinoHall.roulettes) if (r != null) r.Result += OnRouletteResult;
             }
             if (westernTrain != null)
             {
@@ -379,6 +435,7 @@ namespace ShootingGallery
             {
                 spaceStage.ObjectDestroyed += OnSpaceObjectDestroyed;
                 spaceStage.Darken += OnSpaceDarken;
+                spaceStage.StarsAppear += OnSpaceStarsAppear;
                 spaceStage.Restore += OnSpaceRestore;
             }
             if (ghostManor != null)
@@ -445,10 +502,11 @@ namespace ShootingGallery
         void Update()
         {
             UpdateViewGuard(); // 視点がずれたままなら元に戻す (GameManager.View.cs)
+            UpdateStageBgm(); // モードの BGM の大きさ (GameManager.Bgm.cs)
+            UpdateControllerView(); // タイトルで操作方法の看板を見ている間は、手元をコントローラーの模型に
             if (State == GameState.Playing)
             {
                 elapsed += Time.deltaTime;
-                if (!Endless) timeLeft -= Time.deltaTime;
                 int stage = Mathf.Min((int)(elapsed / Mathf.Max(1f, stageInterval)), stageStallCounts.Length - 1);
                 if (stage > Stage && !StallsBusy && !DebugMode) StageUp(stage); // デバッグモードは6軒のまま。チャレンジ中と、別の世界から屋台が戻ってくる途中は拡張を待つ
                 if (SniperActive && sniper.TimeLeft <= 0f) EndSniper(false, "TIME OVER...");
@@ -479,7 +537,12 @@ namespace ShootingGallery
                 if (MuseumActive && artMuseum.TimeLeft <= 0f) EndMuseum();
                 if (UnknownActive && unknownStage.TimeLeft <= 0f) EndUnknown();
                 UpdateFestival(); // 見ている屋台の武器に持ち替える / 時間切れ
-                if (timeLeft <= 0f) EndRound();
+                UpdateCasinoAim(); // カジノ: 狙った先のゲームの武器に持ち替える
+                // モード専用の武器のゲージを、モードの残り時間に合わせる (ゲージが空になった瞬間に、元の世界へ戻り始める)
+                float stageLeft = ActiveStageTimeLeft();
+                if (stageLeft >= 0f) player.SyncStageWeaponTime(stageLeft);
+                if (TimeAttack) timeLeft -= Time.deltaTime; // (タイムアタックだけ時間が減る)
+                if (TimeAttack ? timeLeft <= 0f : !Endless && Score >= GoalScore) EndRound(); // タイムアタックは時間切れ、普通は目標の点数を取ったらクリア
             }
 
             if (messageTimer > 0f)
@@ -570,7 +633,7 @@ namespace ShootingGallery
             if (State != GameState.Playing) return h;
             h = Mix(h, Stage);
             h = Mix(h, GateMode ? 3 : DebugMode ? 2 : Endless ? 1 : 0);
-            h = Mix(h, DebugMode || Endless ? (int)elapsed : Mathf.CeilToInt(Mathf.Max(0f, timeLeft)));
+            h = Mix(h, TimeAttack ? Mathf.CeilToInt(Mathf.Max(0f, timeLeft)) : (int)elapsed);
             h = Mix(h, IsFever, Mathf.CeilToInt(feverLeft));
             h = Mix(h, SniperActive, SniperShotsLeft);
             h = Mix(h, MachineGunChallengeActive, MachineGunChallengeActive ? machineGunChallenge.Hits : 0);
@@ -602,7 +665,8 @@ namespace ShootingGallery
             switch (State)
             {
                 case GameState.Title:
-                    hudText.text = $"SHOOTING GALLERY DX\nHIGH SCORE {highScore}\nHOLD B : ENDLESS MODE   HOLD X : DEBUG";
+                    string best = $"2 MIN HIGH SCORE {Points(highScore)}   100,000 BEST TIME {(bestTime > 0f ? Clock(bestTime) : "-:--")}";
+                    hudText.text = $"SHOOTING GALLERY DX\n{best}\nHOLD B : ENDLESS MODE   HOLD X : DEBUG";
                     break;
                 case GameState.Playing:
                     string fever = IsFever ? $"   FEVER {Mathf.CeilToInt(feverLeft)}" : "";
@@ -625,12 +689,12 @@ namespace ShootingGallery
                     string festival = FestivalActive ? $"   FESTIVAL {Mathf.CeilToInt(festivalStage.TimeLeft)}  GOT {festivalStage.Hits}" : "";
                     ninja += kaiju + casino + western + space + ghost + mine + sub + concert + museum + festival;
                     int secs = (int)elapsed;
-                    string time = GateMode ? $"WORLD GATE {secs / 60}:{secs % 60:00}" : DebugMode ? $"DEBUG {secs / 60}:{secs % 60:00}" : Endless ? $"ENDLESS {secs / 60}:{secs % 60:00}" : $"TIME {Mathf.CeilToInt(Mathf.Max(0f, timeLeft))}";
-                    string score = FestivalActive ? "" : $"SCORE {Score}   "; // 夏祭りの世界ではスコアがお金 (お金はその上の大きな表示に出す)
+                    string time = GateMode ? $"WORLD GATE {secs / 60}:{secs % 60:00}" : DebugMode ? $"DEBUG {secs / 60}:{secs % 60:00}" : Endless ? $"ENDLESS {secs / 60}:{secs % 60:00}" : TimeAttack ? $"TIME {Mathf.CeilToInt(Mathf.Max(0f, timeLeft))}" : $"TIME {secs / 60}:{secs % 60:00}";
+                    string score = FestivalActive ? "" : Endless || TimeAttack ? $"SCORE {Points(Score)}   " : $"SCORE {Points(Score)} / {Points(GoalScore)}   "; // 夏祭りの世界ではスコアがお金 (お金はその上の大きな表示に出す)
                     hudText.text = $"{score}STAGE {Stage + 1}\n{time}{fever}{deluxe}{sniperShots}{mg}{naval}{sky}{ninja}";
                     break;
                 case GameState.Result:
-                    hudText.text = $"SCORE {Score}\nHIGH SCORE {highScore}";
+                    hudText.text = lastRoundCleared ? $"CLEAR TIME {Clock(lastClearTime)}\nBEST TIME {Clock(bestTime)}" : $"SCORE {Score}\nHIGH SCORE {highScore}";
                     break;
             }
         }
@@ -647,6 +711,8 @@ namespace ShootingGallery
 
         void GoTitle()
         {
+            if (goalSign != null) goalSign.Stop(); // 始まりの看板が出ている途中なら片付ける
+            StopRoundBgm(true); // ラウンドの BGM を止める
             ResetView(); // タイトルに戻る時も、いつもの視点に整える
             State = GameState.Title;
             Endless = false;
@@ -655,13 +721,44 @@ namespace ShootingGallery
             mainStall.SetTargetsAvailable(false);
             startTarget.SetAvailable(true);
             if (worldGateTarget != null) worldGateTarget.SetAvailable(true);
+            if (timeAttackTarget != null) timeAttackTarget.SetAvailable(true);
             if (controlsBoard != null) controlsBoard.SetActive(true);
             SetFlatFloor(true); // タイトルの間は、穴もふちもない平らな床
-            ShowMessage("SHOOT  START !", 9999f, Color.white);
+            ShowMessage("CHOOSE A MODE !", 9999f, Color.white);
         }
 
-        void StartRound(bool endless = false, bool debug = false)
+        /// <summary>
+        /// タイトルの 2 MIN / 100,000 POINTS の的を撃った: タイトルの的と看板をしまい、プロペラの付いた看板が真上から降りてきて 3, 2, 1, GO!! と数える。
+        /// GO!! でラウンドが始まる (看板は真上へ飛んでいき、点数の的が出る)。timeAttack = 2分間のタイムアタック
+        /// </summary>
+        void StartRoundWithCountdown(bool timeAttack)
         {
+            if (goalSign == null) PlayRoundBgm(); // (看板がない時は撃った時点から。看板がある時は数え始めた時から)
+            if (goalSign == null)
+            {
+                StartRound(timeAttack: timeAttack);
+                return;
+            }
+            if (goalSign.IsPlaying) return;
+            startTarget.SetAvailable(false);
+            if (worldGateTarget != null) worldGateTarget.SetAvailable(false);
+            if (timeAttackTarget != null) timeAttackTarget.SetAvailable(false);
+            if (controlsBoard != null) controlsBoard.SetActive(false);
+            ShowMessage("", 0f, Color.white);
+            Sfx.Play("stageup");
+            string headline = timeAttack ? "2 MIN TIME ATTACK !!" : $"Get {Points(GoalScore)} points !!";
+            goalSign.Play(headline, onCount: PlayRoundBgm, onGo: () =>
+            {
+                if (State != GameState.Playing) StartRound(timeAttack: timeAttack);
+            });
+        }
+
+        void StartRound(bool endless = false, bool debug = false, bool timeAttack = false)
+        {
+            TimeAttack = timeAttack && !endless;
+            if (endless && goalSign != null) goalSign.Stop(); // (数えている途中にエンドレス・デバッグ・WORLD GATE が始まった時)
+            if (debug) StopRoundBgm(true);                 // デバッグ・WORLD GATE は無音
+            else if (endless) PlayRoundBgm();              // エンドレスは始まった時から
             ResetView(true); // ラウンドの始まりは、いつもの視点から
             State = GameState.Playing;
             Endless = endless;
@@ -673,32 +770,59 @@ namespace ShootingGallery
             Stage = 0;
             stallsReturnUntil = 0f;
             elapsed = 0f;
-            timeLeft = endless ? EndlessTime : roundDuration;
+            timeLeft = TimeAttack ? TimeAttackTime : EndlessTime; // タイムアタックは 2 分。ほかは時間切れなし (普通のラウンドは GoalScore 点でクリア)
+            lastRoundCleared = false;
             startTarget.SetAvailable(false);
             if (worldGateTarget != null) worldGateTarget.SetAvailable(false);
+            if (timeAttackTarget != null) timeAttackTarget.SetAvailable(false);
             if (controlsBoard != null) controlsBoard.SetActive(false);
             SetFlatFloor(false); // ラウンドが始まった: 平らな床のふたが消え、穴のふちとハッチがふくらんで出る
             mainStall.SetTargetsAvailable(true);
             player.ResetWeapon();
             Sfx.Play(endless ? "stageup" : "start");
             if (endless) ShowMessage("ENDLESS MODE!!\nHOLD A : QUIT", 2.5f, new Color(0.4f, 1f, 0.9f));
-            else ShowMessage("GO !", 1.5f, Color.yellow);
+            else if (goalSign == null) ShowMessage("GO !", 1.5f, Color.yellow); // (看板があれば、看板が GO!! を出す)
         }
 
+        bool lastRoundCleared;
+        float lastClearTime;
+
+        /// <summary>
+        /// ラウンドの終わり。タイムアタック (2 MIN) は時間切れで、点数を出し、一番高ければ記録する。
+        /// 普通のラウンドは GoalScore 点を取ってクリアで、かかった時間を出し、一番速ければ記録する
+        /// </summary>
         void EndRound()
         {
             State = GameState.Result;
             StopEverything();
+            StopRoundBgm(); // ラウンドの BGM をふわっと止める
 
-            bool newRecord = Score > highScore;
+            if (TimeAttack)
+            {
+                bool highRecord = Score > highScore;
+                if (highRecord)
+                {
+                    highScore = Score;
+                    PlayerPrefs.SetInt(HighScoreKey, highScore);
+                    PlayerPrefs.Save();
+                }
+                lastRoundCleared = false;
+                Sfx.Play("end");
+                ShowMessage(highRecord ? $"TIME UP!\nNEW RECORD {Points(Score)}" : $"TIME UP!\nSCORE {Points(Score)}", 4f, new Color(1f, 0.85f, 0.3f));
+                backToTitle = StartCoroutine(BackToTitle());
+                return;
+            }
+            lastRoundCleared = true;
+            lastClearTime = elapsed;
+            bool newRecord = bestTime <= 0f || elapsed < bestTime;
             if (newRecord)
             {
-                highScore = Score;
-                PlayerPrefs.SetInt(HighScoreKey, highScore);
-                PlayerPrefs.Save();
+                bestTime = elapsed;
+                PlayerPrefs.SetFloat(BestTimeKey, bestTime);
             }
-            Sfx.Play("end");
-            ShowMessage(newRecord ? $"TIME UP!\nNEW RECORD {Score}" : $"TIME UP!\nSCORE {Score}", 4f, new Color(1f, 0.85f, 0.3f));
+            PlayerPrefs.Save();
+            Sfx.Play("complete");
+            ShowMessage(newRecord ? $"CLEAR!!\nNEW RECORD {Clock(elapsed)}" : $"CLEAR!!\nTIME {Clock(elapsed)}", 4f, new Color(1f, 0.85f, 0.3f));
             backToTitle = StartCoroutine(BackToTitle());
         }
 
@@ -771,8 +895,17 @@ namespace ShootingGallery
             {
                 if (State != GameState.Playing)
                 {
-                    player.CalibrateHeight(); // 視点を身長 180cm の人の高さに合わせる (屋台との位置関係をいつも同じにする)
-                    StartRound();
+                    player.CalibrateHeight(); // 視点を身長 170cm の人の高さに合わせ直す (起動した時にも合わせてある。人が替わっていても屋台との位置関係が同じになる)
+                    StartRoundWithCountdown(false); // 100,000 POINTS: 看板が降りてきて 3, 2, 1, GO!! で始まる
+                }
+                return;
+            }
+            if (target.kind == TargetKind.TimeAttack)
+            {
+                if (State != GameState.Playing)
+                {
+                    player.CalibrateHeight();
+                    StartRoundWithCountdown(true); // 2 MIN: 2分間のタイムアタック
                 }
                 return;
             }
@@ -781,7 +914,7 @@ namespace ShootingGallery
                 if (State != GameState.Playing) StartWorldGate(); // 別の世界へ飛ぶ的だけが並んだ6軒の屋台に囲まれる
                 return;
             }
-            // 操作方法の看板のクレジット / ライセンスの的 (タイトルの間でも撃てる。点数なし)
+            // クレジットの看板のページ送りの的 (タイトルの間でも撃てる。点数なし)
             if (target.kind == TargetKind.Credits)
             {
                 var viewer = target.GetComponentInParent<CreditsViewer>(true);
@@ -818,10 +951,18 @@ namespace ShootingGallery
                 target.points = down;
             }
 
-            // カジノのスロット: 撃つとレバーが下がって回る。点数はリールが止まった時に入る (OnSlotResult)
+            // カジノのスロット: レバーを撃つとお辞儀して回る。点数はリールが止まった時に入る (OnSlotResult)
             if (target.kind == TargetKind.SlotMachine)
             {
-                if (casinoHall != null && casinoHall.slot.Pull()) ShowMessage("SPIN!!", 1f, new Color(1f, 0.85f, 0.3f));
+                var hitSlot = target.GetComponentInParent<SlotMachine>(); // (的はレバーについている)
+                if (hitSlot != null && hitSlot.Pull()) ShowMessage("SPIN!!", 1f, new Color(1f, 0.85f, 0.3f));
+                return;
+            }
+            // カジノのボールのルーレット: 撃つとボールが補給されて回り出す (点数はボールがポケットに入った時)
+            if (target.kind == TargetKind.BallRoulette)
+            {
+                var hitRoulette = target.GetComponent<BallRoulette>();
+                if (hitRoulette != null && hitRoulette.Launch()) ShowMessage("ROLL!!", 1f, new Color(1f, 0.85f, 0.3f));
                 return;
             }
             // カジノのルーレット: ダーツが刺さった扇の点数

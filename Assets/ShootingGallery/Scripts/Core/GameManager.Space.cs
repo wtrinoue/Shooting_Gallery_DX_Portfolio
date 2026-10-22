@@ -45,6 +45,12 @@ namespace ShootingGallery
             ShowMessage("WELCOME TO SPACE!\nSHOOT THE STARS & PLANETS WITH MISSILES!", 3.5f, new Color(0.6f, 0.75f, 1f));
         }
 
+        // 星々がきらめき始めた: 宇宙の BGM を流し始める
+        void OnSpaceStarsAppear()
+        {
+            if (SpaceActive && State == GameState.Playing) PlayStageBgm(spaceBgm);
+        }
+
         // 星が消えて床が戻り始めた: いつもの夜の明るさに戻す
         void OnSpaceRestore()
         {
@@ -58,6 +64,7 @@ namespace ShootingGallery
         void EndSpace()
         {
             if (!SpaceActive) return;
+            StopStageBgm(spaceBgm, State != GameState.Playing); // (ラウンドの終わり・リセットの時はすぐ止める)
             int hits = spaceStage.Hits;
             spaceStage.End();
             ReleaseStageWeapon(WeaponType.Missile);

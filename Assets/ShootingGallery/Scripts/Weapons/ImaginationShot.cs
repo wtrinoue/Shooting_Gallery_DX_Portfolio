@@ -5,8 +5,7 @@ namespace ShootingGallery
     /// <summary>
     /// イマジネーションの玉 (美術館モード)。銃口の向きへまっすぐ飛ぶ (重力なし)、光る玉。まわりを小さな光の粒が回り、後ろに虹色の光の筋を引く。
     /// 形が変わる: キャンバスへ向かう時は筆 (筆先を前にまっすぐ飛ぶ)、彫刻へ向かう時はトンカチ (縦にくるくる回る)、天井から吊るした作品へ向かう時は粘土 (ぐにゃぐにゃ転がる)。
-    ///   放った時に飛ぶ先を1回だけ調べ、作品に当たると決まっていれば、当たる MorphLead m 手前 (近ければすぐ) で変わる。
-    ///   それ以外でも、作品のまわりの範囲 (ArtField) に入ると変わる (かすめて飛ぶ時)。
+    ///   放った時に飛ぶ先を1回だけ調べ、作品に当たると決まっていれば、手元から 2m 離れた所で筆 / トンカチ / 粘土の形に変わる。そうでなければ玉のまま。
     /// 的に当たるとその的を撃ち (作品なら ArtMuseum が筆やトンカチにして作品を作る)、光がはじける。光の筋は少し残ってから消える
     /// </summary>
     public class ImaginationShot : MonoBehaviour
@@ -15,7 +14,7 @@ namespace ShootingGallery
         const float MaxLifetime = 3f;
         const float TrailTime = 0.35f;
         const string PoolKey = "ImaginationShot";
-        const float MorphLead = 9f; // 作品に当たると決まっている時、当たる何 m 手前で筆 / トンカチに変わるか
+        const float MorphDistance = 2f; // 撃った向きに作品がある時、手元からこの距離 (m) を飛んだら筆 / トンカチ / 粘土に変わる
 
         Vector3 velocity;
         float age, deadAt, phase;
@@ -29,7 +28,6 @@ namespace ShootingGallery
         int form; // 0 = 光の玉 / 1 = 筆 / 2 = トンカチ / 3 = 粘土
         float formAge;
         int lockedForm;      // 当たると決まっている作品の形 (0 = 決まっていない)
-        float lockedAt;      // その形に変わる、飛んだ距離 (m)
         float travelled;
 
         /// <summary>玉を1つ放つ。materials = 玉の色 (撃つたびにランダム。まわりの粒は別の色)、trailMaterial = 虹色の筋、sparkMaterial = 当たった時の光</summary>
@@ -65,7 +63,7 @@ namespace ShootingGallery
                 if (art != null && art.target != null && art.target.IsUp)
                 {
                     s.lockedForm = FormFor(art.kind);
-                    s.lockedAt = Mathf.Max(0f, hit.distance - MorphLead);
+                    // (形が変わるのは、手元から MorphDistance m 離れてから。Update)
                 }
             }
             s.trail.Clear();
@@ -164,13 +162,11 @@ namespace ShootingGallery
                 if (age >= deadAt + TrailTime + 0.1f) FxPool.Release(PoolKey, gameObject); // 筋が消えきってからしまう
                 return;
             }
-            // 作品のまわりの範囲に入ったら、筆 (キャンバス) / トンカチ (彫刻) に変わる。範囲を出たら玉に戻る
-            int want = lockedForm != 0 && travelled >= lockedAt ? lockedForm
-                     : ArtField.TryFind(transform.position, out var kind) ? FormFor(kind) : 0;
-            if (want != form)
+            // 撃った向きに作品があれば、手元から MorphDistance m 離れた所で、その作品の形にぽんっと変わる (光がはじける)
+            if (form == 0 && lockedForm != 0 && travelled >= MorphDistance)
             {
-                SetForm(want);
-                if (sparkMaterial != null) Explosion.Spawn(transform.position, 0.22f, sparkMaterial); // ぽんっと変身
+                SetForm(lockedForm);
+                if (sparkMaterial != null) Explosion.Spawn(transform.position, 0.22f, sparkMaterial);
             }
             formAge += dt;
             float pop = Mathf.Min(1f, 0.4f + formAge * 6f); // 変わった瞬間は小さく、すぐ元の大きさへ
@@ -201,12 +197,12 @@ namespace ShootingGallery
                 transform.position = hit.point;
                 var target = hit.collider.GetComponentInParent<Target>();
                 if (target != null && target.IsUp) target.Hit(hit.point); // 点数と作品づくりは GameManager → ArtMuseum
-                Die(hit.point);
+                Die(hit.point, false); // (当たった時は光らない。光がはじけるのは、手元から 2m で形が変わる時だけ)
                 return;
             }
             transform.position += step;
             travelled += dist;
-            if (age >= MaxLifetime) Die(transform.position);
+            if (age >= MaxLifetime) Die(transform.position, false);
         }
 
         void SetForm(int f)
@@ -222,14 +218,14 @@ namespace ShootingGallery
         // 作品の種類 → 変わる形 (キャンバス: 筆 / 彫刻: トンカチ / 吊るした作品: 粘土)
         static int FormFor(Artwork.Kind kind) => kind == Artwork.Kind.Canvas ? 1 : kind == Artwork.Kind.Sculpture ? 2 : 3;
 
-        // 当たった (または飛びきった): 光がはじけて玉が消え、光の筋はその場で消えていく
-        void Die(Vector3 point)
+        // 当たった (または飛びきった): 玉が消え、光の筋はその場で消えていく。作品に当たった時だけ光がはじける (spark)
+        void Die(Vector3 point, bool spark)
         {
             dead = true;
             deadAt = age;
             visual.gameObject.SetActive(false);
             trail.emitting = false;
-            if (sparkMaterial != null)
+            if (spark && sparkMaterial != null)
             {
                 Explosion.Spawn(point, 0.3f, sparkMaterial);
                 SpaceDebris.Spawn(point, 0.25f, sparkMaterial, 6);

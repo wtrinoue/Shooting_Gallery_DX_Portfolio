@@ -215,19 +215,30 @@ namespace ShootingGallery
         SlotMachine BuildSlotStage(Transform parent)
         {
             var gold = Mat("Gold", new Color(1f, 0.78f, 0.25f), new Color(0.3f, 0.2f, 0f));
-            var red = Mat("Slot_Red", new Color(0.62f, 0.04f, 0.1f), new Color(0.12f, 0f, 0.02f), false, 0.75f);
             var black = Mat("Dx_Black", new Color(0.05f, 0.05f, 0.06f), null, false, 0.6f);
-            var gloss = Mat("Slot_GlossBlack", new Color(0.03f, 0.03f, 0.04f), null, false, 0.9f);
-            var chrome = Mat("Casino_Chrome", new Color(0.78f, 0.8f, 0.85f), null, false, 0.92f);
             const float StageH = 0.7f;
 
             // 壇 (2段)
             Prim(PrimitiveType.Cylinder, "Stage", parent, new Vector3(0f, StageH / 2f, 0f), new Vector3(4.4f, StageH / 2f, 3.4f), black);
             FlatRing(parent, "StageTrim", 2.2f, StageH, 0.1f, 0.03f, 40, gold);
             Prim(PrimitiveType.Cylinder, "Step", parent, new Vector3(0f, 0.12f, -0.4f), new Vector3(5f, 0.12f, 3.8f), black, false);
+            return BuildSlotMachine(parent, new Vector3(0f, StageH, 0f), 1f);
+        }
+
+        /// <summary>
+        /// スロットマシン本体 (parent のローカルの pos が足元の真ん中、表 -Z。scale = 大きさの倍率。壁ぎわの小さなスロットにも使う)
+        /// </summary>
+        SlotMachine BuildSlotMachine(Transform parent, Vector3 pos, float scale)
+        {
+            var gold = Mat("Gold", new Color(1f, 0.78f, 0.25f), new Color(0.3f, 0.2f, 0f));
+            var red = Mat("Slot_Red", new Color(0.62f, 0.04f, 0.1f), new Color(0.12f, 0f, 0.02f), false, 0.75f);
+            var black = Mat("Dx_Black", new Color(0.05f, 0.05f, 0.06f), null, false, 0.6f);
+            var gloss = Mat("Slot_GlossBlack", new Color(0.03f, 0.03f, 0.04f), null, false, 0.9f);
+            var chrome = Mat("Casino_Chrome", new Color(0.78f, 0.8f, 0.85f), null, false, 0.92f);
 
             var root = Group(parent, "SlotMachine");
-            root.localPosition = new Vector3(0f, StageH, 0f);
+            root.localPosition = pos;
+            root.localScale = Vector3.one * scale;
             const float W = 2.6f, H = 3.4f, D = 1.4f, ReelY = 1.85f, FrontZ = -D / 2f;
             const float WinW = 0.62f, WinH = 0.62f;
             float[] reelX = { -0.72f, 0f, 0.72f };
@@ -346,13 +357,35 @@ namespace ShootingGallery
             ShapeObj(Shape.Star, root, "TopperStar", new Vector3(0f, H + ArchH + 0.28f, 0f), 0.55f, starMat, false, 0.08f);
             Prim(PrimitiveType.Cylinder, "TopperPost", root, new Vector3(0f, H + ArchH + 0.02f, 0f), new Vector3(0.06f, 0.06f, 0.06f), chrome, false);
 
-            // ---- レバー (右横。根元が軸) ----
+            // ---- レバー (右横の前寄り。箱の横から外へ突き出た軸に付いていて、撃つと先の赤い玉ごとプレイヤーの方へお辞儀する) ----
+            // 軸は箱の横の取り付け板から X 方向へまっすぐ外へ伸び、根元に金の軸受け、先に金の留め具。レバーはその軸のまわりに回る
+            const float LeverY = ReelY - 0.35f, LeverZ = FrontZ + 0.4f, LeverLen = 1.05f, BallD = 0.46f;
+            const float AxleOut = 0.48f;                   // 箱の横から、軸の先までの長さ
+            const float LeverX = W / 2f + AxleOut - 0.1f;  // レバーの付く所 (軸の先の留め具のすぐ内側)
+            Prim(PrimitiveType.Cube, "LeverPlate", root, new Vector3(W / 2f + 0.03f, LeverY, LeverZ), new Vector3(0.06f, 0.55f, 0.45f), chrome, false); // 箱の横の取り付け板
+            var axleRot = Quaternion.Euler(0f, 0f, 90f); // (円柱の軸を X 方向へ)
+            Prim(PrimitiveType.Cylinder, "AxleBearing", root, new Vector3(W / 2f + 0.1f, LeverY, LeverZ), new Vector3(0.3f, 0.06f, 0.3f), gold, false).transform.localRotation = axleRot;
+            Prim(PrimitiveType.Cylinder, "Axle", root, new Vector3(W / 2f + AxleOut / 2f, LeverY, LeverZ), new Vector3(0.11f, AxleOut / 2f, 0.11f), chrome, false).transform.localRotation = axleRot;
+            Prim(PrimitiveType.Cylinder, "AxleCap", root, new Vector3(W / 2f + AxleOut, LeverY, LeverZ), new Vector3(0.2f, 0.035f, 0.2f), gold, false).transform.localRotation = axleRot;
             var lever = Group(root, "Lever");
-            lever.localPosition = new Vector3(W / 2f + 0.12f, ReelY - 0.3f, 0f);
-            Prim(PrimitiveType.Cylinder, "LeverBase", root, new Vector3(W / 2f + 0.08f, ReelY - 0.3f, 0f), new Vector3(0.24f, 0.07f, 0.24f), chrome, false)
-                .transform.localRotation = Quaternion.Euler(0f, 0f, 90f);
-            Prim(PrimitiveType.Cylinder, "LeverPole", lever, new Vector3(0.06f, 0.5f, 0f), new Vector3(0.06f, 0.5f, 0.06f), chrome, false);
-            Prim(PrimitiveType.Sphere, "LeverBall", lever, new Vector3(0.06f, 1.05f, 0f), Vector3.one * 0.22f, Mat("Slot_LeverBall", new Color(0.95f, 0.1f, 0.1f), new Color(0.4f, 0.02f, 0.02f), false, 0.8f), false);
+            lever.localPosition = new Vector3(LeverX, LeverY, LeverZ);
+            Prim(PrimitiveType.Cylinder, "LeverHub", lever, Vector3.zero, new Vector3(0.22f, 0.07f, 0.22f), chrome, false).transform.localRotation = axleRot; // 軸にはまる輪
+            Prim(PrimitiveType.Cylinder, "LeverPole", lever, new Vector3(0f, LeverLen / 2f, 0f), new Vector3(0.08f, LeverLen / 2f, 0.08f), chrome, false);
+            Prim(PrimitiveType.Cylinder, "LeverCollar", lever, new Vector3(0f, LeverLen - 0.04f, 0f), new Vector3(0.13f, 0.03f, 0.13f), gold, false);
+            Prim(PrimitiveType.Sphere, "LeverBall", lever, new Vector3(0f, LeverLen + BallD / 2f - 0.06f, 0f), Vector3.one * BallD, Mat("Slot_LeverBall", new Color(0.95f, 0.1f, 0.1f), new Color(0.7f, 0.04f, 0.04f), false, 0.85f), false);
+            // レバーの当たり判定 (見た目より大きく: 玉のまわりに大きな球、棒のまわりに太いカプセル)。レバーといっしょにお辞儀する。箱の当たり判定でも回る
+            var leverHit = Group(lever, "LeverHit");
+            var ballHit = leverHit.gameObject.AddComponent<SphereCollider>();
+            ballHit.center = new Vector3(0f, LeverLen + BallD / 2f - 0.06f, 0f);
+            ballHit.radius = BallD / 2f + 0.22f;
+            var poleHit = leverHit.gameObject.AddComponent<CapsuleCollider>();
+            poleHit.direction = 1;
+            poleHit.center = new Vector3(0f, LeverLen / 2f, 0f);
+            poleHit.height = LeverLen + 0.3f;
+            poleHit.radius = 0.2f;
+            // 「SHOOT!」の目印を置く所 (玉の真上、箱の前の面より手前)
+            var leverHint = Group(root, "LeverHint");
+            leverHint.localPosition = new Vector3(LeverX, LeverY + LeverLen + BallD + 0.35f, FrontZ - 0.15f);
 
             // ---- 電球 (アーチのふちと、箱の両側) ----
             var lampOn = Mat("Slot_LampOn", new Color(1f, 0.95f, 0.6f), new Color(3f, 2.4f, 0.8f), true);
@@ -373,9 +406,9 @@ namespace ShootingGallery
                 Mat("Slot_Win_2", new Color(0.3f, 1f, 0.4f), new Color(0.6f, 2.5f, 0.8f), true), Mat("Slot_Win_3", new Color(0.3f, 0.7f, 1f), new Color(0.6f, 1.5f, 2.5f), true),
                 Mat("Slot_Win_4", new Color(1f, 0.4f, 0.9f), new Color(2.5f, 0.8f, 2.2f), true)
             };
-            MakeText(root, "Shoot", "SHOOT TO SPIN!", new Vector3(0f, 1.52f, FrontZ - 0.45f), 0.1f, Color.white).transform.localRotation = Quaternion.Euler(-18f, 0f, 0f);
+            MakeText(root, "Shoot", "SHOOT THE LEVER!", new Vector3(0f, 1.52f, FrontZ - 0.45f), 0.1f, Color.white).transform.localRotation = Quaternion.Euler(-18f, 0f, 0f);
 
-            var target = root.gameObject.AddComponent<Target>();
+            var target = root.gameObject.AddComponent<Target>(); // (箱に当たっても、レバーの大きな当たり判定に当たっても回る)
             target.kind = TargetKind.SlotMachine;
             target.points = 0;
             target.manualControl = true;
@@ -387,6 +420,7 @@ namespace ShootingGallery
             var slot = root.gameObject.AddComponent<SlotMachine>();
             slot.target = target;
             slot.lever = lever;
+            slot.leverHint = leverHint;
             slot.reels = reels;
             slot.symbols = symbols;
             slot.lamps = lamps.ToArray();
@@ -483,58 +517,7 @@ namespace ShootingGallery
                 }
             }
 
-            // ルーレット台 (後ろ): 緑の盤に数字の升目と、端の木の器で回るルーレット
-            {
-                var t = Group(lux, "RouletteTable");
-                t.localPosition = new Vector3(0f, 0f, -4.4f);
-                t.localRotation = Quaternion.Euler(0f, 180f, 0f);
-                Prim(PrimitiveType.Cube, "TableBody", t, new Vector3(0f, 0.42f, 0f), new Vector3(2.8f, 0.84f, 1.2f), woodDark, false);
-                Prim(PrimitiveType.Cube, "TableRim", t, new Vector3(0f, 0.86f, 0f), new Vector3(2.9f, 0.06f, 1.3f), leather, false);
-                Prim(PrimitiveType.Cube, "TableFelt", t, new Vector3(0f, 0.895f, 0f), new Vector3(2.7f, 0.01f, 1.12f), felt, false);
-                var red = Mat("Roulette_Red", new Color(0.85f, 0.1f, 0.12f), new Color(0.25f, 0.02f, 0.03f));
-                var black = Mat("Roulette_Black", new Color(0.08f, 0.08f, 0.1f), new Color(0.03f, 0.03f, 0.04f));
-                for (int c = 0; c < 12; c++) // 数字の升目 (3段 × 12列)
-                    for (int r = 0; r < 3; r++)
-                        Prim(PrimitiveType.Cube, "BetCell", t, new Vector3(-0.35f + c * 0.13f, 0.902f, -0.18f + r * 0.18f), new Vector3(0.11f, 0.004f, 0.15f), (c + r) % 2 == 0 ? red : black, false);
-                Prim(PrimitiveType.Cylinder, "WheelBowl", t, new Vector3(-1.0f, 0.95f, 0f), new Vector3(0.95f, 0.08f, 0.95f), woodDark, false);
-                var wheel = Group(t, "WheelSpin");
-                wheel.localPosition = new Vector3(-1.0f, 1.04f, 0f);
-                var spin = wheel.gameObject.AddComponent<Rotator>();
-                spin.axis = Vector3.up;
-                spin.speed = 60f;
-                var green = Mat("Roulette_Green", new Color(0.1f, 0.6f, 0.25f), new Color(0.03f, 0.2f, 0.06f));
-                for (int i = 0; i < 37; i++)
-                {
-                    float a0 = i * 360f / 37f, a1 = (i + 1) * 360f / 37f;
-                    var wedge = new GameObject("WheelPocket");
-                    wedge.transform.SetParent(wheel, false);
-                    wedge.transform.localRotation = Quaternion.Euler(90f, 0f, 0f); // 扇の面 (-Z が表) を上へ
-                    wedge.AddComponent<MeshFilter>().sharedMesh = WedgeMesh(0.12f, 0.4f, a0, a1);
-                    wedge.AddComponent<MeshRenderer>().sharedMaterial = i == 0 ? green : i % 2 == 0 ? red : black;
-                }
-                Prim(PrimitiveType.Cylinder, "WheelHub", wheel, new Vector3(0f, 0.02f, 0f), new Vector3(0.22f, 0.03f, 0.22f), gold, false);
-                Prim(PrimitiveType.Cylinder, "WheelSpindle", wheel, new Vector3(0f, 0.08f, 0f), new Vector3(0.04f, 0.06f, 0.04f), gold, false);
-            }
-
-            // 壁ぎわの小さなスロット (左右に2台ずつ。画面が光っているだけで、的ではない)
-            var screens = new[] { Mat("SideSlot_ScreenGold", new Color(1f, 0.75f, 0.35f), new Color(1.6f, 1f, 0.35f), true), Mat("SideSlot_ScreenRed", new Color(0.9f, 0.2f, 0.18f), new Color(1.4f, 0.25f, 0.2f), true) };
-            var body = new[] { Mat("Slot_GlossBlack", new Color(0.03f, 0.03f, 0.04f), null, false, 0.9f), Mat("Slot_Red", new Color(0.62f, 0.04f, 0.1f), new Color(0.12f, 0f, 0.02f), false, 0.75f) };
-            int n = 0;
-            foreach (float baseA in new[] { 78f, 282f })
-                foreach (float off in new[] { -7f, 7f })
-                {
-                    var rot = Quaternion.Euler(0f, baseA + off, 0f);
-                    var m = Group(lux, "SideSlot");
-                    m.localPosition = rot * new Vector3(0f, 0f, CasinoR - 0.75f);
-                    m.localRotation = rot; // 表 (-Z) が真ん中を向く
-                    Prim(PrimitiveType.Cube, "SideBody", m, new Vector3(0f, 0.85f, 0f), new Vector3(0.75f, 1.7f, 0.6f), body[n % 2], false);
-                    Prim(PrimitiveType.Cube, "SideScreen", m, new Vector3(0f, 1.15f, -0.31f), new Vector3(0.55f, 0.42f, 0.01f), screens[n % 2], false);
-                    Prim(PrimitiveType.Cube, "SideDeck", m, new Vector3(0f, 0.78f, -0.38f), new Vector3(0.7f, 0.06f, 0.2f), chrome, false);
-                    Prim(PrimitiveType.Sphere, "SideTopper", m, new Vector3(0f, 1.82f, 0f), new Vector3(0.3f, 0.2f, 0.3f), screens[(n + 1) % 2], false);
-                    Prim(PrimitiveType.Cylinder, "SideChair", m, new Vector3(0f, 0.3f, -0.85f), new Vector3(0.38f, 0.04f, 0.38f), velvet, false);
-                    Prim(PrimitiveType.Cylinder, "SideChairPole", m, new Vector3(0f, 0.15f, -0.85f), new Vector3(0.05f, 0.15f, 0.05f), chrome, false);
-                    n++;
-                }
+            // (ルーレットと壁ぎわのスロットは、遊べるゲームとして BuildCasino が置く。床の飾りには置かない)
 
             // スロットの壇の前の、金の柱と赤いロープの柵
             {

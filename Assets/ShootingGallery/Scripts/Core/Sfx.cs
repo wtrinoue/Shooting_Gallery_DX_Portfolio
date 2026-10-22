@@ -51,6 +51,10 @@ namespace ShootingGallery
         [Header("Unknown ステージ (世界が灰色に止まるキーン / ひびが入るピキピキ / 割れるガシャーン / 破片が集まるカシャカシャ / ガラスが砕けるパリン)")]
         public AudioClip freeze, crack, shatter, reassemble, glass;
         public AudioClip zap, warpZap;
+        [Tooltip("西部劇のリボルバーの銃声 / 弾を込める音 (音源のファイル。なければ、いつもの銃声 / 弾込めの音)")]
+        public AudioClip revolverShot, revolverReload;
+        [Tooltip("リボルバーの銃声の大きさ (音源の音が割れ気味なので小さめ)")]
+        [Range(0f, 1f)] public float revolverShotVolume = 0.22f;
         [Header("同時に鳴る音の抑え方")]
         [Tooltip("同じ種類の音がこの秒数以内に続いたら、2回目以降は鳴らさない (複数の的を同時に倒した時など)")]
         public float sameSoundGap = 0.07f;
@@ -182,6 +186,11 @@ namespace ShootingGallery
             // トランペット: 撃っても音は鳴らさない (ユーザーの指定)
             if (type == WeaponType.Trumpet) return;
             if (type == WeaponType.Imagination) return; // イマジネーション: 撃っても音は鳴らさない (当たった時に、塗る / 彫る音が鳴る)
+            if (type == WeaponType.Revolver && instance.revolverShot != null)
+            {   // 西部劇のリボルバー: 音源の銃声 (小さめ)
+                instance.PlayLimited("shot", instance.revolverShot, instance.revolverShotVolume, fade: false);
+                return;
+            }
             var clip = type == WeaponType.MachineGun || type == WeaponType.AirMachineGun ? instance.machineGunShot
                      : type == WeaponType.Shotgun ? instance.shotgunShot
                      : type == WeaponType.Bomb || type == WeaponType.Bazooka || type == WeaponType.FireBall ? instance.bombShot
@@ -194,7 +203,7 @@ namespace ShootingGallery
                      : type == WeaponType.RingToss || type == WeaponType.Poi || type == WeaponType.Coin ? instance.fusuma // ふわっと投げる音
                      : instance.handgunShot;
             // 二丁拳銃で左右同時に撃っても1発分の音。つるはしは押しっぱなしで次々に投げるので、続けて聞いても気にならない小ささに
-            bool soft = type == WeaponType.Pickaxe || type == WeaponType.RingToss || type == WeaponType.Poi || type == WeaponType.Coin;
+            bool soft = type == WeaponType.Pickaxe || type == WeaponType.RingToss || type == WeaponType.Poi || type == WeaponType.Coin || type == WeaponType.Lightning; // (アンノウンの電撃も、BGM を聞かせるために小さめ)
             instance.PlayLimited("shot", clip, soft ? 0.25f : 0.5f, fade: false);
         }
 
@@ -260,6 +269,7 @@ namespace ShootingGallery
                 "reelstop" => instance.reelStop,
                 "coin" => instance.coin,
                 "reload" => instance.reload,
+                "revolverreload" => instance.revolverReload != null ? instance.revolverReload : instance.reload,
                 "whistle" => instance.whistle,
                 "blackout" => instance.blackout,
                 "sandstorm" => instance.sandstorm,
@@ -491,24 +501,91 @@ namespace ShootingGallery
         }
 
         /// <summary>怪獣の雄叫び: 低くうなるノイズと、上がってから下がる太い音を重ねる</summary>
+        /// <summary>
+        /// 怪獣の咆哮 (2.2 秒):「グルル…ギャオーーン…」。低い声が一気に高くなって叫び、震えながら長く伸びて、低く落ちて消える。
+        ///   声: 倍音の多いのこぎり波 (声の高さは 60 → 150 → 55Hz)。ガラガラのだみ声 (約 30Hz で声の大きさが細かく揺れる) と、
+        ///   口の形の響き (「アー」の 2 つの共鳴 ≒ 550Hz・1150Hz) を付けて、強くひずませる。
+        ///   息: こすれる息の音 (中高音のノイズ)。  響き: ビルの谷間にこだまする (0.17 秒・0.34 秒遅れの音を重ねる)
+        /// </summary>
         static AudioClip Roar()
         {
-            const float Length = 1.4f;
+            const float Length = 2.2f;
             int n = (int)(Rate * Length);
             var data = new float[n];
-            float lp = 0f, phase = 0f;
+            var rng = new System.Random(31);
+            float phase = 0f, rough = 0f;
+            var f1 = new Resonator(550f, 6f);
+            var f2 = new Resonator(1150f, 7f);
+            var breath = new Resonator(1800f, 2f);
+            float lowNoise = 0f;
             for (int i = 0; i < n; i++)
             {
-                float t = i / (float)n;
-                lp = Mathf.Lerp(lp, Random.Range(-1f, 1f), 0.06f);
-                float f = Mathf.Lerp(110f, 170f, Mathf.Sin(Mathf.PI * Mathf.Min(1f, t * 1.4f))) * (1f + 0.04f * Mathf.Sin(i * 0.004f));
-                phase += 2f * Mathf.PI * f / Rate;
-                float env = Mathf.Clamp01(t * 8f) * Mathf.Clamp01((1f - t) * 2.5f);
-                data[i] = Mathf.Clamp((lp * 2.2f + 0.35f * Mathf.Sign(Mathf.Sin(phase)) * 0.6f + 0.25f * Mathf.Sin(phase * 2f)) * env, -1f, 1f);
+                float t = i / (float)Rate;
+                // 声の高さ: 喉を鳴らす低いうなり → 一気に叫ぶ → 震えながら伸びる → 落ちる
+                float pitch = t < 0.25f ? Mathf.Lerp(60f, 85f, t / 0.25f)
+                            : t < 0.5f ? Mathf.Lerp(85f, 150f, Mathf.SmoothStep(0f, 1f, (t - 0.25f) / 0.25f))
+                            : t < 1.5f ? 150f - (t - 0.5f) * 18f
+                            : Mathf.Lerp(132f, 55f, (t - 1.5f) / 0.7f);
+                pitch *= 1f + 0.03f * Mathf.Sin(2f * Mathf.PI * 6.5f * t) + 0.01f * (float)(rng.NextDouble() * 2.0 - 1.0);
+                phase += pitch / Rate;
+                phase -= Mathf.Floor(phase);
+                float saw = phase * 2f - 1f;
+                // だみ声: 声の大きさがガラガラと細かく揺れる (揺れ方も少しずつ乱れる)
+                rough += (2f * Mathf.PI * (28f + 8f * Mathf.Sin(t * 3.1f))) / Rate;
+                float rasp = 0.55f + 0.45f * Mathf.Sin(rough) * (0.7f + 0.3f * (float)rng.NextDouble());
+                float voice = saw * rasp;
+                float vowel = f1.Process(voice) * 0.9f + f2.Process(voice) * 0.6f + voice * 0.35f;
+                // こすれる息
+                float white = (float)(rng.NextDouble() * 2.0 - 1.0);
+                float hiss = breath.Process(white) * 0.35f;
+                lowNoise = Mathf.Lerp(lowNoise, white, 0.02f);
+                // 大きさ: うなり (小さめ) → 叫び (いちばん大きい) → 伸びて消える
+                float env = t < 0.25f ? Mathf.Lerp(0f, 0.45f, t / 0.25f)
+                          : t < 0.45f ? Mathf.Lerp(0.45f, 1f, (t - 0.25f) / 0.2f)
+                          : t < 1.4f ? 1f - (t - 0.45f) * 0.15f
+                          : Mathf.Lerp(0.86f, 0f, (t - 1.4f) / 0.8f);
+                float scream = Mathf.Clamp01((t - 0.3f) * 4f) * Mathf.Clamp01((1.9f - t) * 2f); // 叫んでいる間は息の音も強く
+                float s = (vowel * 1.6f + hiss * (0.5f + scream) + lowNoise * 2f) * env;
+                data[i] = (float)System.Math.Tanh(s * 2.2f) * 0.85f; // 強くひずませる
+            }
+            // ビルの谷間のこだま
+            int d1 = (int)(Rate * 0.17f), d2 = (int)(Rate * 0.34f);
+            for (int i = n - 1; i >= 0; i--)
+            {
+                float e = 0f;
+                if (i >= d1) e += data[i - d1] * 0.32f;
+                if (i >= d2) e += data[i - d2] * 0.16f;
+                data[i] = Mathf.Clamp(data[i] + e, -1f, 1f);
             }
             var clip = AudioClip.Create("Roar", n, 1, Rate, false);
             clip.SetData(data, 0);
             return clip;
+        }
+
+        /// <summary>共鳴 (山の形に、ある高さの音だけを響かせるフィルター。2次の帯域通過)</summary>
+        class Resonator
+        {
+            readonly float b0, b2, a1, a2;
+            float x1, x2, y1, y2;
+
+            public Resonator(float freq, float q)
+            {
+                float w = 2f * Mathf.PI * freq / Rate;
+                float alpha = Mathf.Sin(w) / (2f * q);
+                float a0 = 1f + alpha;
+                b0 = alpha / a0;
+                b2 = -alpha / a0;
+                a1 = -2f * Mathf.Cos(w) / a0;
+                a2 = (1f - alpha) / a0;
+            }
+
+            public float Process(float x)
+            {
+                float y = b0 * x + b2 * x2 - a1 * y1 - a2 * y2;
+                x2 = x1; x1 = x;
+                y2 = y1; y1 = y;
+                return y;
+            }
         }
 
         /// <summary>大きなスイッチを切って真っ暗になる音: 「バツン」(短い金属音) と、低い「ドン」、電気が落ちる「ブゥン…」</summary>

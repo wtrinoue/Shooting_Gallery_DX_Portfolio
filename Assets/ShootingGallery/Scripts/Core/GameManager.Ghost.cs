@@ -32,6 +32,7 @@ namespace ShootingGallery
             PutAwayStalls(false);
             ghostManor.dropDelay = StallsAwayTime; // 屋台が沈みきって平らな床になってから、土に変わり始める
             ghostManor.Begin(yaw);
+            PlayStageBgm(ghostBgm);
             player.GiveStageWeapon(WeaponType.Flashlight, ghostManor.duration);
             Sfx.Play("stageup");
             ShowMessage("GHOST MODE!!", 1.5f, new Color(0.75f, 0.5f, 1f));
@@ -44,6 +45,7 @@ namespace ShootingGallery
         void EndGhost()
         {
             if (!GhostActive) return;
+            StopStageBgm(ghostBgm, State != GameState.Playing); // (ラウンドの終わり・リセットの時はすぐ止める)
             int hits = ghostManor.Hits;
             ghostReturnStalls.Clear();
             ghostReturnStalls.AddRange(stageStalls);
@@ -61,8 +63,8 @@ namespace ShootingGallery
         // 床が土に変わり始めた: 空・霧をだんだん紫に、明るさを月明かりにしていく (土が広がり、木やお化け屋敷が組み上がる間に)
         void OnGhostArrived()
         {
-            RenderSettings.fogStartDistance = 25f;  // お化け屋敷はくっきり、遠くの月は紫にかすむ
-            RenderSettings.fogEndDistance = 140f;
+            RenderSettings.fogStartDistance = 25f;  // お化け屋敷はくっきり、遠くの月は少し紫にかすむ
+            RenderSettings.fogEndDistance = 220f;   // (空のドーム (92m) の、月に近いほど明るい色が霧で消えないように)
             FadeAmbience(ghostFogColor, ghostAmbient, ghostSkyColor, 2.5f);
             FadeSun(sunIntensity * 0.55f, 2.5f); // 月明かり
             if (State == GameState.Playing) ShowMessage("GHOST MODE!!\nSHOOT THE SPOOKS!", 3f, new Color(0.75f, 0.5f, 1f));

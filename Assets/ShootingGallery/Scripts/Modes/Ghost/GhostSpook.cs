@@ -31,8 +31,10 @@ namespace ShootingGallery
         public Vector2 orbitRadius = new Vector2(5f, 8f);
         [Tooltip("高さ (m。プレイヤーの足元が 0)")]
         public Vector2 orbitHeight = new Vector2(1.2f, 3f);
-        [Tooltip("回る速さ (度/秒)")]
+        [Tooltip("回る速さ (度/秒)。orbitLinearSpeed を決めた時は使わない")]
         public Vector2 orbitSpeed = new Vector2(14f, 26f);
+        [Tooltip("横へ進む速さ (m/秒)。0 より大きければ、距離に合わせて回る角度の速さを決める (遠くの敵も近くの敵も、同じくらいの速さでゆったり流れる)")]
+        public Vector2 orbitLinearSpeed = Vector2.zero;
         [Tooltip("出ている秒数 (撃たれなければ消える)")]
         public Vector2 orbitLife = new Vector2(7f, 10f);
         [Tooltip("ふわふわ上下する幅 (m)")]
@@ -43,7 +45,7 @@ namespace ShootingGallery
         public float riseDepth = 2.2f;
         public float riseTime = 1.1f;
         [Tooltip("出ている秒数 (撃たれなければ土へ戻る)")]
-        public Vector2 stayTime = new Vector2(3.5f, 5f);
+        public Vector2 stayTime = new Vector2(4.5f, 6f); // (懐中電灯で照らす時間がいるので、少し長めに)
 
         [Header("当たった時")]
         [Tooltip("ぽんと出る煙の材質と大きさ")]
@@ -81,8 +83,11 @@ namespace ShootingGallery
             Begin(downCallback);
             Grave = -1;
             angle = startDeg;
-            angSpeed = Random.Range(orbitSpeed.x, orbitSpeed.y) * (Random.value < 0.5f ? 1f : -1f);
             radius = Random.Range(orbitRadius.x, orbitRadius.y);
+            // プレイヤーとの距離 (radius) は保ったまま、横へゆったり流れる
+            float speed = orbitLinearSpeed.y > 0f ? Random.Range(orbitLinearSpeed.x, orbitLinearSpeed.y) / Mathf.Max(0.5f, radius) * Mathf.Rad2Deg
+                                                  : Random.Range(orbitSpeed.x, orbitSpeed.y);
+            angSpeed = speed * (Random.value < 0.5f ? 1f : -1f);
             height = Random.Range(orbitHeight.x, orbitHeight.y);
             life = Random.Range(orbitLife.x, orbitLife.y);
             state = State.Orbit;
@@ -112,6 +117,8 @@ namespace ShootingGallery
             phase = Random.value * 10f;
             body.localRotation = Quaternion.identity;
             body.localPosition = Vector3.zero;
+            body.localScale = Vector3.one;
+            LightExposure.Clear(hitTarget); // (前に出た時に照らされた分は持ち越さない)
             hitTarget.points = pointChoices.Length > 0 ? pointChoices[Random.Range(0, pointChoices.Length)] : 100;
             foreach (var label in pointLabels) if (label != null) label.text = hitTarget.points.ToString();
             hitTarget.SetAvailable(true);
@@ -131,6 +138,7 @@ namespace ShootingGallery
         {
             float dt = Time.deltaTime;
             t += dt;
+            if (IsOut) ShowExposure();
             switch (state)
             {
                 case State.Orbit:
@@ -210,6 +218,20 @@ namespace ShootingGallery
             }
             float tilt = kind == Kind.Witch ? 10f : 6f;
             body.localRotation = Quaternion.Euler(0f, 0f, face * tilt + Mathf.Sin((Time.time + phase) * 1.3f) * 4f);
+        }
+
+        // 懐中電灯で照らされている: たまり具合 (LightExposure) に合わせて、ぶるぶる震えて少し縮む (あと少しでやられるのが分かるように)
+        void ShowExposure()
+        {
+            float p = LightExposure.Progress(hitTarget);
+            if (p <= 0.001f)
+            {
+                if (body.localPosition != Vector3.zero) { body.localPosition = Vector3.zero; body.localScale = Vector3.one; }
+                return;
+            }
+            var j = Random.insideUnitCircle * (0.07f * p);
+            body.localPosition = new Vector3(j.x, j.y, 0f);
+            body.localScale = Vector3.one * (1f - 0.18f * p);
         }
 
         // ゾンビ・骸骨: ゆらゆら左右に揺れる

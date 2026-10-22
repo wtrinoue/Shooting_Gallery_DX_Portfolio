@@ -33,6 +33,7 @@ namespace ShootingGallery
             PutAwayStalls(false);
             westernTrain.dropDelay = StallsAwayTime; // 屋台が沈みきってから暗くなる
             westernTrain.Begin(yaw);
+            PlayStageBgm(westernBgm);
             player.GiveStageWeapon(WeaponType.Revolver, westernTrain.duration);
             Sfx.Play("stageup");
             ShowMessage("WILD WEST!!", 1.2f, new Color(0.95f, 0.75f, 0.35f));
@@ -45,6 +46,7 @@ namespace ShootingGallery
         void EndWestern()
         {
             if (!WesternActive) return;
+            StopStageBgm(westernBgm, State != GameState.Playing); // (ラウンドの終わり・リセットの時はすぐ止める)
             int downed = westernTrain.Downed;
             westernTrain.End();
             ReleaseStageWeapon(WeaponType.Revolver);

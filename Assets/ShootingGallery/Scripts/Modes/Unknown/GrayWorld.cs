@@ -128,12 +128,23 @@ namespace ShootingGallery
                 e.hasBase = m.HasProperty(BaseColorId);
                 e.hasColor = m.HasProperty(ColorId);
                 e.hasEmission = m.HasProperty(EmissionId);
+                cache.Add(m, e);
+            }
+            if (usedSet.Add(e))
+            {
+                // 灰色にするたびに、複製を元の材質とそろえ直す (前に作った時から元の材質が変わっていても、
+                // 色が戻りきって元の材質に差し戻した瞬間に、見た目が跳ねないように)
+                if (e.copy != null)
+                {
+                    e.copy.CopyPropertiesFromMaterial(m);
+                    e.copy.shaderKeywords = m.shaderKeywords;
+                    e.copy.renderQueue = m.renderQueue;
+                }
                 if (e.hasBase) e.baseColor = m.GetColor(BaseColorId);
                 if (e.hasColor) e.color = m.GetColor(ColorId);
                 if (e.hasEmission) e.emission = m.GetColor(EmissionId);
-                cache.Add(m, e);
+                used.Add(e);
             }
-            if (usedSet.Add(e)) used.Add(e);
             return e;
         }
 

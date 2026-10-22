@@ -43,7 +43,7 @@ namespace ShootingGallery
                 State = GameState.Result; // 終わらせている間は Playing 扱いにしない
                 StopEverything();
             }
-            player.CalibrateHeight(); // START を撃った時と同じく、180cm の人の視点に合わせる
+            player.CalibrateHeight(); // START を撃った時と同じく、170cm の人の視点に合わせる
         }
 
         // ---- デバッグモード ----

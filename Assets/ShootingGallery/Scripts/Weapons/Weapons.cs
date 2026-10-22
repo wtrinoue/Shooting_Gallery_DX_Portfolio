@@ -21,6 +21,7 @@ namespace ShootingGallery
         public int magazine;         // 続けて撃てる弾の数 (0 なら弾切れなし)。撃ちきると reloadTime 秒の弾込め
         public float reloadTime;
         public bool reloadGauge;     // true なら銃の上のゲージで弾込めの進み具合を見せる (撃つと空になり、満たされたらまた撃てる)
+        public int reloadStep;       // 0 より大きければ、撃ちきっても自動では込めず、トリガーを引くたびにこの数ずつ込める (弾の列は込めた分が緑色にたまる。満タンで撃てる)
     }
 
     public static class Weapons
@@ -43,12 +44,12 @@ namespace ShootingGallery
                     return new WeaponDef { displayName = "CANNON", fireInterval = 0.45f, automatic = false, pellets = 1, projectile = true, projectileSpeed = 32f, blastRadius = 1.6f, projectileGravity = 1f };
                 case WeaponType.Shuriken: // 忍者モード専用。手裏剣を投げる (まっすぐ速く飛び、当たった所に刺さる)。白いレーザーで狙う
                     return new WeaponDef { displayName = "SHURIKEN", fireInterval = 0.22f, automatic = false, pellets = 1, range = 30f, projectileSpeed = 22f };
-                case WeaponType.FireBall: // 怪獣モード専用。怪獣の口から炎の玉を吐く (少し山なりに飛び、当たった所で燃え上がる)
-                    return new WeaponDef { displayName = "FIRE BREATH", fireInterval = 0.35f, automatic = true, pellets = 1, projectile = true, projectileSpeed = 18f, blastRadius = 1.3f, projectileGravity = 2f };
+                case WeaponType.FireBall: // 怪獣モード専用。怪獣の口から炎の玉を吐く (まっすぐ飛び、当たった所で燃え上がる。FireBallShot)
+                    return new WeaponDef { displayName = "FIRE BREATH", fireInterval = 0.35f, automatic = true, pellets = 1, projectile = true, projectileSpeed = 24f, blastRadius = 1.3f, projectileGravity = 0f };
                 case WeaponType.Dart: // カジノモード専用。ダーツを投げる (まっすぐ飛び、当たった所に刺さる)。白いレーザーで狙う
                     return new WeaponDef { displayName = "DARTS", fireInterval = 0.25f, automatic = false, pellets = 1, range = 30f, projectileSpeed = 20f };
-                case WeaponType.Revolver: // 西部劇モード専用。6発撃つと弾込めの時間が入る
-                    return new WeaponDef { displayName = "REVOLVER", fireInterval = 0.22f, automatic = false, pellets = 1, spreadDeg = 0f, range = 60f, magazine = 6, reloadTime = 1.6f };
+                case WeaponType.Revolver: // 西部劇モード専用。6発撃ちきったら、トリガーを引くたびに1発ずつ込める (6発込めたら撃てる)
+                    return new WeaponDef { displayName = "REVOLVER", fireInterval = 0.22f, automatic = false, pellets = 1, spreadDeg = 0f, range = 60f, magazine = 6, reloadTime = 1.6f, reloadStep = 1 };
                 case WeaponType.Missile: // 宇宙モード専用。ミサイルが煙を引いてまっすぐ速く飛び、当たった所で爆発する
                     return new WeaponDef { displayName = "MISSILE", fireInterval = 0.4f, automatic = false, pellets = 1, projectile = true, projectileSpeed = 26f, blastRadius = 1.5f, projectileGravity = 0f };
                 case WeaponType.Torpedo: // 潜水艦モード専用。プロペラで少しゆっくり進む魚雷。泡を引いてまっすぐ進み、当たった所で爆発する
@@ -70,7 +71,7 @@ namespace ShootingGallery
                 case WeaponType.Coin: // 夏祭りモード (食べ物の屋台)。お金をまっすぐ投げて、当たったメニューの板の料理を買う (スコアがお金)。白いレーザーで狙う
                     return new WeaponDef { displayName = "COIN", fireInterval = 0.35f, automatic = false, pellets = 1, range = 25f, projectile = true, projectileSpeed = 16f, projectileGravity = 0f };
                 case WeaponType.Flashlight: // 幽霊モード専用。トリガーを引いている間だけ光り、照らした的を倒す。電池が減り、使わないと回復する (GunController)
-                    return new WeaponDef { displayName = "FLASHLIGHT", fireInterval = 0.1f, automatic = true, pellets = 1, range = 25f };
+                    return new WeaponDef { displayName = "FLASHLIGHT", fireInterval = 0.1f, automatic = true, pellets = 1, range = 34f }; // (遠くの敵まで届く)
                 default:
                     return new WeaponDef { displayName = "HANDGUN", fireInterval = 0.2f, automatic = false, pellets = 1, spreadDeg = 0f, range = 60f };
             }

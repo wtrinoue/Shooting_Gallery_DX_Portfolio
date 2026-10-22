@@ -48,27 +48,59 @@ namespace ShootingGallery
             var luxury = Group(root, "Luxury");
             BuildCasinoLuxury(luxury);
 
-            // 暗闇の中で1つずつ現れる: スポットライトに照らされたダーツボード (正面のスロットのまわりは空けて、ぐるりと並べる)
+            // 暗闇の中で1つずつ現れる: スポットライトに照らされたゲームを、ぐるりと四方八方に (正面は大きなスロットの壇)。
+            // 壁のダーツボード・斜めのボールのルーレット・壁ぎわの小さなスロット。どれも上に「SHOOT!」の目印が浮かぶ (撃てる時だけ)
             var steps = new List<GameObject>();
             var wheels = new List<RouletteWheel>();
-            float[] angles = { 52f, 104f, 156f, 204f, 256f, 308f };
-            for (int i = 0; i < angles.Length; i++)
+            var sideSlots = new List<SlotMachine>();
+            var roulettes = new List<BallRoulette>();
+            var games = new (float angle, char kind)[] { (55f, 'D'), (100f, 'R'), (145f, 'S'), (180f, 'S'), (215f, 'S'), (260f, 'R'), (305f, 'D') };
+            for (int i = 0; i < games.Length; i++)
             {
+                var (angle, kind) = games[i];
                 var step = Group(root, $"Reveal_{i}");
-                var rot = Quaternion.Euler(0f, angles[i], 0f);
-                step.localPosition = rot * new Vector3(0f, 0f, CasinoR - 0.25f);
-                step.localRotation = rot;
-                wheels.Add(BuildDartboard(step, new Vector3(0f, 3.4f, 0f), i));
-                SpotlightGlow(step, new Vector3(0f, 3.4f, 0.05f), 1.6f);
+                var rot = Quaternion.Euler(0f, angle, 0f);
+                step.localRotation = rot; // 表 (-Z) が真ん中を向く
+                switch (kind)
+                {
+                    case 'D': // 壁のダーツボード
+                    {
+                        step.localPosition = rot * new Vector3(0f, 0f, CasinoR - 0.25f);
+                        var board = BuildDartboard(step, new Vector3(0f, 3.4f, 0f), i);
+                        wheels.Add(board);
+                        SpotlightGlow(step, new Vector3(0f, 3.4f, 0.05f), 1.6f);
+                        CasinoShootHint(step, new Vector3(0f, 4.75f, -0.3f), board.target, null, null);
+                        break;
+                    }
+                    case 'R': // 斜めのボールのルーレット
+                    {
+                        step.localPosition = rot * new Vector3(0f, 0f, CasinoR - 1.6f);
+                        var roulette = BuildBallRoulette(step);
+                        roulettes.Add(roulette);
+                        SpotFixture(step, new Vector3(0f, CasinoH - 1.2f, -2.4f), new Vector3(0f, 1.4f, 0f), 1.3f);
+                        CasinoShootHint(step, new Vector3(0f, 2.75f, 0f), roulette.target, null, roulette);
+                        break;
+                    }
+                    default: // 壁ぎわの小さなスロット
+                    {
+                        step.localPosition = rot * new Vector3(0f, 0f, CasinoR - 1.05f);
+                        var machine = BuildSlotMachine(step, Vector3.zero, 0.75f);
+                        sideSlots.Add(machine);
+                        SpotFixture(step, new Vector3(0f, CasinoH - 1.2f, -2.4f), new Vector3(0f, 1.6f, -0.5f), 1.4f);
+                        CasinoShootHint(machine.leverHint, Vector3.zero, machine.target, machine, null, 1.1f); // (レバーの玉を指す)
+                        break;
+                    }
+                }
                 step.gameObject.SetActive(false);
                 steps.Add(step.gameObject);
             }
 
-            // 最後に現れる主役: 正面の壇とスロットマシン
+            // 最後に現れる主役: 正面の壇と大きなスロットマシン
             var finale = Group(root, "Reveal_Slot");
             finale.localPosition = new Vector3(0f, 0f, 4.6f);
             var slot = BuildSlotStage(finale);
             SpotFixture(finale, new Vector3(0f, CasinoH - 1.2f, -2.6f), new Vector3(0f, 2.4f, -0.7f), 1.9f); // 暗闇の中でスロットだけを照らす
+            CasinoShootHint(slot.leverHint, Vector3.zero, slot.target, slot, null, 0.9f); // (レバーの玉を指す)
             finale.gameObject.SetActive(false);
 
             var hall = go.AddComponent<CasinoHall>();
@@ -79,7 +111,11 @@ namespace ShootingGallery
             hall.revealFinale = finale.gameObject;
             hall.luxury = luxury.gameObject;
             hall.slot = slot;
+            hall.sideSlots = sideSlots.ToArray();
+            hall.roulettes = roulettes.ToArray();
             hall.wheels = wheels.ToArray();
+            hall.coinMaterial = Mat("Casino_Coin", new Color(1f, 0.8f, 0.25f), new Color(0.6f, 0.42f, 0.08f), false, 0.85f);
+            hall.revealInterval = 0.35f; // ゲームが1つずつ現れる間隔 (7つ + スロット。ドラムロールの長さ 3.6 秒に合わせる)
             hall.bgmClip = LoadSourceAsset(CasinoBgmPath, a => a.casinoBgm); // BGM (実機では GalleryRuntimeAssets から。実機には UnityEditor がないので)
             // 明かりが点く時の演出: ネオンがチカチカと点き、広間の明かりがふっと強く点いて落ち着き、紙吹雪が舞う
             var neon = new List<Renderer>();
@@ -205,7 +241,7 @@ namespace ShootingGallery
             var dieMat = Mat("Casino_Die", new Color(0.9f, 0.1f, 0.12f), new Color(0.15f, 0f, 0f), false, 0.7f);
             var pip = Mat("Target_White", Color.white);
             var chipMats = new[] { Mat("Chip_Red", new Color(0.85f, 0.1f, 0.1f)), Mat("Chip_Blue", new Color(0.15f, 0.3f, 0.9f)), Mat("Chip_Green", new Color(0.1f, 0.6f, 0.25f)), Mat("Chip_Black", new Color(0.08f, 0.08f, 0.08f)) };
-            foreach (float a in new[] { 30f, 130f, 230f, 330f })
+            foreach (float a in new[] { 25f, 120f, 240f, 335f }) // (ゲームの間に)
             {
                 var rot = Quaternion.Euler(0f, a, 0f);
                 var die = Group(lux, "BigDie");

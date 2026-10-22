@@ -73,11 +73,13 @@ namespace ShootingGallery
             // BGM: 魔王魂 の曲 (実機では GalleryRuntimeAssets から。無ければコードで作った曲。クレジットは Resources/THIRD_PARTY_NOTICES.txt)
             concert.bgmClip = LoadSourceAsset(ConcertBgmPath, a => a.concertBgm);
             concert.beatMap = LoadSourceAsset(ConcertBeatMapPath, a => a.concertBeatMap); // 人が曲に合わせて打った拍の表 (指揮棒・楽器の拍)
-            concert.staffStartZ = HallBack + HallShiftZ - 2f;    // 五線譜が出てくる所: ステージの左右の端の上空、奥から
+            // 五線譜が出てくる所: ステージの左右の端の上空。五線譜の始まり (縦線・ト音記号・調号) が奥の壁・横の幕・天井の反響板に食い込まないように、
+            // どれからも余裕をとって離す (線の帯は上下に ±0.6m、ト音記号はさらに上へ 0.5m ほど出る)
+            concert.staffStartZ = HallBack + HallShiftZ - 3.5f;  //   奥から (奥の壁より 3.5m 手前。パイプオルガンにもかからない)
             concert.staffNearZ = HallFront + HallShiftZ + 4.6f;  //   手前まで (端の手前のコントラバス・第1バイオリンより奥)
-            concert.staffEdgeX = OpeningHalfW - 1.8f;            //   舞台の両わきの幕 (OpeningHalfW - 1.6 〜 OpeningHalfW) より内側
+            concert.staffEdgeX = OpeningHalfW - 2.3f;            //   舞台の両わきの幕 (OpeningHalfW - 1.6 〜 OpeningHalfW) より 0.7m 以上内側
             concert.staffLowY = StageTop + 1.3f;                 //   ステージの床のすぐ上 (ト音記号が床に埋まらない)
-            concert.staffHighY = OpeningTop - 1.3f;              //   〜 天井の下 (ト音記号が天井に入らない)
+            concert.staffHighY = OpeningTop - 2.1f;              //   〜 天井の反響板 (8.35m) より 1.2m 以上下 (ト音記号の頭も当たらない)
 
             hall.gameObject.SetActive(false);
             curtain.gameObject.SetActive(false);
