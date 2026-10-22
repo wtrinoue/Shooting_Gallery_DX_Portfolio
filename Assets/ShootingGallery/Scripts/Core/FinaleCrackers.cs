@@ -8,7 +8,8 @@ namespace ShootingGallery
     /// 時間切れと同時に、クラッカーの口からプレイヤーの頭の上へ紙吹雪と紙テープが飛び出す (Burst。破裂音はなし)。
     /// 紙吹雪は、はじめの勢いがすぐ弱まり、ゆらゆら揺れながらゆっくり落ちて、床に着いたら消える (FxPool で使い回す)。
     /// クラッカーはメイン屋台 (stall) の子なので、屋台が動いたり沈んだりするといっしょに動く。
-    /// 紙吹雪は、屋台がどこにいても「メイン屋台の最初の位置」のクラッカーの口から出す (時間切れの時は屋台が戻ってくる途中のことがあるので)
+    /// 紙吹雪は、屋台がどこにいても「メイン屋台の最初の位置」のクラッカーの口から出す (時間切れの時は屋台が戻ってくる途中のことがあるので)。
+    /// 普通のメイン屋台と豪華屋台のメインに1組ずつある (見えるのは、今出ている屋台の組だけ。紙吹雪は普通の屋台の組だけが出す)
     /// </summary>
     public class FinaleCrackers : MonoBehaviour
     {
@@ -20,6 +21,8 @@ namespace ShootingGallery
         public Transform[] mouths;
         [Tooltip("口をふさいでいる金紙 (飛び出す時に消える)")]
         public GameObject[] caps;
+        [Tooltip("紙吹雪を出す (豪華屋台の組は OFF。普通の屋台の組と同じ所から出るので、2倍にならないように)")]
+        public bool spawnConfetti = true;
         [Tooltip("紙吹雪・紙テープの色")]
         public Material[] confettiMaterials;
         public int confettiPerCracker = 80;
@@ -74,7 +77,7 @@ namespace ShootingGallery
             }
             kickClock = 0f;
             foreach (var c in caps) if (c != null) c.SetActive(false);
-            if (confettiMaterials == null || confettiMaterials.Length == 0) return;
+            if (!spawnConfetti || confettiMaterials == null || confettiMaterials.Length == 0) return;
             Transform space = stall.parent;
             for (int i = 0; i < mouths.Length; i++)
             {

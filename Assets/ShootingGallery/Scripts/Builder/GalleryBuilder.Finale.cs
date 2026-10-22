@@ -10,10 +10,15 @@ namespace ShootingGallery
     {
         public const string FinaleApplausePath = "Assets/Source/normal/clap_in_hall.mp3"; // 2 MIN の終わりの拍手
 
-        FinaleCrackers BuildFinaleCrackers(Transform mainShell)
+        /// <summary>
+        /// メイン屋台 (mainShell) に1組のクラッカーを置く。spawnConfetti = 紙吹雪を出す組か (豪華屋台の組は false。同じ所から出るので)。
+        /// shelfMat / holderMat = 棚と台の材質 (豪華屋台は黒と金)
+        /// </summary>
+        FinaleCrackers BuildFinaleCrackers(Transform mainShell, string name, bool spawnConfetti, Material shelfMat, Material holderMat)
         {
-            var root = Group(world, "FinaleConfetti"); // 紙吹雪はこの下に出す (世界の原点。y = 0 が床)
+            var root = Group(world, name); // 紙吹雪はこの下に出す (世界の原点。y = 0 が床)
             var finale = root.gameObject.AddComponent<FinaleCrackers>();
+            finale.spawnConfetti = spawnConfetti;
 
             var stripes = new[]
             {
@@ -21,7 +26,6 @@ namespace ShootingGallery
                 Mat("Finale_Blue", new Color(0.15f, 0.4f, 0.95f)), Mat("Finale_Green", new Color(0.15f, 0.75f, 0.35f))
             };
             var foil = Mat("Finale_Foil", new Color(1f, 0.8f, 0.3f), new Color(0.35f, 0.25f, 0.05f), false, 0.8f);
-            var holderMat = Mat("Wood_Dark", new Color(0.25f, 0.16f, 0.1f));
 
             // 円すい (先が下、口が上): 長さ 0.28m を 4色の縞に分ける
             const float Length = 0.28f;
@@ -36,12 +40,12 @@ namespace ShootingGallery
             for (int i = 0; i < 2; i++)
             {
                 float side = i == 0 ? -1f : 1f;
-                var cracker = Group(mainShell, $"FinaleCracker_{i + 1}");
+                var cracker = Group(mainShell, $"FinaleCracker_{i + 1}"); // (屋台の子: 屋台が出ている時だけ見え、屋台といっしょに動く)
                 // 的 (いちばん外側は x ±1.2) と重ならないよう、カウンターの外の柱のそばに置く
                 cracker.localPosition = new Vector3(side * CrackerX, CounterTop, CounterZ);
                 // 柱から張り出した小さな棚 (カウンターの天板と同じ高さ) と、棚を支える斜めの板
-                Prim(PrimitiveType.Cube, "Shelf", cracker, new Vector3(side * 0.03f, -0.02f, 0.1f), new Vector3(0.24f, 0.04f, 0.5f), holderMat, false);
-                var brace = Prim(PrimitiveType.Cube, "ShelfBrace", cracker, new Vector3(side * 0.1f, -0.14f, 0.27f), new Vector3(0.03f, 0.24f, 0.03f), holderMat, false);
+                Prim(PrimitiveType.Cube, "Shelf", cracker, new Vector3(side * 0.03f, -0.02f, 0.1f), new Vector3(0.24f, 0.04f, 0.5f), shelfMat, false);
+                var brace = Prim(PrimitiveType.Cube, "ShelfBrace", cracker, new Vector3(side * 0.1f, -0.14f, 0.27f), new Vector3(0.03f, 0.24f, 0.03f), shelfMat, false);
                 brace.transform.localRotation = Quaternion.Euler(0f, 0f, side * 30f);
                 // 小さな台 (先を挿しておく)
                 Prim(PrimitiveType.Cylinder, "Holder", cracker, new Vector3(0f, 0.03f, 0f), new Vector3(0.07f, 0.03f, 0.07f), holderMat, false);

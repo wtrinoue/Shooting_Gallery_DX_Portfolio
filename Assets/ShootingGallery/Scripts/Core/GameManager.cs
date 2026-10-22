@@ -733,7 +733,7 @@ namespace ShootingGallery
             if (worldGateTarget != null) worldGateTarget.SetAvailable(true);
             if (timeAttackTarget != null) timeAttackTarget.SetAvailable(true);
             if (controlsBoard != null) controlsBoard.SetActive(true);
-            if (finaleCrackers != null) finaleCrackers.Hide(); // フィナーレのクラッカーをしまう (拍手と落ちている紙吹雪はそのまま)
+            HideFinaleCrackers(); // フィナーレのクラッカーをしまう (拍手と落ちている紙吹雪はそのまま)
             SetFlatFloor(true); // タイトルの間は、穴もふちもない平らな床
             ShowMessage("CHOOSE A MODE !", 9999f, Color.white);
         }

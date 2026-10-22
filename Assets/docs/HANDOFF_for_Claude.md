@@ -443,4 +443,7 @@ VS Code の診断で、新規ファイルの型が「見つからない」と出
   - Core/FinaleCrackers.cs (クラッカーの出し入れと紙吹雪。紙吹雪は FxPool の "FinaleConfetti" / "FinaleStreamer"、裏からも見えるよう薄い Cube)、Core/GameManager.Finale.cs (UpdateFinale / PlayFinale / ClearFinale)、Builder/GalleryBuilder.Finale.cs (BuildFinaleCrackers、FinaleApplausePath)。
   - クラッカーはメイン屋台 (Stall_Main) の子なので屋台といっしょに動く。紙吹雪は屋台がどこにいても「メイン屋台の最初の位置 (mainHomePos / mainHomeRot)」の口から出す。
   - タイトルに戻る時 (GoTitle) にクラッカーをしまい、次のラウンドの始まり・リセットで拍手と紙吹雪もすぐ片付ける。100,000 POINTS のクリアには付けていない。
+  - 位置はカウンターの外の柱のそば (x ±1.52、CrackerX。的と重ならないように)。柱から張り出した小さな棚に載っている。
+  - 豪華屋台のメイン (Stall_Deluxe_Grand) にも同じ配置でもう1組 (GameManager.deluxeFinaleCrackers、棚は黒・台は金)。今出ている屋台の組だけが見える。紙吹雪は普通の屋台の組だけが出す (FinaleCrackers.spawnConfetti。同じ所から出るので2倍にならないように)。
   - 拍手は GalleryRuntimeAssets.finaleApplause にも入れ (実機用)、読み込み設定は StageBgmPaths に足した (ConcertBgmImport の版を 8 に)。再生時に組み立てる運用なので、そのまま反映される。拍手の音源のクレジットは未記入 (出典をユーザーに確認)。
+- **credit.txt** (リポジトリのいちばん上、README.md の隣) に、使っている曲・音のファイルの一覧を作った (2026-10-23)。コードの *Path 定数から拾ったもの。出典が「（未記入）」の物はユーザーに確認中。曲や音を足したら、ここにも足すこと。→ 同日、ユーザーが出典を記入し、各サイトの利用規約を確認して、ゲーム内のクレジット (Resources/THIRD_PARTY_NOTICES.txt の 4.〜9.: 魔王魂 / 音楽の卵 / OpenTracks / Pixabay / 小森平 / Google Gemini の AI 生成曲) を書き直した。クレジット必須は魔王魂だけ、小森平は「可能ならリンク表示」、Google は「AI 生成物を人が作ったと思わせない」。規約のまとめは credit.txt の末尾。曲を足したら両方に足すこと。

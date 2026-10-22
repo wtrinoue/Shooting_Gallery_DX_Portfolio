@@ -282,7 +282,10 @@ namespace ShootingGallery
             gm.worldGateTarget = worldGateTarget;
             gm.controlsBoard = controlsBoard;
             gm.goalSign = BuildGoalSign(GameManager.GoalScore); // ラウンドの始まりに降りてくる、プロペラの付いた看板
-            gm.finaleCrackers = BuildFinaleCrackers(mainShell); // 2 MIN の終わりのクラッカーと紙吹雪 (GalleryBuilder.Finale.cs)
+            // 2 MIN の終わりのクラッカーと紙吹雪 (GalleryBuilder.Finale.cs)。普通のメイン屋台と、豪華屋台のメインに同じ配置で1組ずつ
+            var woodDark = Mat("Wood_Dark", new Color(0.25f, 0.16f, 0.1f));
+            gm.finaleCrackers = BuildFinaleCrackers(mainShell, "FinaleConfetti", true, woodDark, woodDark);
+            gm.deluxeFinaleCrackers = BuildFinaleCrackers(deluxeMain.transform, "FinaleConfetti_Deluxe", false, DxBlack, DxGold);
             gm.hudText = hudText;
             gm.messageText = msgText;
             gm.font = font;
