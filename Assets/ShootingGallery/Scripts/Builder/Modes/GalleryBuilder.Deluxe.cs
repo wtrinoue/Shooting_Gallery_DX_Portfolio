@@ -911,7 +911,7 @@ namespace ShootingGallery
         }
 
         /// <summary>
-        /// 豪華屋台の点数付きの的。点数で形が変わる (丸 / 四角 / 三角 / 星)。金の縁取り、光る色の板、真ん中の黒い丸に金の数字。
+        /// 豪華屋台の点数付きの的。点数で形が変わる (丸 / 四角 / 三角 / 星)。金の縁取り、光る色の板、真ん中の黒い板に金の数字。
         /// 根元が原点で、形の中心は TargetDiscY の高さ (普通の的と同じなので、武器の的に化ける時も同じ所に箱が付く)。
         /// </summary>
         Target ShapeTarget(Transform parent, int points, Vector3 localPos, float respawnDelay = 3f)
@@ -937,9 +937,11 @@ namespace ShootingGallery
             var center = new Vector3(0f, TargetDiscY, 0f);
             ShapeObj(shape, face, "Rim", center + Vector3.forward * 0.006f, d * 1.16f, DxGold, false);
             ShapeObj(shape, face, "Body", center, d, body, true);
-            float inner = shape switch { Shape.Star => 0.42f, Shape.Triangle => 0.48f, _ => 0.6f } * d;
-            ShapeObj(Shape.Circle, face, "Inner", center + Vector3.back * 0.008f, inner, DxBlack, false);
-            MakeText(face, "Points", points.ToString(), center + Vector3.back * 0.016f, inner * (points >= 1000 ? 0.32f : 0.4f), new Color(1f, 0.85f, 0.4f));
+            // 金の数字 (図形) と、その下敷きの黒い角丸の板。どちらも形から少しはみ出すくらいの大きさ (金の星の上でも数字が読めるように)
+            var digits = PointDigits(face, points, center + Vector3.back * 0.016f, d * 0.9f, d * 0.4f, DxGold);
+            var size = digits.GetComponent<MeshFilter>().sharedMesh.bounds.size * digits.transform.localScale.x;
+            float plateH = size.y * 1.36f;
+            PillPlate(face, "Inner", center + Vector3.back * 0.012f, size.x + plateH / 2f, plateH, DxBlack);
             return target;
         }
 

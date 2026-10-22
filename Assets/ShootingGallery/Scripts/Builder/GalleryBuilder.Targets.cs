@@ -34,8 +34,9 @@ namespace ShootingGallery
             target.face = face.gameObject;
             var color = Mat($"Points_{points}", PointStyle.TargetColor(points), PointStyle.Emission(points));
             Bullseye(face, TargetDiscY, d, color, Mat("Target_White", Color.white), null);
-            // 数字: 白い輪からはみ出すくらい大きく、太字で
-            MakeText(face, "Points", points.ToString(), new Vector3(0f, TargetDiscY, -0.012f), d * 0.44f, new Color(0.08f, 0.08f, 0.08f)).fontStyle = FontStyle.Bold;
+            // 数字 (図形): 豪華屋台の的 (ShapeTarget) の数字と同じ大きさ。円の模様より手前に置く
+            float dx = DxSize(points);
+            PointDigits(face, points, new Vector3(0f, TargetDiscY, -0.02f), dx * 0.9f, dx * 0.4f, DigitMat);
             return target;
         }
 
