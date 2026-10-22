@@ -31,6 +31,8 @@ namespace ShootingGallery
         public AudioClip unknownBgm;
         public AudioClip revolverShot, revolverReload;
         public AudioClip roundBgm;
+        [Tooltip("2 MIN の終わりの拍手 (GalleryBuilder.FinaleApplausePath)")]
+        public AudioClip finaleApplause;
         [Tooltip("タイトルのモードの看板の右に飾る絵 (GalleryBuilder.PocochiImagePath)")]
         public Texture2D pocochiImage;
         public TextAsset concertBeatMap;

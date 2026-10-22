@@ -512,6 +512,7 @@ namespace ShootingGallery
         {
             UpdateViewGuard(); // 視点がずれたままなら元に戻す (GameManager.View.cs)
             UpdateStageBgm(); // モードの BGM の大きさ (GameManager.Bgm.cs)
+            UpdateFinale(); // 2 MIN の終わりのクラッカーと拍手 (GameManager.Finale.cs)
             UpdateControllerView(); // タイトルで操作方法の看板を見ている間は、手元をコントローラーの模型に
             if (State == GameState.Playing)
             {
@@ -732,6 +733,7 @@ namespace ShootingGallery
             if (worldGateTarget != null) worldGateTarget.SetAvailable(true);
             if (timeAttackTarget != null) timeAttackTarget.SetAvailable(true);
             if (controlsBoard != null) controlsBoard.SetActive(true);
+            if (finaleCrackers != null) finaleCrackers.Hide(); // フィナーレのクラッカーをしまう (拍手と落ちている紙吹雪はそのまま)
             SetFlatFloor(true); // タイトルの間は、穴もふちもない平らな床
             ShowMessage("CHOOSE A MODE !", 9999f, Color.white);
         }
@@ -769,6 +771,7 @@ namespace ShootingGallery
             if (debug) StopRoundBgm(true);                 // デバッグ・WORLD GATE は無音
             else if (endless) PlayRoundBgm();              // エンドレスは始まった時から
             ResetView(true); // ラウンドの始まりは、いつもの視点から
+            ClearFinale(); // 前のラウンドのフィナーレ (拍手・紙吹雪) が残っていれば片付ける
             State = GameState.Playing;
             Endless = endless;
             DebugMode = debug; // 的を出す前に決めておく (起き上がる時に種類別に化ける)
@@ -816,6 +819,7 @@ namespace ShootingGallery
                     PlayerPrefs.Save();
                 }
                 lastRoundCleared = false;
+                PlayFinale(); // フィナーレ: クラッカーから紙吹雪が飛び出し、拍手が流れる
                 Sfx.Play("end");
                 ShowMessage(highRecord ? $"TIME UP!\nNEW RECORD {Points(Score)}" : $"TIME UP!\nSCORE {Points(Score)}", 4f, new Color(1f, 0.85f, 0.3f));
                 backToTitle = StartCoroutine(BackToTitle());
@@ -892,6 +896,7 @@ namespace ShootingGallery
                 State = GameState.Result; // 終わらせている間は Playing 扱いにしない (点数やメッセージを出さない)
                 StopEverything();
             }
+            ClearFinale(); // フィナーレの途中なら、拍手も紙吹雪もすぐ片付ける
             GoTitle();
             Sfx.Play("door");
         }

@@ -282,6 +282,7 @@ namespace ShootingGallery
             gm.worldGateTarget = worldGateTarget;
             gm.controlsBoard = controlsBoard;
             gm.goalSign = BuildGoalSign(GameManager.GoalScore); // ラウンドの始まりに降りてくる、プロペラの付いた看板
+            gm.finaleCrackers = BuildFinaleCrackers(mainShell); // 2 MIN の終わりのクラッカーと紙吹雪 (GalleryBuilder.Finale.cs)
             gm.hudText = hudText;
             gm.messageText = msgText;
             gm.font = font;

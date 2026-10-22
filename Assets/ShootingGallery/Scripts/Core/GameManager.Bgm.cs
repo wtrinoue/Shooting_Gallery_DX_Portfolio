@@ -66,8 +66,8 @@ namespace ShootingGallery
         [Tooltip("ラウンドの BGM (タイトルの的を撃った時から流れる。別の世界のモードの間は小さくして一時停止し、戻ったら続きから)")]
         public AudioClip roundBgm;
         [Range(0f, 1f)] public float roundBgmVolume = 0.4f;
-        /// <summary>2 MIN のタイムアタックで、別の世界から戻った時に曲の位置を残り時間に合わせる境目 (秒。1分43秒)</summary>
-        const float TimeAttackBgmSync = 103f;
+        /// <summary>2 MIN のタイムアタックで、別の世界から戻った時に曲の位置を残り時間に合わせる境目 (秒。1分42秒)</summary>
+        const float TimeAttackBgmSync = 102f;
 
         AudioSource roundBgmSource;
         bool roundBgmOn;
@@ -119,7 +119,7 @@ namespace ShootingGallery
             if (want && !roundBgmSource.isPlaying)
             {
                 // 別の世界から戻ってきた: 一時停止していた続きから。
-                // 2 MIN のタイムアタックで残りが TimeAttackBgmSync 秒 (1分43秒) 以下の時は、曲の「1分43秒 − 残り時間」の所から
+                // 2 MIN のタイムアタックで残りが TimeAttackBgmSync 秒 (1分42秒) 以下の時は、曲の「1分42秒 − 残り時間」の所から
                 if (TimeAttack && timeLeft <= TimeAttackBgmSync)
                     roundBgmSource.time = Mathf.Clamp(TimeAttackBgmSync - timeLeft, 0f, Mathf.Max(0f, roundBgmSource.clip.length - 0.05f));
                 roundBgmSource.UnPause();

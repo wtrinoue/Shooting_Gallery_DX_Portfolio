@@ -1,6 +1,6 @@
 # 射的屋さんデラックス — 引き継ぎメモ (次の Claude へ)
 
-最終更新: 2026-10-13 (モードの切り替わり方・ハッチ・PCのキー) / 初版 2026-10-11 前セッションの Claude Code が作成。
+最終更新: 2026-10-23 (git の差分から 10/15〜10/23 の変更を追記。末尾の「2026-10-15〜10-23 の変更」) / 初版 2026-10-11 前セッションの Claude Code が作成。
 この文書だけ読めば「何を作ったか・どう作られているか・ユーザーの好み・注意点」が分かるように書いてある。
 コードの細部は各スクリプトを直接読むこと (コメントはすべて日本語で丁寧に入っている)。
 
@@ -10,6 +10,9 @@
 
 - **返答は必ず日本語。** (ユーザーから明示的に依頼あり。メモリにも保存済み)
 - ユーザーは Unity / VR 初心者寄り。専門用語は短く補足し、手順は「どこを押すか」まで書くと喜ばれる。
+- **★ 2026-10-23 時点の運用 (ユーザーに確認済み): シーンには貼らず、再生した時にビルダーが毎回組み立てる (BuildRoutine)。** 下の「コピペ運用」は昔の話。
+  - 「作り直す → 貼り直し」の案内は不要。スクリプトを保存して再生すれば反映される。
+  - 再生中に組み立てる時は、`AddComponent` した瞬間に Awake が動き、その時はまだビルダーがフィールドを入れていない。**新しい部品の Awake で、ビルダーが入れるフィールドを使わないこと** (初めて使う時に準備する。FinaleCrackers.EnsureInit で一度 NullReferenceException になった)。
 - **BuildScene (GalleryBuilder) は本番では使わない。** エディターで「シーンに生成」/「作り直す」ボタンを押して `ShootingGallery` という子オブジェクトを作り、それをシーンにコピペして使う運用。
   - そのため **生成物は、ビルダー無しで再生しても完全に動く** 必要がある (参照はすべてシリアライズ、マテリアルは .mat に保存)。
   - **新しいオブジェクト/構造を追加したら「作り直す → 貼り直し」が必要** と毎回伝える。スクリプトの中身だけの変更なら不要と伝える。
@@ -64,6 +67,7 @@ VS Code の診断で、新規ファイルの型が「見つからない」と出
 
 ### 基本
 - START の的を撃つと開始。1ラウンド **90秒**。終了後スコア表示 → 4秒でタイトルに戻る。ハイスコアは PlayerPrefs。
+  - **※ 2026-10-23 に変更: 90秒のラウンドはなくなった。今は「100,000 POINTS (10万点までの時間を競う)」と「2 MIN (2分のタイムアタック)」の2つ。末尾の「2026-10-15〜10-23 の変更」を参照。**
 - 点数の種類は **10 / 50 / 100 / 200 / 300 / 500**。点数で色と大きさが変わる (`PointStyle.cs`: 高いほど小さく派手。300以上は光る)。
 - **点数の配分: メイン屋台は低め、フィーバー屋台は高め** (2026-10-12 にユーザーの希望で変更。動き・並びは以前のまま、数値だけ変えた)。
   値は `GalleryBuilder.cs` の各 `BuildXxx` に直接書いてある (変えたら「作り直す」が必要)。
@@ -348,3 +352,95 @@ VS Code の診断で、新規ファイルの型が「見つからない」と出
   - 仕組み: Core/GameManager.WorldGate.cs。StartRound(true, true) でデバッグモードの仕組み (輪を出したまま・DebugKinds で屋台ごとに化ける・DebugClearFor) を使い、GateMode を立てて mainStall = gateStalls[0]、feverStalls = 残り5軒にして StartFever。DebugKinds は GateMode なら GateKinds(stall)。終わり (StopEverything の EndWorldGate) で gate の屋台を沈め、mainStall を normalMainStall に戻して元の場所にせり上げる。HUD は WORLD GATE m:ss。
   - ビルダー: Builder/GalleryBuilder.WorldGate.cs (BuildWorldGateTarget = 青い的に WORLD / GATE の2行、BuildWorldGateStalls)。START の的は x -0.5、WORLD GATE は x +0.5 (メイン屋台のカウンターの前)。要 作り直す → 貼り直し。
   - スクリプトを Unity の外でまとめてコンパイルする確認: scratchpad/build/Check.csproj (前のセッションの物を、今のファイル一覧で作り直した。dotnet build で 0 エラー)。
+
+---
+
+## 2026-10-15〜10-23 の変更 (git の差分から追記)
+※ この期間はメモが更新されていなかったので、2026-10-23 に次の Claude が git の差分 (675b578 add world gate → 51899ee fix) とコミットメッセージから読み取って書いた。
+細かい数値や意図は、各スクリプトのコメントを直接確かめること。Unknown ステージの詳しい仕様は **new_docs/develop.txt**、ユーザーのプロンプト履歴 (10/12〜10/15) は **new_docs/prompts.md** (docs/ から移動) にある。
+
+### ラウンドのルール変更 (10/23 complete shooting gallery dx) ★いちばん大きい変更
+- タイトルの的が3つ: **2 MIN** (左。TargetKind.TimeAttack、GameManager.timeAttackTarget) / **100,000 POINTS** (真ん中。従来の startTarget) / **WORLD GATE**。タイトルの表示は「CHOOSE A MODE !」。
+- **100,000 POINTS**: 時間切れなし。`GameManager.GoalScore` (100000) 点を取ったらクリア (CLEAR!! と "complete" の音)。かかった時間を競い、一番速い時間を PlayerPrefs `ShootingGalleryDX_BestTime` に保存。HUD は `SCORE n / 100,000` と経過時間。
+- **2 MIN**: `TimeAttackTime` (120秒) のタイムアタック。時間切れで TIME UP!、ハイスコアを保存 (従来の HighScoreKey)。
+- タイトルの HUD: `2 MIN HIGH SCORE … / 100,000 BEST TIME …`。結果画面はクリアならクリアタイムとベストタイム。
+- 始まり方: 的を撃つと **プロペラの付いた看板 (Core/GoalSign.cs)** が真上から降りてきて、1行目にルール (「Get 100,000 points !!」/「2 MIN TIME ATTACK !!」)、3 → 2 → 1 → GO!! と数えてラウンド開始 (GameManager.StartRoundWithCountdown)。看板は真上へ飛んでいく。
+- 視点の高さの基準は 180cm → **170cm** (player.CalibrateHeight。起動時にも合わせる)。
+- `roundDuration` は使っていない (Tooltip に「使わない」と明記)。エンドレス・デバッグ・WORLD GATE は従来どおり。
+
+### BGM (10/16〜10/23)
+- Core/GameManager.Bgm.cs: **ラウンドの BGM** (2 MIN / 100,000 POINTS / エンドレス。WORLD GATE とデバッグは無音。看板が数え始めた時から流す) と、**モードの BGM** (夏祭り・幽霊・怪獣・鉱山・海戦・西部劇・宇宙・潜水艦・忍者・Unknown)。モードの間はラウンドの BGM を一時停止し、戻ったら続きから。2 MIN では戻った時に曲の位置を残り時間に合わせる (残りが `TimeAttackBgmSync` 秒以下なら、曲の「その秒数 − 残り時間」の所から = 時間切れの瞬間に曲のその位置が来る。2026-10-23 にユーザーの指定で 1分43秒 → **1分42秒** (102) に変更)。
+- カジノ・美術館・音楽・空中ステージは、それぞれのモードが自分で BGM を鳴らす。
+- 曲の結びつけは Builder/GalleryBuilder.StageBgm.cs (エディターでは Assets/Source から、実機では GalleryRuntimeAssets から)。
+- 曲の出典は Assets/Source/contents.txt (魔王魂: カジノ・音楽 / 音楽の卵: 飛行機・絵画 / pixabay: …)。クレジットは Resources/THIRD_PARTY_NOTICES.txt にも追記済み。
+
+### 素材の扱い (10/18)
+- **Assets/Source (mp3 など) は .gitignore で git の管理から外した** (Source.meta も削除)。素材は README の Google Drive のリンクで配っている様子。clone しただけでは BGM が無いので注意。
+- Assets/Source には、まだコードで使っていないフォルダもある (christmas_stage / ocean_stage / pirate_stage / onece / stall / normal など)。今後のモード用かもしれない。
+
+### Android (Quest 単体) ビルド対応 (10/16)
+- エディター専用の AssetDatabase を実行時に使っていた所を直した: **Builder/GalleryRuntimeAssets.cs** (Assets/Resources/GalleryRuntimeAssets.asset) に BGM・拍の表・専用シェーダー・ビルダーが作った材質を参照させ、必ずビルドに入るようにした。中身は **Builder/Editor/GalleryRuntimeAssetsSync.cs** が自動でそろえる (エディターを開いた時・ビルドの直前・メニュー)。
+- **Builder/Editor/QuestSetup.cs**: メニュー「ShootingGallery → Quest (Android) の VR 設定をする」で、Android の OpenXR・Meta Quest のサポートとコントローラーの入力・最小 API 32・IL2CPP・ARM64・ASTC を一度に設定 (PC / WebGL は変えない)。→ 「7. 未確認」の Min API Level の件はこれで解決したはず。
+
+### シーンの状態 (2026-10-23 ユーザーに確認済み)
+- git にある **Assets/Scenes/SampleScene.unity には ShootingGallery が入っていない** (カメラ・ライト・Global Volume だけの 499 行。前は約320万行)。**シーンには貼らず、再生した時にビルダーが組み立てる運用** (冒頭の「0. まず守ること」を参照)。
+- Assets/_Recovery/ に Unity の復旧用シーンが3つコミットされている。
+
+### 美術館モード (10/16 追加、10/23 改良)
+- 絵筆の的 (TargetKind.Museum) で始まる。Core/GameManager.Museum.cs、Modes/Museum/ (ArtMuseum = 流れと作品の出し方、Artwork = 作品の的、ArtField、ArtGlint)、Builder/Modes/GalleryBuilder.Museum.cs / MuseumHanging.cs / Paintings.cs、Builder/Painter.cs、Common/PaintingMask.cs。
+- 流れ: 屋台が下へ一気にしまわれ、ハッチが真ん中へ縮んで平らな床 → 目の前にイーゼルの白いキャンバス、宙に浮いた筆がひとりでに美術館の中を描く → 白い閃光 (Arrived) で円い展示室の中へ。帰りも白い閃光の間に屋台を元の場所へ並べ、晴れたら的を出す。
+- 的 (TargetKind.Artwork) は未完成の作品 (真っ白な物が撃つべき的): キャンバス (筆が左右に往復して塗り、下塗り → 形 → 仕上げ。額縁が白木 → 木 → 銀 → 金)、彫刻 (トンカチでたたき、直方体 → 荒削り → 色とりどりの完成品)、天井から吊るした粘土 (飛行機・恐竜の骨・クジラ)。完成すると金の光で飾られ、点数は入らない。空いた所に次々出る。500点以上で MASTERPIECE!!。
+- 武器: **イマジネーション** (WeaponType.Imagination = 19。Weapons/ImaginationShot.cs)。虹色の光の玉がまっすぐ飛び、狙った作品に合わせて手元 2m で筆 / トンカチ / 粘土の形に変わる。
+- 絵はビルダーで Painter が描いて PNG に保存 (Generated/Paintings/。元絵は ShootingGallery/Paintings/: 大波・星月夜・ひまわり・肖像・丘・美術館の中)。塗る順番は画像のアルファに入れ、_Cutoff を下げて見せる (PaintingMask)。
+- 10/23: まだ当てられる作品の上を斜めの光の帯が流れる (ArtGlint。完成すると出ない)。
+
+### Unknown ステージ (10/16 追加、10/22 修正)
+- ワープゲートの的 (TargetKind.Unknown) で始まる。**詳しくは new_docs/develop.txt**。要点: 世界が灰色に止まる (GrayWorld) → 頭を包むガラスの球にひび → 屋台・ハッチ・地面をまとめた空間をひびの線どおりに立体のまま切り分けた破片 (WorldShatter) と入れ替えて割れる → 「ふしぎな空間」(パステルの市松の床、宙に浮くドア・逆回りの時計など。ワープゲート5つ: COUNTRY / SPACE / BEACH / CITY / SNOW) で45秒。15秒後に大きなワープホールをくぐって背景が星空に (UnknownCosmos.shader)。帰りは破片が逆に戻って組み上がる。
+- 的: ゲートから紛れ込む物 (TargetKind.UnknownObject。牛・UFO・ビーチボール・タクシー・雪だるまなど 100〜500) と時計・ドア。武器は **WARP BOLT** (WeaponType.Lightning = 21、Weapons/LightningBolt.cs)。当たった物は紫のプラズマボールと一緒に縮んで転送される。
+- シェーダー: Shaders/UnknownShard / UnknownShardSolid / UnknownShardDepth / UnknownCosmos。Sfx: freeze / crack / shatter / reassemble / zap / warpzap。
+- 10/16: 看板などの文字 (TextMesh) も文字の形のメッシュにして、ひびの線どおりに割れるように (WorldShatter.BakeText)。10/22: より自然に見えるよう調整 (UnknownStage / GrayWorld)。
+
+### 別の世界のモード共通 (10/22 fix any)
+- **モードの残り時間 = モード専用の武器のゲージ** にそろえ、**ゲージが完全に空になった瞬間に元の世界へ戻り始める** (前はゲージが残っているうちに戻っていた)。
+- Core/GameManager.View.cs (10/16): 視点の見張り役。発掘・潜水艦・音楽 (プレイヤーを上下に動かす)・怪獣 (世界を縮める) の後に視点が戻りきっていなければ、なめらかに元へ戻す。ラウンドの始まり・タイトルに戻る時も整える。
+- WORLD GATE に BACK の的 (TargetKind.GateBack、点数なし) を追加。
+
+### モードごとの改良
+- **カジノ** (10/16〜10/23): スロットが複数台に (casinoHall.AllSlots。的はレバーについていて、撃つとお辞儀して回る)。**ボールのルーレット** (Modes/Casino/BallRoulette.cs、TargetKind.BallRoulette。傾いた盤に金の管からボールが転がり込み、ポケットの点数が入る)。当たるとコインが飛び散る (CoinBurst、FxPool)。撃てる時だけ「SHOOT!」の目印 (CasinoHint)。狙った先のゲームの武器に持ち替える (GameManager.UpdateCasinoAim)。ビルダーは GalleryBuilder.CasinoDeluxe.cs / CasinoGames.cs を追加。
+- **怪獣**: 動く的 (Modes/Kaiju/KaijuVehicle.cs、TargetKind.KaijuVehicle: 道路を走る車・街を横切る飛行機・怪獣のまわりを回るヘリ。当たると爆発・きりもみで落ちる)。炎の玉を作り直し (Weapons/FireBallShot.cs。まっすぐ飛ぶ・速さ 24・重力 0、ギザギザの炎の形と炎の尾)。ビルの作り込み (KaijuBuilding、GalleryBuilder.KaijuTargets.cs)。
+- **海戦**: 撃った的の方を船首に。イルカが跳ねる (Modes/Naval/Dolphin.cs、飾り)。景色を後ろへ流して進んで見せる。武器の表示名は CANNON (見た目は木の台の大砲)。
+- **空中ステージ**: 床がその場で消え、屋台はばらばらに空から落ち、帰りはパラシュートで降りてくる。武器は専用の水冷式の機関銃 (WeaponType.AirMachineGun = 20、性能はマシンガンと同じ)。
+- **忍者**: パネルのポーズが出るたびにランダム (Modes/Ninja/NinjaPose.cs)。ふすまが開き始めた時のイベント (NinjaDojo.DoorsOpening)。
+- **幽霊**: 懐中電灯は照らした時間がたまるとやられる方式に (Weapons/LightExposure.cs。前は照らした瞬間)。届く距離 25 → 34m。お化け屋敷の小物 (GalleryBuilder.GhostProps.cs)。
+- **西部劇**: リボルバーは6発撃ちきったら、トリガーを引くたびに1発ずつ込める (WeaponDef.reloadStep。満タンで撃てる。込めた分が緑、弾倉が回る)。
+- **鉱山** (10/22): 環境光を真っ暗に近く (mineAmbient)、光る宝石・鉱脈・ランプの明かりだけが浮かぶように。ビルダー (GalleryBuilder.Mine.cs) を大きく作り込み、宝石 (MineGem) も改良。
+- **夏祭り** (10/22): 花火を作り直し (FestivalFirework。菊・芯入り / 輪 / しだれ柳、FxPool で使い回し)。
+- **夏祭りのお金** (10/23 fix): お金をスコアと分けた (`GameManager.FestivalMoney`。夏祭りに入ってから稼いだ分。稼いだ分はスコアにも入る = AddScore)。料理を買うとお金が減り、**値段の分だけスコアが増える**。HUD のスコアは夏祭りの間も出す。
+- **宇宙**: 星が出たイベント (spaceStage.StarsAppear)。
+- **音楽** (10/23 fix): 楽器・音符に当たっても、楽器の音程の音は鳴らさない (BGM に別の音程が混ざらないように。当たった音だけ)。
+- **UFO**: 1000 → **10000点** (10/23 fix。GalleryBuilder.WeaponDropper.cs。要 作り直す)。
+- 電撃 (WARP BOLT) の発射音は 0.4 (BGM を聞かせるため少し小さめ)。
+
+### 屋台・的の見た目 (10/22)
+- 屋台を細かく作り込み (GalleryBuilder.Stalls.cs)、的を大きく。
+- 普通の屋台の点数の数字を、豪華屋台と同じ **図形の数字** に (Builder/GalleryBuilder.Digits.cs。太い線でなぞった平らなメッシュ、同じ点数は使い回し)。
+- タイトルの START / WORLD GATE の的が浮いて見えたので棒を長く。
+- 操作方法とクレジットの看板を、**最初の屋台の左右** に移した (前は背中側)。
+- タイトルで操作方法の看板を見ている間は、手元がコントローラーの模型になる (GameManager.UpdateControllerView)。引き金で白い玉 (Weapons/PointerBall.cs) が出て、看板のボタン (Credits) に当たった時だけ押す。クレジットの表示も改良 (CreditsViewer)。
+
+### 共通の部品 (10/16〜10/23)
+- Common/MeshMerger.cs: 動かない部品の見た目を材質ごとに1つのメッシュにまとめる (WebGL の VR は両目で2回描くので効く)。※ 以前「メッシュの結合はユーザーの指示でしていない」とあったが、この期間に導入された (Unknown の飾り・ゲートなどで使用)。
+- Common/TextOutline.cs: TextMesh の黒いふち取り (HUD などを明るい所でも読めるように)。Common/PointText.cs。
+
+### 未解決・確認したいこと
+- 「海戦モードで屋台が戻らない」(10/15 の未解決) が直ったかは差分からは不明。
+- (解決) シーンの運用: 再生時にビルダーが組み立てる。
+- 追加したオブジェクト・数値 (UFO の点数、屋台・的の見た目、美術館、Unknown、カジノなど) は、再生時に組み立てる今の運用ならそのまま反映される。
+
+### 2026-10-23 の変更 (この会話)
+- 2 MIN の BGM の合わせ直しを 1分43秒 → **1分42秒** に (GameManager.Bgm.cs の TimeAttackBgmSync = 102。スクリプトのみ)。
+- **2 MIN のフィナーレ** (ユーザーの指定): 残り `finalePrepareSeconds` (10秒) で、普通のメイン屋台のカウンターの左右 (x ±0.95) にクラッカー (縞模様の円すいに金紙のふた、小さな台に挿してある) がぽんっと出て、ゆらゆら待つ。時間切れと同時に金紙が消え、口からプレイヤーの頭の上へ紙吹雪 80枚 + 紙テープ 10本ずつが飛び出し、ゆらゆら落ちて床で消える (**破裂音はなし**、ユーザーの指定)。同時に拍手 `Assets/Source/normal/clap_in_hall.mp3` を流し、`finaleApplauseHold` (1.5秒) そのまま → `finaleApplauseFade` (4秒) でだんだん小さくして止める。
+  - Core/FinaleCrackers.cs (クラッカーの出し入れと紙吹雪。紙吹雪は FxPool の "FinaleConfetti" / "FinaleStreamer"、裏からも見えるよう薄い Cube)、Core/GameManager.Finale.cs (UpdateFinale / PlayFinale / ClearFinale)、Builder/GalleryBuilder.Finale.cs (BuildFinaleCrackers、FinaleApplausePath)。
+  - クラッカーはメイン屋台 (Stall_Main) の子なので屋台といっしょに動く。紙吹雪は屋台がどこにいても「メイン屋台の最初の位置 (mainHomePos / mainHomeRot)」の口から出す。
+  - タイトルに戻る時 (GoTitle) にクラッカーをしまい、次のラウンドの始まり・リセットで拍手と紙吹雪もすぐ片付ける。100,000 POINTS のクリアには付けていない。
+  - 拍手は GalleryRuntimeAssets.finaleApplause にも入れ (実機用)、読み込み設定は StageBgmPaths に足した (ConcertBgmImport の版を 8 に)。再生時に組み立てる運用なので、そのまま反映される。拍手の音源のクレジットは未記入 (出典をユーザーに確認)。

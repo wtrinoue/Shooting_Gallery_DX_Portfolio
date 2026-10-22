@@ -21,7 +21,7 @@ namespace ShootingGallery
         public const string RevolverReloadPath = "Assets/Source/western_stage/gun/universfield-gun-reload-123781.mp3"; // 西部劇の弾を込める音
 
         /// <summary>BGM の読み込み方を軽くする曲 (Editor/ConcertBgmImport)</summary>
-        public static readonly string[] StageBgmPaths = { FestivalBgmPath, GhostBgmPath, KaijuBgmPath, MineBgmPath, NavalBgmPath, WesternBgmPath, SpaceBgmPath, SubmarineBgmPath, NinjaBgmPath, RoundBgmPath, UnknownBgmPath };
+        public static readonly string[] StageBgmPaths = { FestivalBgmPath, GhostBgmPath, KaijuBgmPath, MineBgmPath, NavalBgmPath, WesternBgmPath, SpaceBgmPath, SubmarineBgmPath, NinjaBgmPath, RoundBgmPath, UnknownBgmPath, FinaleApplausePath };
 
         void AssignStageBgm(GameManager gm)
         {
@@ -36,6 +36,7 @@ namespace ShootingGallery
             gm.ninjaBgm = LoadSourceAsset(NinjaBgmPath, a => a.ninjaBgm);
             gm.unknownBgm = LoadSourceAsset(UnknownBgmPath, a => a.unknownBgm);
             gm.roundBgm = LoadSourceAsset(RoundBgmPath, a => a.roundBgm);
+            gm.finaleApplause = LoadSourceAsset(FinaleApplausePath, a => a.finaleApplause);
         }
     }
 }
