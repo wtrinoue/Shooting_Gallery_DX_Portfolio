@@ -25,7 +25,7 @@ namespace ShootingGallery
             var pivot = Group(root, "Pivot");
             target.visual = pivot;
 
-            float d = PointStyle.Diameter(points);
+            float d = StallTargetDiameter(points);
             if (stand)
                 Prim(PrimitiveType.Cube, "Stand", pivot, new Vector3(0f, (TargetDiscY - d / 2f) / 2f, 0f), new Vector3(0.035f, TargetDiscY - d / 2f, 0.035f), Mat("Target_Stand", new Color(0.3f, 0.3f, 0.32f)));
 
@@ -34,9 +34,13 @@ namespace ShootingGallery
             target.face = face.gameObject;
             var color = Mat($"Points_{points}", PointStyle.TargetColor(points), PointStyle.Emission(points));
             Bullseye(face, TargetDiscY, d, color, Mat("Target_White", Color.white), null);
-            MakeText(face, "Points", points.ToString(), new Vector3(0f, TargetDiscY, -0.012f), d * 0.32f, new Color(0.1f, 0.1f, 0.1f));
+            // 数字: 白い輪からはみ出すくらい大きく、太字で
+            MakeText(face, "Points", points.ToString(), new Vector3(0f, TargetDiscY, -0.012f), d * 0.44f, new Color(0.08f, 0.08f, 0.08f)).fontStyle = FontStyle.Bold;
             return target;
         }
+
+        /// <summary>普通の屋台の点数の的の直径 (PointStyle の大きさを一回り大きくして、遠くからでも狙いやすく・数字を読みやすくする)</summary>
+        static float StallTargetDiameter(int points) => PointStyle.Diameter(points) * 1.25f;
 
         /// <summary>回る円盤や板に貼り付けた点数の的: 棒がなく、当たると後ろに倒れずにその場で縮んで消える (起き上がる時はふくらんで出る)</summary>
         Target WallTarget(Transform parent, int points, Vector3 localPos)

@@ -447,7 +447,7 @@ namespace ShootingGallery
 
                 RemoveCollider(Prim(PrimitiveType.Cube, "Rope", pivot, new Vector3(0f, -lengths[i] / 2f, 0f), new Vector3(0.012f, lengths[i], 0.012f), rope));
                 // 的の円の上端がロープの先に来るように吊るす
-                float d = PointStyle.Diameter(values[i]);
+                float d = StallTargetDiameter(values[i]);
                 targets.Add(PointTarget(pivot, values[i], new Vector3(0f, -lengths[i] - d / 2f - TargetDiscY, 0f), stand: false)); // ロープから吊るすので棒なし
             }
         }
