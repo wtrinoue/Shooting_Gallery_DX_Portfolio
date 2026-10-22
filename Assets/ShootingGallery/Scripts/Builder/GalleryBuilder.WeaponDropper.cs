@@ -232,7 +232,7 @@ namespace ShootingGallery
             root.localPosition = new Vector3(0f, 6.5f, 2f); // 編集中に見た目を確認できる位置 (再生時は UfoFlyer が動かす)
             var target = root.gameObject.AddComponent<Target>();
             target.kind = TargetKind.Ufo;
-            target.points = 1000;
+            target.points = 10000;
             target.manualControl = true;
             var pivot = Group(root, "Pivot");
             target.visual = pivot;

@@ -834,18 +834,17 @@ namespace ShootingGallery
 
         // ---- 当たった (GameManager から) ----
 
-        /// <summary>楽器に当たった: 跳ねて音が鳴る。ソロの楽器なら点数を返し、五線譜を出す (ソロでなければ 0)</summary>
+        /// <summary>楽器に当たった: 跳ねる。ソロの楽器なら点数を返し、五線譜を出す (ソロでなければ 0)</summary>
         public int OnInstrumentHit(Target target, Vector3 point)
         {
             if (!IsActive || !playing) return 0;
             var inst = target.GetComponentInParent<MusicInstrument>();
             if (inst == null) return 0;
-            // 撃った楽器の音を曲に合わせる: BGM の曲ならその調の音階に、コードで作った曲なら今の和音に
-            int m = UseBgmClip ? ConcertMusic.ScaleToneNear(bgmKeyRoot, bgmMinor, inst.midi) : ConcertMusic.ChordToneNear(Beat, inst.midi);
-            PlayVoice(inst.voice, m, inst.transform.position, inst.IsSolo ? 1f : 0.6f);
+            // (楽器ごとの音程の音は鳴らさない: BGM にほかの音程が混ざらないように。当たった音だけ)
             if (!inst.IsSolo)
             {
                 inst.Jump(false);
+                Sfx.Play("hit"); // (ソロでない楽器: 当たった音だけ)
                 return 0;
             }
             inst.Jump(true);
@@ -855,15 +854,13 @@ namespace ShootingGallery
             return inst.points;
         }
 
-        /// <summary>音符に当たった: その線 / 間の高さの音が鳴る (点数は音符の的が持っている)</summary>
+        /// <summary>音符に当たった (点数は音符の的が持っている)。当たった音だけ鳴らす</summary>
         public void OnNoteHit(Target target)
         {
             var note = target.GetComponentInParent<MusicNote>();
             if (note == null) return;
             Hits++;
-            int bell = SlotMidi[Mathf.Clamp(note.slot, 0, SlotMidi.Length - 1)] + 12;
-            if (UseBgmClip) bell = ConcertMusic.ScaleToneNear(bgmKeyRoot, bgmMinor, bell); // BGM の曲の調の音階に合わせる
-            PlayVoice(ConcertMusic.Voice.Bell, bell, note.transform.position, 0.9f);
+            Sfx.Play("hit"); // (音符の高さの音は鳴らさない: BGM にほかの音程が混ざらないように。当たった音だけ)
         }
 
         // ---- 五線譜 ----

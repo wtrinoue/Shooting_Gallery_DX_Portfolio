@@ -154,7 +154,7 @@ namespace ShootingGallery
         public Color unknownFogColor = new Color(0.62f, 0.5f, 0.72f);
         public Color unknownAmbient = new Color(0.92f, 0.88f, 0.96f);
 
-        [Header("Festival (夏祭りモード:提灯の的を撃つと、屋台が射的・輪投げ・金魚すくい・食べ物の4軒に入れ替わる。見ている屋台で武器が変わり、スコアがお金になる)")]
+        [Header("Festival (夏祭りモード:提灯の的を撃つと、屋台が射的・輪投げ・金魚すくい・食べ物の4軒に入れ替わる。見ている屋台で武器が変わり、夏祭りで稼いだ分がお金になる)")]
         public FestivalStage festivalStage;
         [Tooltip("夏祭りモードの間だけ HUD に出す、お金 (= スコア) の大きな表示 (スコアなどの文字とは別)")]
         public GameObject moneyPanel;
@@ -338,6 +338,15 @@ namespace ShootingGallery
         /// <summary>このフィーバー中にもう青い玉を撃ったか (ボーナスステージは1回のフィーバーにつき1回)</summary>
         public bool BonusUsedThisFever { get; private set; }
         public int Score { get; private set; }
+        /// <summary>夏祭りモードのお金 (夏祭りに入ってから稼いだ分。スコアとは別。料理を買うと減る)</summary>
+        public int FestivalMoney { get; private set; }
+
+        // 点数を足す (夏祭りの間は、稼いだ分をお金にも足す)
+        void AddScore(int points)
+        {
+            Score += points;
+            if (FestivalActive) FestivalMoney += points;
+        }
 
         float timeLeft;
         /// <summary>ラウンドの残り時間 (秒)</summary>
@@ -601,15 +610,15 @@ namespace ShootingGallery
                 shownMoney = shownFestivalSeconds = -1;
                 return;
             }
-            if (Score != shownMoney)
+            if (FestivalMoney != shownMoney)
             {
                 if (shownMoney >= 0)
                 {
                     moneyPulse = 1f;
-                    moneyGained = Score > shownMoney;
+                    moneyGained = FestivalMoney > shownMoney;
                 }
-                shownMoney = Score;
-                moneyText.text = "¥" + Score.ToString("N0", System.Globalization.CultureInfo.InvariantCulture);
+                shownMoney = FestivalMoney;
+                moneyText.text = "¥" + FestivalMoney.ToString("N0", System.Globalization.CultureInfo.InvariantCulture);
             }
             UpdateFestivalTime();
             if (moneyPulse <= 0f) return;
@@ -690,7 +699,7 @@ namespace ShootingGallery
                     ninja += kaiju + casino + western + space + ghost + mine + sub + concert + museum + festival;
                     int secs = (int)elapsed;
                     string time = GateMode ? $"WORLD GATE {secs / 60}:{secs % 60:00}" : DebugMode ? $"DEBUG {secs / 60}:{secs % 60:00}" : Endless ? $"ENDLESS {secs / 60}:{secs % 60:00}" : TimeAttack ? $"TIME {Mathf.CeilToInt(Mathf.Max(0f, timeLeft))}" : $"TIME {secs / 60}:{secs % 60:00}";
-                    string score = FestivalActive ? "" : Endless || TimeAttack ? $"SCORE {Points(Score)}   " : $"SCORE {Points(Score)} / {Points(GoalScore)}   "; // 夏祭りの世界ではスコアがお金 (お金はその上の大きな表示に出す)
+                    string score = Endless || TimeAttack ? $"SCORE {Points(Score)}   " : $"SCORE {Points(Score)} / {Points(GoalScore)}   "; // (夏祭りのお金はスコアとは別。その上の大きな表示に出す)
                     hudText.text = $"{score}STAGE {Stage + 1}\n{time}{fever}{deluxe}{sniperShots}{mg}{naval}{sky}{ninja}";
                     break;
                 case GameState.Result:
@@ -974,7 +983,7 @@ namespace ShootingGallery
             }
 
             // 夏祭りの食べ物: お金 (スコア) を払って買う (点数は入らない)
-            // 音楽モードの楽器: 撃つと跳ねて音が鳴る。点数が入るのはソロを弾いている楽器だけ
+            // 音楽モードの楽器: 撃つと跳ねる。点数が入るのはソロを弾いている楽器だけ
             if (target.kind == TargetKind.MusicInstrument)
             {
                 target.points = concertHall != null ? concertHall.OnInstrumentHit(target, point) : 0;
@@ -993,7 +1002,7 @@ namespace ShootingGallery
                 return;
             }
 
-            Score += target.points;
+            AddScore(target.points);
             Color popupColor = PointStyle.PopupColor(target.points);
 
             switch (target.kind)
@@ -1181,13 +1190,13 @@ namespace ShootingGallery
                     popupColor = new Color(0.95f, 0.75f, 1f);
                     if (target.points >= 500) ShowMessage("MASTERPIECE!!", 1.5f, new Color(1f, 0.85f, 0.35f));
                     break;
-                case TargetKind.MusicInstrument: // ソロの楽器 (音は ConcertHall が鳴らした)
+                case TargetKind.MusicInstrument: // ソロの楽器 (楽器の音程の音は鳴らさない。当たった音だけ)
                     popupColor = new Color(1f, 0.85f, 0.3f);
                     Sfx.Play("bonus");
                     var inst = target.GetComponentInParent<MusicInstrument>();
                     ShowMessage($"BRAVO!! {(inst != null ? inst.displayName : "SOLO")}\n+{target.points}", 1.5f, popupColor);
                     break;
-                case TargetKind.MusicNote: // 五線譜の音符 (その高さの音が鳴る)
+                case TargetKind.MusicNote: // 五線譜の音符 (高さの音は鳴らさない。当たった音だけ)
                     popupColor = target.points >= 400 ? new Color(1f, 0.85f, 0.3f) : new Color(0.75f, 0.9f, 1f);
                     if (concertHall != null) concertHall.OnNoteHit(target);
                     break;
@@ -1243,7 +1252,7 @@ namespace ShootingGallery
         void AwardPoints(int points, Vector3 pos, Color color, float size)
         {
             if (State != GameState.Playing || points <= 0) return;
-            Score += points;
+            AddScore(points);
             ScorePopup.Spawn(font, pos, $"+{points}", color, size);
         }
 

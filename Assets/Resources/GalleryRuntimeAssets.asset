@@ -16,6 +16,20 @@ MonoBehaviour:
   museumBgm: {fileID: 8300000, guid: 13a288e62f6d4694487f684d4b15b9fc, type: 3}
   concertBgm: {fileID: 8300000, guid: 8842c2418927dcc4abac8dd9cf0c405a, type: 3}
   skyBgm: {fileID: 8300000, guid: c558ea6324daa474e8af19e329f674d3, type: 3}
+  festivalBgm: {fileID: 8300000, guid: 15bf51e7ac4a48a45882f1c3a8a35791, type: 3}
+  ghostBgm: {fileID: 8300000, guid: 3f15560ffda9b2c448541382cb83c4cc, type: 3}
+  kaijuBgm: {fileID: 8300000, guid: bffa995f066c7e644b4c0a56de531eac, type: 3}
+  mineBgm: {fileID: 8300000, guid: 1d70d26845710fd4896783b2b7faee18, type: 3}
+  navalBgm: {fileID: 8300000, guid: 3c896c178d226b249946d56450fd09ab, type: 3}
+  westernBgm: {fileID: 8300000, guid: cbec37a990aa6d94e9ff36504477e185, type: 3}
+  spaceBgm: {fileID: 8300000, guid: 9136b6a408fcf33439994b59d1e78734, type: 3}
+  submarineBgm: {fileID: 8300000, guid: a19bcc4a2d1155a44abb18aec3e5eb4b, type: 3}
+  ninjaBgm: {fileID: 8300000, guid: c04d0387ad546294088db0d863d85d31, type: 3}
+  unknownBgm: {fileID: 8300000, guid: 4d8262226f3a1c94c8982e4853adc667, type: 3}
+  revolverShot: {fileID: 8300000, guid: 26f3f49adf370a7488fec76a5dff3f0d, type: 3}
+  revolverReload: {fileID: 8300000, guid: e47b59fccf277ab449cc3c2e3d48b3de, type: 3}
+  roundBgm: {fileID: 8300000, guid: e37a4cc308e971641be6baa2eaa517e9, type: 3}
+  pocochiImage: {fileID: 2800000, guid: a3ae682e2292a6e45983c93ce5104b97, type: 3}
   concertBeatMap: {fileID: 4900000, guid: 94913ff248bbd764caa4cac98736f58e, type: 3}
   shaders:
   - {fileID: 4800000, guid: fac2f7e847b9ca742aaf4fa4a26e3bd8, type: 3}

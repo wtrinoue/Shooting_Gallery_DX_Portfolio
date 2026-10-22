@@ -68,7 +68,7 @@ namespace ShootingGallery
                     return new WeaponDef { displayName = "CORK GUN", fireInterval = 0.2f, automatic = false, pellets = 1, range = 30f, projectile = true, projectileSpeed = 24f, projectileGravity = 1.5f, magazine = 1, reloadTime = 0.8f, reloadGauge = true };
                 case WeaponType.Poi: // 夏祭りモード (金魚すくい)。ポイを向けた所へ輪投げと同じ放物線で投げ入れる。確率ですくえたり破れたりする。投げたら次のポイが来るまで待つ (ゲージ)
                     return new WeaponDef { displayName = "POI", fireInterval = 0.2f, automatic = false, pellets = 1, range = 20f, projectile = true, projectileSpeed = 6.5f, projectileGravity = 6f, magazine = 1, reloadTime = 1.4f, reloadGauge = true };
-                case WeaponType.Coin: // 夏祭りモード (食べ物の屋台)。お金をまっすぐ投げて、当たったメニューの板の料理を買う (スコアがお金)。白いレーザーで狙う
+                case WeaponType.Coin: // 夏祭りモード (食べ物の屋台)。お金をまっすぐ投げて、当たったメニューの板の料理を買う (お金は夏祭りで稼いだ分)。白いレーザーで狙う
                     return new WeaponDef { displayName = "COIN", fireInterval = 0.35f, automatic = false, pellets = 1, range = 25f, projectile = true, projectileSpeed = 16f, projectileGravity = 0f };
                 case WeaponType.Flashlight: // 幽霊モード専用。トリガーを引いている間だけ光り、照らした的を倒す。電池が減り、使わないと回復する (GunController)
                     return new WeaponDef { displayName = "FLASHLIGHT", fireInterval = 0.1f, automatic = true, pellets = 1, range = 34f }; // (遠くの敵まで届く)

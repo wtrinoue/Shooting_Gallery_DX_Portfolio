@@ -111,7 +111,7 @@ namespace ShootingGallery
         [Header("BGM (コードで作る、ふしぎで明るいオルゴールの曲)")]
         [Range(0f, 1f)] public float bgmVolume = 0.35f;
         /// <summary>このモードの効果音 (凍る・ひび・割れる・ワープ・組み上がる…) の大きさ (BGM を聞かせるために小さめ)</summary>
-        public const float SfxVolume = 0.45f;
+        public const float SfxVolume = 0.7f;
 
         public bool IsActive { get; private set; }
         public float TimeLeft => IsActive ? Mathf.Max(0f, duration - (Time.time - startTime)) : 0f;
@@ -183,6 +183,10 @@ namespace ShootingGallery
         static readonly int PortalId = Shader.PropertyToID("_CosmosPortal");
         static readonly int PortalDirId = Shader.PropertyToID("_CosmosPortalDir");
         const float PortalNone = 0f, PortalInside = 1f, PortalOutside = 2f, PortalAll = 3f;
+        // 輪が目からこの距離 (m) より近い間は、輪の中かどうかで描き分けずに、星空を全部描く。
+        // (輪の面が目のすぐそばを通る時、左右の目・頭の動きで「輪の中を通して見ているか」の判定が1フレームだけ入れ替わり、
+        //  元の世界が一瞬ちかっと見えてしまうため。輪はとても大きいので、近い間は視界がもともと全部星空で、見た目は変わらない)
+        const float PortalNear = 0.8f;
 
         void Awake()
         {
@@ -484,7 +488,8 @@ namespace ShootingGallery
             for (float t = 0f; t < 1f; t += Time.deltaTime / Mathf.Max(0.05f, holeApproachTime))
             {
                 bigHole.position = head + dir * (holeDistance * (1f - t * t));
-                SetPortal(bigHole.position, dir, holeRadius, PortalInside);
+                float ahead = holeDistance * (1f - t * t);
+                SetPortal(bigHole.position, dir, holeRadius, ahead < PortalNear ? PortalAll : PortalInside); // (目のすぐ近くでは、全部星空に)
                 yield return null;
             }
 
@@ -495,9 +500,10 @@ namespace ShootingGallery
             for (float t = 0f; t < 1f; t += Time.deltaTime / Mathf.Max(0.05f, holeCloseTime))
             {
                 float s = Mathf.Max(0.001f, 1f - t * t * t);
-                bigHole.position = head - dir * (passDistance * (1f - (1f - t) * (1f - t)));
+                float behind = passDistance * (1f - (1f - t) * (1f - t));
+                bigHole.position = head - dir * behind;
                 bigHole.localScale = holeScale * s;
-                SetPortal(bigHole.position, dir, holeRadius * s, PortalOutside);
+                SetPortal(bigHole.position, dir, holeRadius * s, behind < PortalNear ? PortalAll : PortalOutside); // (目のすぐ近くでは、全部星空に)
                 yield return null;
             }
             bigHole.gameObject.SetActive(false);

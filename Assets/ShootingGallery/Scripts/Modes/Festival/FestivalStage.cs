@@ -65,10 +65,10 @@ namespace ShootingGallery
         [Tooltip("すくえた金魚を入れるお椀の中 (水面のあたり)")]
         public Transform scoopBowl;
 
-        [Header("食べ物の屋台 (この世界ではスコアがお金)")]
+        [Header("食べ物の屋台 (お金は夏祭りに入ってから稼いだ分。スコアとは別)")]
         [Tooltip("買った物を並べる、屋台の前の机の上の置き場所")]
         public Transform[] tableSlots;
-        [Tooltip("ON: 買うとお金 (スコア) が減る。OFF: 値段の分だけスコアが増える")]
+        [Tooltip("ON: 買うとお金 (夏祭りで稼いだ分) が減る。OFF: 値段の分だけスコアが増える")]
         public bool spendMoneyOnFood = true;
         [Tooltip("食べ物の屋台のカウンターに立てた残高のパネルの数字 (今のお金 = スコア)")]
         public TextMesh balanceText;
@@ -271,11 +271,11 @@ namespace ShootingGallery
             }
         }
 
-        // 残高のパネル: お金 (スコア) が変わった時だけ書き換える
+        // 残高のパネル: お金 (夏祭りで稼いだ分) が変わった時だけ書き換える
         void UpdateBalance()
         {
             if (balanceText == null || GameManager.I == null) return;
-            int money = GameManager.I.Score;
+            int money = GameManager.I.FestivalMoney;
             if (money == shownBalance) return;
             shownBalance = money;
             balanceText.text = "¥" + money.ToString("N0", System.Globalization.CultureInfo.InvariantCulture);
@@ -514,11 +514,11 @@ namespace ShootingGallery
 
         // ---- 食べ物の屋台 ----
 
-        /// <summary>お金が料理に当たった: お金 (スコア) が足りれば買う (料理の的に当たる)。足りなければ買えない</summary>
+        /// <summary>お金が料理に当たった: お金 (夏祭りで稼いだ分) が足りれば買う (料理の的に当たる)。足りなければ買えない</summary>
         public void TryBuy(Target food, Vector3 point)
         {
             var gm = GameManager.I;
-            if (spendMoneyOnFood && gm != null && gm.Score < food.points)
+            if (spendMoneyOnFood && gm != null && gm.FestivalMoney < food.points)
             {
                 Sfx.Play("snipermiss");
                 Popup(point, $"NEED ¥{food.points}\nWIN PRIZES TO EARN!", new Color(1f, 0.4f, 0.35f), 0.15f);
