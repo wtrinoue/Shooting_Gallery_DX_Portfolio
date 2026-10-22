@@ -77,18 +77,34 @@ namespace ShootingGallery
         Target BuildStartTarget(Transform stall)
         {
             var root = Group(stall, "Target_Start");
-            root.localPosition = new Vector3(-0.5f, 1.1f, -0.6f); // 右に WORLD GATE の的
+            root.localPosition = new Vector3(-0.5f, 0f, -0.6f); // 右に WORLD GATE の的
             var target = root.gameObject.AddComponent<Target>();
             target.kind = TargetKind.Start;
             target.points = 0;
             target.respawnDelay = 1f;
             var pivot = Group(root, "Pivot");
             target.visual = pivot;
-            Prim(PrimitiveType.Cube, "Stand", pivot, new Vector3(0f, 0.15f, 0f), new Vector3(0.05f, 0.3f, 0.05f), Mat("Target_Stand", new Color(0.3f, 0.3f, 0.32f)));
+            const float y = TitleTargetY;
+            TitleTargetStand(pivot, y + 0.62f - 0.55f / 2f);
             var red = Mat("Target_StartRed", new Color(0.85f, 0.1f, 0.1f), new Color(0.3f, 0f, 0f));
-            Bullseye(pivot, 0.62f, 0.55f, red, Mat("Target_White", Color.white), red);
-            MakeText(pivot, "Label", "START", new Vector3(0f, 0.62f, -0.03f), 0.13f, new Color(0.1f, 0.1f, 0.1f));
+            Bullseye(pivot, y + 0.62f, 0.55f, red, Mat("Target_White", Color.white), red);
+            MakeText(pivot, "Label", "START", new Vector3(0f, y + 0.62f, -0.03f), 0.13f, new Color(0.1f, 0.1f, 0.1f));
             return target;
+        }
+
+        // タイトルの的 (START / WORLD GATE) の、屋台の床から円の下までの高さの目安 (円の中心は床から 1.72m)
+        const float TitleTargetY = 1.1f;
+
+        /// <summary>
+        /// タイトルの的の棒: 屋台の床の重しから、円の下 (top) までまっすぐ立てる。
+        /// 的は根元 (床) を軸に奥へ倒れるので、棒も重しも見た目 (pivot) ごと倒れて消える
+        /// </summary>
+        void TitleTargetStand(Transform pivot, float top)
+        {
+            var stand = Mat("Target_Stand", new Color(0.3f, 0.3f, 0.32f));
+            Prim(PrimitiveType.Cube, "Stand", pivot, new Vector3(0f, top / 2f, 0f), new Vector3(0.05f, top + 0.02f, 0.05f), stand);
+            Prim(PrimitiveType.Cylinder, "StandBase", pivot, new Vector3(0f, 0.03f, 0f), new Vector3(0.26f, 0.03f, 0.26f), Mat("Target_StandBase", new Color(0.18f, 0.18f, 0.2f)), false);
+            Prim(PrimitiveType.Cube, "StandCollar", pivot, new Vector3(0f, 0.1f, 0f), new Vector3(0.09f, 0.08f, 0.09f), stand, false);
         }
 
         /// <summary>同心円の的。外側の円にだけ BoxCollider を付ける。center が null なら2色。</summary>

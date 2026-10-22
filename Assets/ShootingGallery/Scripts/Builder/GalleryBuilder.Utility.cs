@@ -96,7 +96,8 @@ namespace ShootingGallery
             return mat;
         }
 
-        Material LanternMat() => Mat("Lantern", new Color(1f, 0.55f, 0.2f), new Color(1.6f, 0.6f, 0.15f));
+        // 赤い提灯の胴。光らせすぎると蛇腹の陰影が消えるので、光は控えめにする
+        Material LanternMat() => Mat("Lantern", new Color(0.92f, 0.22f, 0.13f), new Color(0.75f, 0.16f, 0.05f), false, 0.35f);
 
         /// <summary>URP マテリアルを生成 (同じ名前なら使い回す)。matte = true なら、まわりの景色の映り込みとハイライトを切る (曲面でも、平らな部品と同じ見た目になる)</summary>
         protected Material Mat(string name, Color color, Color? emission = null, bool unlit = false, float smoothness = 0.25f, bool matte = false)

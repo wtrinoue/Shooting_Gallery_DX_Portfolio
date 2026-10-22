@@ -25,8 +25,10 @@ namespace ShootingGallery
         public Stall[] debugStalls;
         [Tooltip("WORLD GATE の輪の屋台 (1段だけの屋台 6軒。1軒目が正面)。WORLD GATE の間はメイン屋台・フィーバー屋台の代わりにこれを使う")]
         public Stall[] gateStalls;
-        [Tooltip("プレイヤー(中心)からメイン屋台までの距離。最初のステージの輪の半径")]
+        [Tooltip("プレイヤー(中心)からメイン屋台までの距離 (フィーバー外)。輪の半径はこれより小さくならない")]
         public float stallRadius = 3.5f;
+        [Tooltip("輪に並べた時の、隣どうしの屋台 (屋根の手前の角・提灯) の間のすき間 (m)。輪の半径はこれが空くように決まる")]
+        public float stallGap = 0.05f;
         public Target startTarget;
         [Tooltip("タイトルの WORLD GATE の的 (START の横)。撃つと、別の世界へ飛ぶ的が並んだ6軒の屋台に囲まれる")]
         public Target worldGateTarget;

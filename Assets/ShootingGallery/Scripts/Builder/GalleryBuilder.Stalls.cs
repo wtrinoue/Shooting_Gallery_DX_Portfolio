@@ -85,24 +85,173 @@ namespace ShootingGallery
 
             Prim(PrimitiveType.Cube, "Counter", t, new Vector3(0f, 0.5f, -1.2f), new Vector3(2.4f * wide, 1.0f, 0.4f), wood);
             Prim(PrimitiveType.Cube, "CounterTop", t, new Vector3(0f, 1.02f, -1.2f), new Vector3(2.5f * wide, 0.05f, 0.5f), woodDark);
+            // カウンターの前に掛けた布 (屋台の色に、白い線を上下に)
+            Prim(PrimitiveType.Cube, "CounterCloth", t, new Vector3(0f, 0.62f, -1.405f), new Vector3(2.4f * wide, 0.5f, 0.01f), cloth, false);
+            foreach (float y in new[] { 0.83f, 0.41f })
+                Prim(PrimitiveType.Cube, "CounterClothLine", t, new Vector3(0f, y, -1.412f), new Vector3(2.4f * wide, 0.025f, 0.005f), white, false);
 
             float px = 1.7f * wide; // 柱の位置
             Prim(PrimitiveType.Cube, "BackWall", t, new Vector3(0f, 1.4f, 0.8f), new Vector3(3.6f * wide, 2.8f, 0.08f), white);
             foreach (var p in new[] { new Vector3(-px, 0f, -0.9f), new Vector3(px, 0f, -0.9f), new Vector3(-px, 0f, 0.75f), new Vector3(px, 0f, 0.75f) })
+            {
                 Prim(PrimitiveType.Cylinder, "Pillar", t, p + Vector3.up * 1.4f, new Vector3(0.1f, 1.4f, 0.1f), woodDark);
+                Prim(PrimitiveType.Cube, "PillarBase", t, p + Vector3.up * 0.06f, new Vector3(0.17f, 0.12f, 0.17f), wood, false);
+            }
             // 屋根と看板は当たり判定なし (空の UFO を狙う弾をさえぎらないように)
             Prim(PrimitiveType.Cube, "Roof", t, new Vector3(0f, 2.8f, -0.05f), new Vector3(3.7f * wide, 0.08f, 1.8f), woodDark, false);
 
+            // 幕: 縦じまの布の下のふちを、波形 (半円が並ぶ形) にする
             int awnings = Mathf.Max(2, Mathf.RoundToInt(8 * wide));
             float awningW = 3.6f * wide / awnings; // 幕は奥の壁と同じ幅に並べる (普通の屋台は 0.45m × 8枚)
             for (int i = 0; i < awnings; i++)
-                RemoveCollider(Prim(PrimitiveType.Cube, $"Awning_{i}", t, new Vector3(-1.8f * wide + (i + 0.5f) * awningW, 2.58f, -0.95f), new Vector3(awningW, 0.38f, 0.04f), i % 2 == 0 ? cloth : white));
+            {
+                var mat = i % 2 == 0 ? cloth : white;
+                float x = -1.8f * wide + (i + 0.5f) * awningW;
+                RemoveCollider(Prim(PrimitiveType.Cube, $"Awning_{i}", t, new Vector3(x, 2.58f, -0.95f), new Vector3(awningW, 0.38f, 0.04f), mat));
+                var scallop = Prim(PrimitiveType.Cylinder, $"AwningScallop_{i}", t, new Vector3(x, 2.39f, -0.95f), new Vector3(awningW, 0.015f, 0.24f), mat, false);
+                scallop.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            }
 
             foreach (float x in new[] { -px, px })
-                RemoveCollider(Prim(PrimitiveType.Sphere, "Lantern", t, new Vector3(x, 2.2f, -1.0f), new Vector3(0.28f, 0.36f, 0.28f), LanternMat()));
+                BuildLantern(t, new Vector3(x, 2.2f, -0.9f), 1.08f - 0.9f, woodDark);
 
-            Prim(PrimitiveType.Cube, "SignBoard", t, new Vector3(0f, 3.15f, -0.9f), new Vector3(2.6f * wide, 0.55f, 0.06f), Mat("Sign", new Color(0.1f, 0.08f, 0.06f)), false);
-            MakeText(t, "SignText", sign, new Vector3(0f, 3.15f, -0.94f), 0.22f, new Color(1f, 0.85f, 0.35f));
+            BuildSignBoard(t, sign, wide, cloth, wood, woodDark);
+        }
+
+        /// <summary>
+        /// 赤い提灯 (蛇腹の胴と、上下の黒いふた・つる)。柱から前へ突き出した腕 (根元 armRoot) に吊るす。当たり判定なし
+        /// </summary>
+        void BuildLantern(Transform t, Vector3 armRoot, float reach, Material arm)
+        {
+            const float Diameter = 0.3f, Height = 0.32f;
+            var black = Mat("Lantern_Cap", new Color(0.05f, 0.045f, 0.04f), null, false, 0.75f);
+            var metal = Mat("Lantern_Wire", new Color(0.7f, 0.7f, 0.72f), null, false, 0.6f);
+
+            // 柱から前へ出した腕と、そこから下がる吊り金具
+            var hook = armRoot + Vector3.back * reach;
+            Prim(PrimitiveType.Cube, "LanternArm", t, (armRoot + hook) / 2f, new Vector3(0.025f, 0.025f, reach + 0.02f), arm, false);
+
+            float capH = 0.045f;
+            var center = hook + Vector3.down * (0.03f + 0.05f + capH + Height / 2f); // 吊り金具 0.03 + つる 0.05 + ふた + 胴の半分
+            float top = center.y + Height / 2f;
+            float bottom = center.y - Height / 2f;
+
+            MeshObj(t, "Lantern", LanternMesh(), center, LanternMat()).transform.localScale = new Vector3(Diameter, Height, Diameter);
+            // 上のふた (大きめ) と下のふた。ふちに銀の線、正面に鋲
+            Prim(PrimitiveType.Cylinder, "LanternCapTop", t, new Vector3(center.x, top + capH / 2f, center.z), new Vector3(0.16f, capH / 2f, 0.16f), black, false);
+            Prim(PrimitiveType.Cylinder, "LanternCapTopRim", t, new Vector3(center.x, top + 0.004f, center.z), new Vector3(0.165f, 0.004f, 0.165f), metal, false);
+            Prim(PrimitiveType.Sphere, "LanternRivet", t, new Vector3(center.x, top + capH / 2f, center.z - 0.08f), Vector3.one * 0.016f, metal, false);
+            Prim(PrimitiveType.Cylinder, "LanternCapBottom", t, new Vector3(center.x, bottom - 0.0175f, center.z), new Vector3(0.14f, 0.0175f, 0.14f), black, false);
+            Prim(PrimitiveType.Cylinder, "LanternCapBottomRim", t, new Vector3(center.x, bottom - 0.004f, center.z), new Vector3(0.145f, 0.004f, 0.145f), metal, false);
+
+            // つる: ふたの左右から山形に上がって、吊り金具で1つになる
+            float capTop = top + capH;
+            var apex = new Vector3(center.x, capTop + 0.05f, center.z);
+            foreach (float s in new[] { -1f, 1f })
+            {
+                var foot = new Vector3(center.x + s * 0.075f, capTop - 0.01f, center.z);
+                var wire = Prim(PrimitiveType.Cube, "LanternBail", t, (foot + apex) / 2f, new Vector3(0.006f, Vector3.Distance(foot, apex), 0.006f), metal, false);
+                wire.transform.localRotation = Quaternion.FromToRotation(Vector3.up, apex - foot);
+            }
+            Prim(PrimitiveType.Cube, "LanternHook", t, (apex + hook) / 2f, new Vector3(0.008f, hook.y - apex.y + 0.01f, 0.008f), metal, false);
+        }
+
+        /// <summary>
+        /// 提灯の胴のメッシュ (直径 1・高さ 1。上下は口が開いていて、ふたでふさぐ)。
+        /// 丸い胴に細かい溝を横に何本も入れて、竹ひごの蛇腹に見せる
+        /// </summary>
+        Mesh LanternMesh()
+        {
+            const string name = "Lantern_Ribbed";
+            if (meshes.TryGetValue(name, out var cached)) return cached;
+            const int Ribs = 22, PerRib = 4, Segments = 28;
+            const float EndRadius = 0.24f; // 上下の口の半径 (ふたより少し小さく)
+            float k = 1f - (EndRadius / 0.5f) * (EndRadius / 0.5f);
+
+            int rows = Ribs * PerRib + 1;
+            var verts = new List<Vector3>();
+            var tris = new List<int>();
+            for (int i = 0; i < rows; i++)
+            {
+                float y = -0.5f + (float)i / (rows - 1);
+                float r = 0.5f * Mathf.Sqrt(1f - k * (2f * y) * (2f * y));
+                // 1本の節の中で、境目 (溝) をへこませ、真ん中をふくらませる
+                int phase = i % PerRib;
+                r *= phase == 0 ? 0.94f : phase == 2 ? 1f : 0.985f;
+                for (int j = 0; j < Segments; j++)
+                {
+                    float a = j * Mathf.PI * 2f / Segments;
+                    verts.Add(new Vector3(Mathf.Cos(a) * r, y, Mathf.Sin(a) * r));
+                }
+            }
+            for (int i = 0; i < rows - 1; i++)
+                for (int j = 0; j < Segments; j++)
+                {
+                    int a = i * Segments + j, b = i * Segments + (j + 1) % Segments;
+                    int c = a + Segments, d = b + Segments;
+                    tris.Add(a); tris.Add(c); tris.Add(b); // 外向きが表
+                    tris.Add(b); tris.Add(c); tris.Add(d);
+                }
+
+            var mesh = new Mesh { name = name };
+            mesh.SetVertices(verts);
+            mesh.SetTriangles(tris, 0);
+            mesh.RecalculateNormals();
+            mesh.RecalculateBounds();
+            mesh = SaveMeshIfEditing(mesh, name);
+            meshes[name] = mesh;
+            return mesh;
+        }
+
+        /// <summary>
+        /// 看板: 木の額縁に、細い金の線で縁取った黒い板。上には小さな切妻屋根、左右には屋台の色の丸い紋。屋根の上に2本の脚で立てる
+        /// </summary>
+        void BuildSignBoard(Transform t, string sign, float wide, Material cloth, Material wood, Material woodDark)
+        {
+            const float Y = 3.32f, Z = -0.9f, H = 0.56f; // 額縁の下に、屋根から立てた脚が少し見える高さ
+            float w = 2.5f * wide;
+            var gold = Mat("Gold", new Color(1f, 0.78f, 0.25f), new Color(0.3f, 0.2f, 0f));
+            var panel = Mat("Sign", new Color(0.1f, 0.08f, 0.06f));
+
+            // 脚 (屋根から看板の下まで)
+            foreach (float s in new[] { -1f, 1f })
+                Prim(PrimitiveType.Cube, "SignPost", t, new Vector3(s * (w / 2f - 0.25f), (2.84f + Y) / 2f, Z), new Vector3(0.08f, Y - 2.84f, 0.06f), woodDark, false);
+
+            // 額縁と板と金の縁取り
+            Prim(PrimitiveType.Cube, "SignFrame", t, new Vector3(0f, Y, Z), new Vector3(w + 0.14f, H + 0.14f, 0.07f), woodDark, false);
+            Prim(PrimitiveType.Cube, "SignBoard", t, new Vector3(0f, Y, Z - 0.04f), new Vector3(w, H, 0.02f), panel, false);
+            float lz = Z - 0.053f, iw = w - 0.08f, ih = H - 0.08f;
+            Prim(PrimitiveType.Cube, "SignLine_T", t, new Vector3(0f, Y + ih / 2f, lz), new Vector3(iw, 0.012f, 0.005f), gold, false);
+            Prim(PrimitiveType.Cube, "SignLine_B", t, new Vector3(0f, Y - ih / 2f, lz), new Vector3(iw, 0.012f, 0.005f), gold, false);
+            foreach (float s in new[] { -1f, 1f })
+                Prim(PrimitiveType.Cube, "SignLine_S", t, new Vector3(s * iw / 2f, Y, lz), new Vector3(0.012f, ih, 0.005f), gold, false);
+            MakeText(t, "SignText", sign, new Vector3(0f, Y, Z - 0.06f), 0.2f, new Color(1f, 0.85f, 0.35f));
+
+            // 左右の丸い紋 (額縁の外へはみ出す飾り。屋台の色に金の輪)
+            foreach (float s in new[] { -1f, 1f })
+            {
+                var c = new Vector3(s * (w / 2f + 0.2f), Y, Z - 0.05f);
+                var ring = Prim(PrimitiveType.Cylinder, "SignCrestRing", t, c, new Vector3(0.36f, 0.012f, 0.36f), gold, false);
+                ring.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+                var crest = Prim(PrimitiveType.Cylinder, "SignCrest", t, c + Vector3.back * 0.008f, new Vector3(0.3f, 0.012f, 0.3f), cloth, false);
+                crest.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+                Prim(PrimitiveType.Sphere, "SignCrestDot", t, c + Vector3.back * 0.02f, Vector3.one * 0.08f, gold, false);
+            }
+
+            // 小さな切妻屋根 (2枚の板が真ん中で合わさる) と、てっぺんの飾り
+            float half = w / 2f + 0.4f, rise = 0.16f, roofY = Y + H / 2f + 0.09f; // 丸い紋の上まで覆う幅
+            float len = Mathf.Sqrt(half * half + rise * rise) + 0.04f;
+            float tilt = Mathf.Atan2(rise, half) * Mathf.Rad2Deg;
+            foreach (float s in new[] { -1f, 1f })
+            {
+                var plank = Prim(PrimitiveType.Cube, "SignRoof", t, new Vector3(s * half / 2f, roofY + rise / 2f, Z), new Vector3(len, 0.05f, 0.24f), woodDark, false);
+                plank.transform.localRotation = Quaternion.Euler(0f, 0f, -s * tilt);
+                var edge = Prim(PrimitiveType.Cube, "SignRoofEdge", t, new Vector3(s * half / 2f, roofY + rise / 2f - 0.03f, Z - 0.12f), new Vector3(len, 0.03f, 0.015f), cloth, false);
+                edge.transform.localRotation = Quaternion.Euler(0f, 0f, -s * tilt);
+            }
+            Prim(PrimitiveType.Sphere, "SignRoofTop", t, new Vector3(0f, roofY + rise + 0.04f, Z), Vector3.one * 0.09f, gold, false);
+            // 屋根と額縁の間の小さな束 (板を支える)
+            Prim(PrimitiveType.Cube, "SignRoofStrut", t, new Vector3(0f, (Y + H / 2f + 0.07f + roofY + rise) / 2f, Z), new Vector3(0.05f, roofY + rise - (Y + H / 2f + 0.07f), 0.05f), wood, false);
         }
 
         // ---- メイン: ひな壇 (特殊な的はここにだけある) ----

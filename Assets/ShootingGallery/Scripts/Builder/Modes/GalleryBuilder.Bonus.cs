@@ -8,8 +8,8 @@ namespace ShootingGallery
     /// </summary>
     public partial class GalleryBuilder
     {
-        // 足元の丸い穴 (ハッチ) の半径。屋台6軒の輪 (半径 3.5m。屋台は中心から 2.3m 〜 4.3m) の、屋台の奥行きの半分くらいまで重なる大きさ。
-        // 時間がたって輪が広がっても、ハッチは広がらない
+        // 足元の丸い穴 (ハッチ) の半径。メイン屋台 (半径 3.5m。屋台は中心から 2.3m 〜 4.3m) の、屋台の奥行きの半分くらいまで重なる大きさ。
+        // フィーバーで輪になると屋台は外へ下がる (GameManager.RingRadius) が、ハッチは広がらない
         const float PitRadius = 3.3f;
         // 地面の厚さ。絞り羽根はこの厚さの中を回り、開くと周りの地面の下に隠れる
         const float GroundThickness = 0.2f;

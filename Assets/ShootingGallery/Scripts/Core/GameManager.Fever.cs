@@ -39,14 +39,24 @@ namespace ShootingGallery
             return Mathf.Clamp(stageStallCounts[Mathf.Clamp(Stage, 0, stageStallCounts.Length - 1)], 2, feverStalls.Length + 1);
         }
 
+        // 屋台の外形 (BuildStallFrame / BuildDeluxeFrame の寸法)。輪に並べた時に隣とぶつかりやすいのは、屋根の手前の角と、柱の前に吊るした提灯
+        const float StallHalfWidth = 1.86f;  // 屋根の幅の半分 (豪華屋台の屋根の縁 3.72m)
+        const float StallFrontDepth = 0.98f; // 屋台の中心から屋根・幕の手前の端まで
+        const float LanternX = 1.7f, LanternDepth = 1.08f, LanternRadius = 0.15f; // 提灯の中心 (横・手前) と半径
+
         /// <summary>
-        /// n 軒を輪に並べるときの半径。最初のステージの屋台どうしの間隔 (弦の長さ) を保つように広げる。
+        /// n 軒を輪に並べるときの半径。隣どうしの屋台の間が stallGap だけ空くように決める
+        /// (屋台は扇形の中に収め、扇の境目の線から屋根の角・提灯までを stallGap / 2 以上離す)。メイン屋台だけの時の stallRadius より内側にはしない。
         /// </summary>
         float RingRadius(int n)
         {
-            int baseCount = stageStallCounts != null && stageStallCounts.Length > 0 ? Mathf.Max(2, stageStallCounts[0]) : 6;
-            float r = stallRadius * Mathf.Sin(Mathf.PI / baseCount) / Mathf.Sin(Mathf.PI / n);
-            return Mathf.Max(stallRadius, r);
+            if (n < 2) return stallRadius;
+            float half = Mathf.PI / n, sin = Mathf.Sin(half), cos = Mathf.Cos(half);
+            float margin = stallGap * 0.5f;
+            // 点 (横 x, 中心からの距離 R - depth) と扇の境目の線との距離 = (R - depth)·sin − x·cos
+            float roof = (StallHalfWidth * cos + margin) / sin + StallFrontDepth;
+            float lantern = (LanternX * cos + LanternRadius + margin) / sin + LanternDepth;
+            return Mathf.Max(stallRadius, Mathf.Max(roof, lantern));
         }
 
         /// <summary>
