@@ -56,11 +56,26 @@ namespace ShootingGallery
         [Tooltip("宝石を割ってから、別の宝石が光り始めるまでの秒数")]
         public Vector2 gemInterval = new Vector2(0.8f, 1.8f);
 
+        [Header("天井から落ちてくる物")]
+        [Tooltip("洞窟 (やぐらの上が原点)。天井・床の高さはこの座標")]
+        public Transform caveRoot;
+        public float ceilingY = 10f;
+        public float floorY = -4f;
+        [Tooltip("天井からちょろちょろ崩れ落ちる小石 (隠してある。使い回す)")]
+        public Transform[] fallingRocks;
+        [Tooltip("小石がこぼれ始める間隔 (秒)。1回に何粒か続けてこぼれる")]
+        public Vector2 trickleInterval = new Vector2(0.5f, 1.6f);
+        [Tooltip("ときどき天井から落ちてくる宝石 (床に当たるまでに撃てば点数)")]
+        public MineGem[] fallingGems;
+        public Vector2 gemDropInterval = new Vector2(2f, 4f);
+
         [Header("洞窟の雰囲気 (きらきら・ゆらめく明かり・舞うほこり)")]
         [Tooltip("結晶や鉱脈の上で、ときどきキラッと光る十字の光 (大きさが脈打つ)")]
         public Transform[] sparkles;
-        [Tooltip("ゆらゆらゆらめくランタンの明かり")]
+        [Tooltip("ゆらゆらゆらめくランタン・たいまつの明かり")]
         public Light[] flickerLights;
+        [Tooltip("たいまつの炎 (大きさがゆらゆら揺れる)")]
+        public Transform[] flames;
         [Tooltip("明かりの中をゆっくり漂うほこり")]
         public Transform[] motes;
 
@@ -115,7 +130,14 @@ namespace ShootingGallery
             foreach (var g in gems) if (g != null && g.pointLabel != null) labels.Add(g.pointLabel.GetComponent<Renderer>());
             foreach (var c in loopCarts) if (c != null) foreach (var l in c.pointLabels) if (l != null) labels.Add(l.GetComponent<Renderer>());
             foreach (var c in tunnelCarts) if (c != null) foreach (var l in c.pointLabels) if (l != null) labels.Add(l.GetComponent<Renderer>());
+            if (fallingGems == null) fallingGems = new MineGem[0];
+            foreach (var g in fallingGems) if (g != null && g.pointLabel != null) labels.Add(g.pointLabel.GetComponent<Renderer>());
             labelRenderers = labels.ToArray();
+            if (fallingRocks == null) fallingRocks = new Transform[0];
+            rockVel = new float[fallingRocks.Length];
+            rockSpin = new Vector3[fallingRocks.Length];
+            rockScale = new Vector3[fallingRocks.Length];
+            for (int i = 0; i < fallingRocks.Length; i++) rockScale[i] = fallingRocks[i].localScale;
             SetStageVisible(false);
             if (digCover != null) digCover.SetActive(false);
         }
@@ -307,6 +329,9 @@ namespace ShootingGallery
             hiddenGems.Clear();
             foreach (var g in gems) { g.Hide(); hiddenGems.Add(g); }
             for (int i = 0; i < maxGems; i++) ShowRandomGem();
+            foreach (var g in fallingGems) if (g != null) g.Hide();
+            nextTrickle = Time.time + Random.Range(trickleInterval.x, trickleInterval.y);
+            nextGemDrop = Time.time + Random.Range(gemDropInterval.x, gemDropInterval.y);
         }
 
         void StopTargets()
@@ -315,6 +340,8 @@ namespace ShootingGallery
             foreach (var c in loopCarts) if (c != null) c.Stop();
             foreach (var c in tunnelCarts) if (c != null) c.Stop();
             foreach (var g in gems) if (g != null) g.Hide();
+            foreach (var g in fallingGems) if (g != null) g.Hide();
+            pendingDrops.Clear();
             hiddenGems.Clear();
         }
 
@@ -341,9 +368,137 @@ namespace ShootingGallery
         Vector3[] sparkleScale, moteHome;
         float[] sparklePhase, sparkleRate, lightBase;
 
+        // ---- 天井から落ちてくる物 ----
+
+        float[] rockVel;
+        Vector3[] rockSpin, rockScale;
+        float nextTrickle, nextGemDrop;
+        // これからこぼれる小石 (時刻・天井の場所 (洞窟の座標)・大きさの倍率)、落ちる前に天井がこぼれる宝石 (時刻・場所・宝石)
+        readonly List<(float at, Vector3 spot, float size)> pendingRocks = new List<(float, Vector3, float)>();
+        readonly List<(float at, Vector3 spot, MineGem gem)> pendingDrops = new List<(float, Vector3, MineGem)>();
+
+        bool InCave => player != null && playerStartY - player.localPosition.y > depth - caveRoomHeight;
+
+        // 天井の、ある場所の高さ (洞窟の座標)。縦穴のまわりが一番高く、外へ向かって少し下がる
+        float CeilingAt(float r) => ceilingY + 1f - r * 0.06f;
+
+        Vector3 RandomCeilingSpot(float rMin, float rMax)
+        {
+            float a = Random.Range(0f, Mathf.PI * 2f), r = Random.Range(rMin, rMax);
+            return new Vector3(Mathf.Sin(a) * r, CeilingAt(r), Mathf.Cos(a) * r);
+        }
+
+        void UpdateFalling()
+        {
+            if (caveRoot == null) return;
+            float now = Time.time;
+            bool spawning = IsActive && InCave;
+            // 天井のどこかから、小石がちょろちょろ (ほこりが舞って、何粒か続けてこぼれる。ときどき少し大きな石)
+            if (spawning && now >= nextTrickle)
+            {
+                nextTrickle = now + Random.Range(trickleInterval.x, trickleInterval.y);
+                var spot = RandomCeilingSpot(4f, 24f);
+                Dust(spot, Random.Range(0.4f, 0.8f));
+                int n = Random.Range(2, 6);
+                float t = now + Random.Range(0.05f, 0.2f);
+                for (int i = 0; i < n; i++)
+                {
+                    pendingRocks.Add((t, spot + new Vector3(Random.Range(-0.3f, 0.3f), 0f, Random.Range(-0.3f, 0.3f)), Random.value < 0.12f ? Random.Range(2f, 3f) : Random.Range(0.6f, 1.2f)));
+                    t += Random.Range(0.08f, 0.3f);
+                }
+            }
+            // ときどき宝石が落ちてくる: まず天井がぱらぱらこぼれて (前ぶれ)、少しして宝石が落ちる
+            if (spawning && now >= nextGemDrop && TimeLeft > 5f)
+            {
+                nextGemDrop = now + Random.Range(gemDropInterval.x, gemDropInterval.y);
+                var free = new List<MineGem>();
+                foreach (var g in fallingGems) if (g != null && !g.IsShown && !Pending(g)) free.Add(g);
+                if (free.Count > 0)
+                {
+                    var gem = free[Random.Range(0, free.Count)];
+                    var spot = RandomCeilingSpot(5f, 14f);
+                    Dust(spot, 1f);
+                    Sfx.Play("crack");
+                    for (int i = 0; i < 4; i++) pendingRocks.Add((now + i * 0.12f, spot + new Vector3(Random.Range(-0.4f, 0.4f), 0f, Random.Range(-0.4f, 0.4f)), Random.Range(0.6f, 1f)));
+                    pendingDrops.Add((now + 0.7f, spot, gem));
+                }
+            }
+            for (int i = pendingRocks.Count - 1; i >= 0; i--)
+            {
+                if (now < pendingRocks[i].at) continue;
+                DropRock(pendingRocks[i].spot, pendingRocks[i].size);
+                pendingRocks.RemoveAt(i);
+            }
+            for (int i = pendingDrops.Count - 1; i >= 0; i--)
+            {
+                if (now < pendingDrops[i].at) continue;
+                var (_, spot, gem) = pendingDrops[i];
+                pendingDrops.RemoveAt(i);
+                if (!IsActive) continue;
+                Dust(spot, 0.9f);
+                gem.Drop(caveRoot.TransformPoint(spot + Vector3.down * 0.4f), caveRoot.TransformPoint(new Vector3(0f, floorY + 0.2f, 0f)).y, OnFallingGemBroken, null);
+            }
+            // 落ちている小石を動かす (床に当たったら、小さなほこりを立てて消える)
+            float floorWorld = caveRoot.TransformPoint(new Vector3(0f, floorY, 0f)).y;
+            for (int i = 0; i < fallingRocks.Length; i++)
+            {
+                var r = fallingRocks[i];
+                if (!r.gameObject.activeSelf) continue;
+                rockVel[i] += 9.8f * Time.deltaTime;
+                r.position += Vector3.down * (rockVel[i] * Time.deltaTime);
+                r.Rotate(rockSpin[i] * Time.deltaTime, Space.Self);
+                if (r.position.y > floorWorld) continue;
+                if (r.localScale.x > rockScale[i].x * 1.8f || Random.value < 0.4f) Dust(caveRoot.InverseTransformPoint(r.position), r.localScale.x * 2.5f);
+                r.gameObject.SetActive(false);
+            }
+        }
+
+        bool Pending(MineGem g)
+        {
+            foreach (var d in pendingDrops) if (d.gem == g) return true;
+            return false;
+        }
+
+        void DropRock(Vector3 spot, float size)
+        {
+            for (int i = 0; i < fallingRocks.Length; i++)
+            {
+                var r = fallingRocks[i];
+                if (r.gameObject.activeSelf) continue;
+                r.position = caveRoot.TransformPoint(spot);
+                r.localScale = rockScale[i] * size;
+                r.rotation = Random.rotation;
+                rockVel[i] = Random.Range(0f, 0.6f);
+                rockSpin[i] = Random.insideUnitSphere * 360f;
+                r.gameObject.SetActive(true);
+                return;
+            }
+        }
+
+        // 天井や床で舞うほこり (洞窟の座標)
+        void Dust(Vector3 spot, float size)
+        {
+            if (dirtMaterial != null && caveRoot != null) Explosion.Spawn(caveRoot.TransformPoint(spot), size, dirtMaterial);
+        }
+
+        // 落ちてくる宝石を撃った (点数はもう入っている)
+        void OnFallingGemBroken(MineGem g)
+        {
+            Hits++;
+            GemBroken?.Invoke(g);
+        }
+
+        void HideFalling()
+        {
+            pendingRocks.Clear();
+            pendingDrops.Clear();
+            foreach (var r in fallingRocks) if (r != null) r.gameObject.SetActive(false);
+            foreach (var g in fallingGems) if (g != null) g.Hide();
+        }
+
         void Update()
         {
-            if (stageVisible) UpdateAtmosphere();
+            if (stageVisible) { UpdateAtmosphere(); UpdateFalling(); }
             UpdateLabels();
             if (!IsActive || Time.time < nextTunnel || tunnelTracks == null || tunnelTracks.Length == 0) return;
             nextTunnel = Time.time + Random.Range(tunnelInterval.x, tunnelInterval.y);
@@ -360,6 +515,7 @@ namespace ShootingGallery
         void SetStageVisible(bool visible)
         {
             stageVisible = visible;
+            if (!visible) HideFalling();
             if (showDuringStage != null)
                 foreach (var go in showDuringStage) if (go != null) go.SetActive(visible);
         }
@@ -393,6 +549,14 @@ namespace ShootingGallery
             }
             for (int i = 0; i < flickerLights.Length; i++)
                 flickerLights[i].intensity = lightBase[i] * (0.82f + 0.18f * Mathf.PerlinNoise(time * 3.2f, i * 7.3f) + 0.05f * Mathf.Sin(time * 17f + i));
+            if (flames != null)
+                for (int i = 0; i < flames.Length; i++)
+                {
+                    // 炎は細かく伸び縮みしながら、ゆらゆら揺れる
+                    float n = Mathf.PerlinNoise(time * 6f, i * 3.1f);
+                    flames[i].localScale = new Vector3(0.9f + 0.2f * Mathf.PerlinNoise(time * 5f + 7f, i), 0.8f + 0.45f * n, 0.9f + 0.2f * Mathf.PerlinNoise(time * 5f, i + 11f));
+                    flames[i].localRotation = Quaternion.Euler((Mathf.PerlinNoise(time * 2.5f, i + 3f) - 0.5f) * 16f, 0f, (Mathf.PerlinNoise(time * 2.5f + 5f, i) - 0.5f) * 16f);
+                }
             for (int i = 0; i < motes.Length; i++)
             {
                 float ph = i * 1.37f;

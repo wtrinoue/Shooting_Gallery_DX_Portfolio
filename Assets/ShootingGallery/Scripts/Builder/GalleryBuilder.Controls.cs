@@ -3,9 +3,10 @@ using UnityEngine;
 namespace ShootingGallery
 {
     /// <summary>
-    /// 操作方法の看板の生成。メイン屋台の反対側 (プレイヤーの背中側) に立ち、タイトルの間だけ表示される
-    /// (ゲーム中はフィーバーの屋台が並ぶ場所なので GameManager が隠す)。
-    /// 左右のコントローラーの絵と、ボタンごとの操作を色分けして書く (ボタンの色は長押しのインジケーターの色と同じ)。
+    /// タイトルの看板の生成: メイン屋台の左に操作方法の看板、右にクレジット (ライセンス全文) の看板。
+    /// どちらも屋台と同じように輪の上に立ってプレイヤーの方を向き、タイトルの間だけ表示される
+    /// (ゲーム中はフィーバーの屋台が並ぶ場所なので GameManager が2枚まとめて隠す)。
+    /// 操作方法は、左右のコントローラーの絵と、ボタンごとの操作を色分けして書く (ボタンの色は長押しのインジケーターの色と同じ)。
     /// </summary>
     public partial class GalleryBuilder
     {
@@ -14,11 +15,14 @@ namespace ShootingGallery
         static readonly Color EndlessColor = new Color(0.3f, 1f, 0.85f);
         static readonly Color DebugColor = new Color(0.6f, 1f, 0.3f);
 
+        // 看板を置く向き (メイン屋台 = 0度 から左右へ)。看板 (幅 4.5m) の端が、メイン屋台の屋根の角・提灯にかからない角度
+        const float TitleBoardAngle = 75f;
+
+        /// <summary>タイトルの看板 (左に操作方法、右にクレジット) をまとめて作る。GameManager はこのまとまりごと出し入れする</summary>
         GameObject BuildControlsBoard()
         {
-            var board = Group(world, "ControlsBoard");
-            board.localPosition = new Vector3(0f, 0f, -3.2f);
-            board.localRotation = Quaternion.Euler(0f, 180f, 0f); // 表 (-Z) がプレイヤーの方を向く
+            var root = Group(world, "TitleBoards");
+            var board = TitleBoardRoot(root, "ControlsBoard", -TitleBoardAngle);
 
             var wood = Mat("Wood", new Color(0.45f, 0.28f, 0.15f));
             var gold = Mat("Gold", new Color(1f, 0.78f, 0.25f), new Color(0.3f, 0.2f, 0f));
@@ -52,34 +56,50 @@ namespace ShootingGallery
             MakeText(board, "HowTo1", "START の的を撃つとゲーム開始！", new Vector3(0f, 0.85f, -0.01f), 0.1f, new Color(1f, 0.85f, 0.3f));
             MakeText(board, "HowTo2", "特別な的を撃つと、武器やステージが変わるよ", new Vector3(0f, 0.65f, -0.01f), 0.07f, Color.white);
 
-            BuildCredits(board, panel, gold);
-            return board.gameObject;
+            BuildCreditsBoard(root, panel, gold, wood, banner);
+            return root.gameObject;
+        }
+
+        /// <summary>タイトルの看板1枚の置き場所: 屋台と同じく、輪の上の angle 度の向きに立てて、表 (-Z) をプレイヤーの方へ向ける</summary>
+        Transform TitleBoardRoot(Transform parent, string name, float angle)
+        {
+            var t = Group(parent, name);
+            var rot = Quaternion.Euler(0f, angle, 0f);
+            t.localPosition = rot * new Vector3(0f, 0f, stallRadius);
+            t.localRotation = rot;
+            return t;
         }
 
         /// <summary>
-        /// 看板のいちばん下の「CREDITS / LICENSES」の的と、撃つと看板の前に開くクレジットとライセンス全文のパネル (CreditsViewer)。
-        /// パネルは大きな文字でページに分けて出し、下の的 (前へ / 閉じる / 次へ) を撃ってページを送る。文章は Resources/THIRD_PARTY_NOTICES.txt
+        /// メイン屋台の右のクレジットの看板: クレジットとライセンス全文を大きな文字でページに分けて出し (CreditsViewer)、
+        /// 下の的 (前へ / 次へ) を撃ってページを送る。文章は Resources/THIRD_PARTY_NOTICES.txt
         /// </summary>
-        void BuildCredits(Transform board, Material panelMat, Material gold)
+        void BuildCreditsBoard(Transform root, Material panelMat, Material gold, Material wood, Material banner)
         {
             var dark = new Color(0.05f, 0.05f, 0.08f);
-            var open = CreditsButton(board, "CreditsButton", new Vector3(0f, 0.27f, -0.04f), new Vector2(2.3f, 0.26f), "CREDITS / LICENSES  (shoot)", new Color(0.95f, 0.8f, 0.35f), 0.075f, dark);
+            var board = TitleBoardRoot(root, "CreditsBoard", TitleBoardAngle);
+
+            // 柱・上の赤い幕 (操作方法の看板と同じ作り)
+            foreach (float s in new[] { -1f, 1f })
+                Prim(PrimitiveType.Cube, "Post", board, new Vector3(s * 2.35f, 1.4f, 0.05f), new Vector3(0.1f, 2.8f, 0.1f), wood);
+            Prim(PrimitiveType.Cube, "Banner", board, new Vector3(0f, 2.78f, 0.02f), new Vector3(4.8f, 0.34f, 0.06f), banner);
+            MakeText(board, "Title", "CREDITS   クレジット", new Vector3(0f, 2.78f, -0.02f), 0.18f, Color.white);
 
             var panel = Group(board, "CreditsPanel");
-            panel.localPosition = new Vector3(0f, 1.6f, -0.14f); // 下はしが CREDITS の的より上 (開いている間も的が隠れない)
-            Prim(PrimitiveType.Cube, "Back", panel, Vector3.zero, new Vector3(4.5f, 2.3f, 0.04f), panelMat, false);
+            panel.localPosition = new Vector3(0f, 1.45f, 0.03f);
+            Prim(PrimitiveType.Cube, "Back", panel, Vector3.zero, new Vector3(4.5f, 2.3f, 0.04f), panelMat);
             foreach (float y in new[] { -1.15f, 1.15f })
                 Prim(PrimitiveType.Cube, "FrameH", panel, new Vector3(0f, y, -0.02f), new Vector3(4.54f, 0.04f, 0.03f), gold, false);
             foreach (float x in new[] { -2.25f, 2.25f })
                 Prim(PrimitiveType.Cube, "FrameV", panel, new Vector3(x, 0f, -0.02f), new Vector3(0.04f, 2.34f, 0.03f), gold, false);
             MakeText(panel, "Title", "CREDITS & LICENSES", new Vector3(0f, 1f, -0.03f), 0.12f, new Color(1f, 0.85f, 0.35f));
-            var page = MakeText(panel, "PageText", "", new Vector3(-2.1f, 0.86f, -0.03f), 0.075f, Color.white);
-            page.anchor = TextAnchor.UpperLeft;
+            // 文章: 行は左そろえで、文字のかたまり全体を看板の真ん中に置く (長い行は CreditsViewer が lineWidth で折り返す)
+            var page = MakeText(panel, "PageText", "", new Vector3(0f, 0.86f, -0.03f), 0.075f, Color.white);
+            page.anchor = TextAnchor.UpperCenter;
             page.alignment = TextAlignment.Left;
             var number = MakeText(panel, "PageNumber", "1 / 1", new Vector3(0f, -0.54f, -0.03f), 0.07f, new Color(0.75f, 0.78f, 0.88f));
-            var prev = CreditsButton(panel, "PrevButton", new Vector3(-1.5f, -0.88f, -0.05f), new Vector2(0.95f, 0.26f), "< PREV", new Color(0.4f, 0.75f, 1f), 0.08f, dark);
-            var close = CreditsButton(panel, "CloseButton", new Vector3(0f, -0.88f, -0.05f), new Vector2(0.95f, 0.26f), "CLOSE  X", new Color(1f, 0.4f, 0.35f), 0.08f, dark);
-            var next = CreditsButton(panel, "NextButton", new Vector3(1.5f, -0.88f, -0.05f), new Vector2(0.95f, 0.26f), "NEXT >", new Color(0.4f, 0.75f, 1f), 0.08f, dark);
+            var prev = CreditsButton(panel, "PrevButton", new Vector3(-1.2f, -0.88f, -0.05f), new Vector2(0.95f, 0.26f), "< PREV", new Color(0.4f, 0.75f, 1f), 0.08f, dark);
+            var next = CreditsButton(panel, "NextButton", new Vector3(1.2f, -0.88f, -0.05f), new Vector2(0.95f, 0.26f), "NEXT >", new Color(0.4f, 0.75f, 1f), 0.08f, dark);
 
             var viewer = board.gameObject.AddComponent<CreditsViewer>();
             viewer.notices = Resources.Load<TextAsset>("THIRD_PARTY_NOTICES");
@@ -87,11 +107,9 @@ namespace ShootingGallery
             viewer.pageText = page;
             viewer.pageNumber = number;
             viewer.linesPerPage = 13;
-            viewer.openButton = open;
             viewer.prevButton = prev;
             viewer.nextButton = next;
-            viewer.closeButton = close;
-            panel.gameObject.SetActive(false);
+            viewer.Refresh(); // 文章を渡してから1ページ目を出す (シーンに生成した時も見えるように)
         }
 
         /// <summary>撃つと押せる板の的 (点数なし)。当たると縮んで、すぐにふくらんで戻る</summary>

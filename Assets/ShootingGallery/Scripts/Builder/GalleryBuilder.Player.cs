@@ -518,6 +518,7 @@ namespace ShootingGallery
             gun.ammoBullets = bullets.ToArray();
             gun.ammoFullMaterial = ammoFull;
             gun.ammoEmptyMaterial = ammoEmpty;
+            gun.ammoLoadingMaterial = Mat("Ammo_Loading", new Color(0.3f, 1f, 0.35f), null, true); // リボルバーの弾込めの途中 (緑)
             gun.flashlightBeam = beam.gameObject;
             gun.flashlightLight = spot;
             gun.flashlightLens = lens.GetComponent<Renderer>();

@@ -32,13 +32,22 @@ namespace ShootingGallery
         public Material[] fireworkMaterials;
         [Tooltip("打ち上がる光の玉")]
         public Material fireworkShellMaterial;
-        public Vector2 fireworkInterval = new Vector2(0.7f, 1.8f);
+        public Vector2 fireworkInterval = new Vector2(0.5f, 1.3f);
         [Tooltip("打ち上げる所までの水平の距離 (m)")]
         public Vector2 fireworkDistance = new Vector2(34f, 52f);
         [Tooltip("開く高さ (m)")]
         public Vector2 fireworkHeight = new Vector2(26f, 40f);
         [Tooltip("開いた大きさ (半径 m)")]
-        public Vector2 fireworkRadius = new Vector2(6f, 11f);
+        public Vector2 fireworkRadius = new Vector2(8f, 14f);
+        [Tooltip("ときどき、同じ方角から続けざまに何発も上がる (スターマイン) 確率")]
+        public float starmineChance = 0.15f;
+
+        [Header("星空 (夏祭りの間だけ、ゆっくり現れる)")]
+        [Tooltip("星空 (星の固まり・天の川)。夏祭りの間だけ出す")]
+        public GameObject nightSky;
+        [Tooltip("またたかせる星の固まり (固まりごとに明るさがゆっくり揺れる)")]
+        public Renderer[] starClusters;
+        public float starFadeTime = 2.5f;
 
         [Header("金魚すくい")]
         [Tooltip("水面の当たり判定 (ポイがここに入ったら、すくえたか決める)")]
@@ -87,8 +96,26 @@ namespace ShootingGallery
         int nextSlot;
         readonly List<GameObject> bought = new List<GameObject>();
 
+        // 星の材質は実行中だけの複製にして、明るさを変えても元の材質 (アセット) は変えない
+        Material[] starMats = new Material[0];
+        Color[] starColors = new Color[0];
+        float[] starPhase = new float[0];
+        float starLevel, starTarget;
+
         void Awake()
         {
+            if (starClusters == null) starClusters = new Renderer[0];
+            starMats = new Material[starClusters.Length];
+            starColors = new Color[starClusters.Length];
+            starPhase = new float[starClusters.Length];
+            for (int i = 0; i < starClusters.Length; i++)
+            {
+                if (starClusters[i] == null) continue;
+                starMats[i] = starClusters[i].material;
+                starColors[i] = starMats[i].GetColor("_BaseColor");
+                starPhase[i] = Random.value * 10f;
+            }
+            if (nightSky != null) nightSky.SetActive(false);
             if (decorations != null)
             {
                 lanterns = decorations.GetComponentsInChildren<Renderer>(true);
@@ -130,14 +157,21 @@ namespace ShootingGallery
                 foreach (var s in stalls) if (s != null) s.HideImmediate();
                 SetLanterns(0f, false);
                 if (decorations != null) decorations.gameObject.SetActive(false);
+                starLevel = starTarget = 0f;
+                if (nightSky != null) nightSky.SetActive(false);
                 ClearTable();
                 return;
             }
+            starTarget = 0f; // 星空はゆっくり消える
             Play(Leave());
         }
 
         IEnumerator Enter()
         {
+            // 星空がゆっくり現れる (いつもの屋台が沈んでいる間から)
+            if (nightSky != null) nightSky.SetActive(true);
+            starTarget = 1f;
+            UpdateStars();
             yield return new WaitForSeconds(riseDelay);
             foreach (var s in stalls) if (s != null) s.Rise(moveTime, true);
             Sfx.Play("taiko");
@@ -196,10 +230,45 @@ namespace ShootingGallery
         void Update()
         {
             UpdateBalance();
+            UpdateStars();
             if (!fireworksOn || Time.time < nextFirework) return;
             nextFirework = Time.time + Random.Range(fireworkInterval.x, fireworkInterval.y);
-            int volley = Random.value < 0.25f ? Random.Range(2, 4) : 1; // ときどき何発か同時に
-            for (int i = 0; i < volley; i++) LaunchFirework();
+            if (Random.value < starmineChance)
+            {
+                // スターマイン: 同じ方角から、少しずつずらして続けざまに何発も
+                float a = Random.Range(0f, Mathf.PI * 2f);
+                int n = Random.Range(5, 9);
+                for (int i = 0; i < n; i++) StartCoroutine(LaunchLater(i * Random.Range(0.12f, 0.22f), a + Random.Range(-0.25f, 0.25f), 0.7f));
+                nextFirework += 1.2f;
+                return;
+            }
+            int volley = Random.value < 0.35f ? Random.Range(2, 5) : 1; // ときどき何発か同時に
+            for (int i = 0; i < volley; i++) LaunchFirework(Random.Range(0f, Mathf.PI * 2f), 1f);
+        }
+
+        IEnumerator LaunchLater(float delay, float angle, float size)
+        {
+            yield return new WaitForSeconds(delay);
+            if (fireworksOn) LaunchFirework(angle, size);
+        }
+
+        // 星空: ゆっくり現れて / 消えて、固まりごとに明るさがゆっくり揺れる (またたき)
+        void UpdateStars()
+        {
+            if (nightSky == null) return;
+            starLevel = Mathf.MoveTowards(starLevel, starTarget, Time.deltaTime / Mathf.Max(0.1f, starFadeTime));
+            if (starLevel <= 0f && starTarget <= 0f)
+            {
+                if (nightSky.activeSelf) nightSky.SetActive(false);
+                return;
+            }
+            float level = Mathf.SmoothStep(0f, 1f, starLevel);
+            for (int i = 0; i < starMats.Length; i++)
+            {
+                if (starMats[i] == null) continue;
+                float tw = 0.75f + 0.25f * Mathf.Sin(Time.time * (0.8f + i * 0.13f) + starPhase[i]);
+                starMats[i].SetColor("_BaseColor", starColors[i] * (level * tw));
+            }
         }
 
         // 残高のパネル: お金 (スコア) が変わった時だけ書き換える
@@ -212,17 +281,20 @@ namespace ShootingGallery
             balanceText.text = "¥" + money.ToString("N0", System.Globalization.CultureInfo.InvariantCulture);
         }
 
-        void LaunchFirework()
+        // angle の方角に1発打ち上げる。size = 開く大きさの倍率 (スターマインは小さめ)
+        void LaunchFirework(float angle, float size)
         {
             if (fireworkMaterials == null || fireworkMaterials.Length == 0) return;
-            float a = Random.Range(0f, Mathf.PI * 2f);
-            Vector3 dir = new Vector3(Mathf.Sin(a), 0f, Mathf.Cos(a));
+            Vector3 dir = new Vector3(Mathf.Sin(angle), 0f, Mathf.Cos(angle));
             Vector3 from = transform.position + dir * Random.Range(fireworkDistance.x, fireworkDistance.y);
             Vector3 burst = from + Vector3.up * Random.Range(fireworkHeight.x, fireworkHeight.y) + new Vector3(Random.Range(-3f, 3f), 0f, Random.Range(-3f, 3f));
             float r = Random.value;
-            var style = r < 0.5f ? FestivalFirework.Style.Peony : r < 0.75f ? FestivalFirework.Style.Ring : FestivalFirework.Style.Willow;
-            var mat = style == FestivalFirework.Style.Willow ? fireworkMaterials[0] : fireworkMaterials[Random.Range(0, fireworkMaterials.Length)];
-            FestivalFirework.Launch(from, burst, Random.Range(fireworkRadius.x, fireworkRadius.y), style, mat, fireworkShellMaterial);
+            var style = r < 0.55f ? FestivalFirework.Style.Peony : r < 0.78f ? FestivalFirework.Style.Ring : FestivalFirework.Style.Willow;
+            int c = Random.Range(0, fireworkMaterials.Length);
+            var mat = style == FestivalFirework.Style.Willow ? fireworkMaterials[0] : fireworkMaterials[c];
+            // 菊は内側に別の色の芯を入れる
+            var core = fireworkMaterials.Length > 1 ? fireworkMaterials[(c + Random.Range(1, fireworkMaterials.Length)) % fireworkMaterials.Length] : null;
+            FestivalFirework.Launch(from, burst, Random.Range(fireworkRadius.x, fireworkRadius.y) * size, style, mat, fireworkShellMaterial, core);
         }
 
         // ---- 見ている屋台と武器 ----

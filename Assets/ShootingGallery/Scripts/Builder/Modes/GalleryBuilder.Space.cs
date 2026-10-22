@@ -193,21 +193,28 @@ namespace ShootingGallery
 
         /// <summary>
         /// 星の点々のメッシュ: 原点 (プレイヤー) を向いた小さなひし形を count 個、半径 rMin〜rMax の球面のまわりに散らす。
-        /// band を渡すと、その向きを軸にした大きな円 (天の川) の近くに集める。遠い星ほど大きくして、見た目の大きさをそろえる
+        /// band を渡すと、その向きを軸にした大きな円 (天の川) の近くに集める。遠い星ほど大きくして、見た目の大きさをそろえる。
+        /// minUp を渡すと、その高さ (向きの y) より上にだけ置く (地面のある所で、地平線より下に星が出ないように)
         /// </summary>
-        Mesh StarFieldMesh(string name, int count, float rMin, float rMax, float sizeMin, float sizeMax, Vector3? band)
+        Mesh StarFieldMesh(string name, int count, float rMin, float rMax, float sizeMin, float sizeMax, Vector3? band, float minUp = -1f)
         {
             if (meshes.TryGetValue(name, out var cached)) return cached;
             var verts = new List<Vector3>();
             var tris = new List<int>();
             for (int i = 0; i < count; i++)
             {
-                var dir = Random.onUnitSphere;
-                if (band.HasValue)
+                Vector3 dir;
+                int tries = 0;
+                do
                 {
-                    var n = band.Value;
-                    dir = (dir - n * Vector3.Dot(dir, n) * Random.Range(0.82f, 1f)).normalized; // 帯の近くに寄せる
-                }
+                    dir = Random.onUnitSphere;
+                    if (band.HasValue)
+                    {
+                        var n = band.Value;
+                        dir = (dir - n * Vector3.Dot(dir, n) * Random.Range(0.82f, 1f)).normalized; // 帯の近くに寄せる
+                    }
+                } while (dir.y < minUp && ++tries < 30);
+                if (dir.y < minUp) dir = new Vector3(dir.x, Mathf.Abs(dir.y) + minUp, dir.z).normalized;
                 float r = Random.Range(rMin, rMax);
                 // 小さな星が多く、大きな星は少ない
                 float s = Mathf.Lerp(sizeMin, sizeMax, Mathf.Pow(Random.value, 2.5f)) * r / 75f;

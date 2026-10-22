@@ -36,32 +36,24 @@ namespace ShootingGallery
         }
 
         /// <summary>
-        /// 洞窟の空気: 天井の穴から差し込む、うっすらした光の筋 / 明かりの中を漂うほこり / 壁の岩に光る金と銀の鉱脈 (ときどきキラッと光る)。
+        /// 洞窟の空気: 明かりの中を漂うほこり / 壁の岩に光る金と銀の鉱脈 (ときどきキラッと光る)。
         /// ほこりの Transform を返す (MineCave がゆっくり漂わせる)
         /// </summary>
         List<Transform> BuildCaveAtmosphere(Transform cave)
         {
             var air = Group(cave, "Atmosphere");
-            // 天井の穴から差し込む光の筋
-            var beam = new GameObject("LightShaft");
-            beam.transform.SetParent(air, false);
-            beam.transform.localPosition = new Vector3(0f, CaveCeiling, 0f);
-            beam.transform.localRotation = Quaternion.Euler(90f, 0f, 0f); // 先が上、下へ広がる
-            beam.transform.localScale = new Vector3(2.6f, 2.6f, CaveCeiling - CaveFloor);
-            beam.AddComponent<MeshFilter>().sharedMesh = ConeMesh();
-            beam.AddComponent<MeshRenderer>().sharedMaterial = TransparentMat("Mine_LightShaft", new Color(0.75f, 0.85f, 1f, 0.05f));
             // 漂うほこり (明かりのまわりに多め)
             var dustMat = TransparentMat("Mine_Dust", new Color(1f, 0.85f, 0.6f, 0.4f));
             var motes = new List<Transform>();
             for (int i = 0; i < 70; i++)
             {
-                Vector3 p = i % 3 == 0 ? new Vector3(Random.Range(-2.5f, 2.5f), Random.Range(-3f, CaveCeiling - 1f), Random.Range(-2.5f, 2.5f)) // 光の筋の中
+                Vector3 p = i % 3 == 0 ? new Vector3(Random.Range(-2.5f, 2.5f), Random.Range(-3f, CaveCeiling - 1f), Random.Range(-2.5f, 2.5f)) // やぐらのまわり
                                        : Quaternion.Euler(0f, Random.Range(0f, 360f), 0f) * Vector3.forward * Random.Range(3f, 18f) + Vector3.up * Random.Range(-3f, 5f);
                 motes.Add(Prim(PrimitiveType.Sphere, "Dust", air, p, Vector3.one * Random.Range(0.025f, 0.05f), dustMat, false).transform);
             }
             // 壁の鉱脈 (金・銀のかけらが岩に埋まっていて、ときどきキラッと光る)
-            var gold = Mat("Ore_Gold", new Color(1f, 0.8f, 0.25f), new Color(0.35f, 0.25f, 0.02f), false, 0.8f);
-            var silver = Mat("Ore_Silver", new Color(0.85f, 0.87f, 0.92f), new Color(0.12f, 0.12f, 0.14f), false, 0.85f);
+            var gold = OreGold;
+            var silver = OreSilver;
             for (int i = 0; i < 26; i++)
             {
                 float a = Random.Range(0f, Mathf.PI * 2f), r = Random.Range(24f, 27f);
@@ -145,7 +137,8 @@ namespace ShootingGallery
                 float a = (k * 60f + 30f) * Mathf.Deg2Rad;
                 Prim(PrimitiveType.Cube, "LiftPost", lift, new Vector3(Mathf.Sin(a) * 0.97f, 0.47f, Mathf.Cos(a) * 0.97f), new Vector3(0.06f, 0.95f, 0.06f), woodDark, false);
             }
-            Prim(PrimitiveType.Sphere, "LiftLantern", lift, new Vector3(0.97f, 1.05f, 0f), new Vector3(0.12f, 0.18f, 0.12f), lantern, false);
+            // 手すりの柱の上に上向きに生えた、かご付きのランプ (プレイヤーといっしょに上下し、足元と縦穴・やぐらのまわりを照らす)
+            CageLamp(lift, new Vector3(0.97f, 0.95f, 0f), 9f, 1.6f);
 
             // ---- 3. 洞窟 ----
             var cave = Group(root, "Cave");
@@ -176,8 +169,10 @@ namespace ShootingGallery
             BuildCaveShell(cave);
             foreach (var p in portals) TunnelPortal(cave, p.pos, p.outward, wood, woodDark, lantern);
             BuildCaveTower(cave, wood, woodDark, lantern);
-            BuildCaveDecor(cave, wood, woodDark, lantern);
-            var flicker = BuildCaveLights(cave);
+            var flicker = new List<Light>();
+            var flames = new List<Transform>();
+            BuildCaveDecor(cave, wood, woodDark, flicker);
+            BuildCaveLights(cave, flicker, flames);
             BuildCaveBats(cave);
             var motes = BuildCaveAtmosphere(cave);
 
@@ -188,6 +183,8 @@ namespace ShootingGallery
             var tunnelCarts = new List<MineCart>();
             for (int i = 0; i < 8; i++) tunnelCarts.Add(BuildMineCart(cave, $"Cart_T{i}", tunnelTracks[0], 4.5f));
             var gems = BuildMineGems(cave);
+            var fallingRocks = BuildFallingRocks(cave);
+            var fallingGems = BuildFallingGems(cave);
 
             // 洞窟と縦穴は暗いので、影は落とさない (重くしないように)
             foreach (var r in root.GetComponentsInChildren<Renderer>(true)) r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
@@ -203,9 +200,16 @@ namespace ShootingGallery
             mine.tunnelCarts = tunnelCarts.ToArray();
             mine.tunnelTracks = tunnelTracks.ToArray();
             mine.gems = gems.ToArray();
+            mine.caveRoot = cave;
+            mine.ceilingY = CaveCeiling;
+            mine.floorY = CaveFloor;
+            mine.fallingRocks = fallingRocks;
+            mine.fallingGems = fallingGems;
+            mine.gemDropInterval = new Vector2(2f, 4f); // 宝石が落ちてくる間隔 (秒)
             mine.caveRoomHeight = CaveCeiling;
             mine.sparkles = mineSparkles.ToArray();
             mine.flickerLights = flicker.ToArray();
+            mine.flames = flames.ToArray();
             mine.motes = motes.ToArray();
             // 発掘モードの時だけ出る (シーンに生成した時も隠しておく)
             cover.gameObject.SetActive(false);
@@ -420,6 +424,157 @@ namespace ShootingGallery
             return false;
         }
 
+        // いちばん近い線路の点までの、水平の距離
+        float TrackDistance(float x, float z)
+        {
+            float best = float.MaxValue;
+            foreach (var q in mineTrackPoints)
+            {
+                float dx = x - q.x, dz = z - q.z;
+                best = Mathf.Min(best, dx * dx + dz * dz);
+            }
+            return Mathf.Sqrt(best);
+        }
+
+        /// <summary>
+        /// 洞窟の床の高さ (洞窟の座標)。なだらかな起伏と細かなでこぼこがあり、壁ぎわは岩の壁へ向かってせり上がる。
+        /// 線路の下 (線路が通れるように) と、真ん中のやぐらのまわりは平ら (CaveFloor)。床の上に置く物は、この高さに置く
+        /// </summary>
+        float FloorAt(float x, float z)
+        {
+            float r = Mathf.Sqrt(x * x + z * z);
+            float bump = (Mathf.PerlinNoise(x * 0.11f + 31.7f, z * 0.11f + 12.3f) - 0.5f) * 1.4f
+                       + (Mathf.PerlinNoise(x * 0.45f + 5.1f, z * 0.45f + 77.2f) - 0.5f) * 0.35f;
+            float rise = r > 24f ? Mathf.Min(5f, (r - 24f) * (r - 24f) * 0.06f) : 0f;
+            float flat = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(1.2f, 3.2f, TrackDistance(x, z)))
+                       * Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(2.8f, 5.5f, r));
+            return CaveFloor + (bump + rise) * flat;
+        }
+
+        Vector3 OnFloor(Vector3 p) => new Vector3(p.x, FloorAt(p.x, p.z), p.z);
+
+        // 床を分ける区画: 真ん中から外へ (内側の半径, 外側の半径, その輪を分ける数)。
+        // 1つの物を照らせる明かりの数には上限がある (Quest・WebGL の設定は4つまで) ので、床を区画に分けて、
+        // それぞれの区画が近くのランタン・たいまつの明かりで照らされるようにする
+        static readonly (float r0, float r1, int sectors)[] FloorBands = { (0f, 8f, 6), (8f, 16f, 10), (16f, 24f, 14), (24f, 36f, 18) };
+        const float FloorCell = 0.75f; // 床のメッシュの、だいたいの目の細かさ (m)
+
+        // 床の向き (法線)。区画の境目で陰影がずれないように、メッシュからではなく床の高さの傾きから求める
+        Vector3 FloorNormal(float x, float z)
+        {
+            const float E = 0.15f;
+            float dx = FloorAt(x + E, z) - FloorAt(x - E, z), dz = FloorAt(x, z + E) - FloorAt(x, z - E);
+            return new Vector3(-dx, 2f * E, -dz).normalized;
+        }
+
+        /// <summary>でこぼこの床 (FloorAt の高さ) を区画ごとのメッシュに分けて置く。明かりの当たり方で起伏が見えるように、なめらかな法線</summary>
+        void BuildCaveFloor(Transform parent, Material mat)
+        {
+            var floor = Group(parent, "CaveFloor");
+            for (int b = 0; b < FloorBands.Length; b++)
+            {
+                var (r0, r1, sectors) = FloorBands[b];
+                for (int s = 0; s < sectors; s++)
+                {
+                    float a0 = s * Mathf.PI * 2f / sectors, a1 = (s + 1) * Mathf.PI * 2f / sectors;
+                    MeshObj(floor, $"Floor_{b}_{s}", FloorChunkMesh($"Mine_Floor_{b}_{s}", r0, r1, a0, a1), Vector3.zero, mat);
+                }
+            }
+        }
+
+        // 床の1区画 (半径 r0〜r1、角度 a0〜a1 の扇形の帯)
+        Mesh FloorChunkMesh(string name, float r0, float r1, float a0, float a1)
+        {
+            if (meshes.TryGetValue(name, out var cached)) return cached;
+            int nr = Mathf.Max(1, Mathf.CeilToInt((r1 - r0) / FloorCell));
+            int na = Mathf.Max(2, Mathf.CeilToInt((a1 - a0) * r1 / FloorCell));
+            var verts = new List<Vector3>();
+            var normals = new List<Vector3>();
+            var tris = new List<int>();
+            for (int i = 0; i <= nr; i++)
+            {
+                float r = Mathf.Lerp(r0, r1, (float)i / nr);
+                for (int j = 0; j <= na; j++)
+                {
+                    float a = Mathf.Lerp(a0, a1, (float)j / na);
+                    float x = Mathf.Sin(a) * r, z = Mathf.Cos(a) * r;
+                    verts.Add(new Vector3(x, FloorAt(x, z), z));
+                    normals.Add(FloorNormal(x, z));
+                }
+            }
+            // 上から見て表になるように並べる
+            void Tri(int a, int b, int c)
+            {
+                if (Vector3.Cross(verts[b] - verts[a], verts[c] - verts[a]).y < 0f) (b, c) = (c, b);
+                tris.Add(a); tris.Add(b); tris.Add(c);
+            }
+            int V(int i, int j) => i * (na + 1) + j;
+            for (int i = 0; i < nr; i++)
+                for (int j = 0; j < na; j++)
+                {
+                    if (r0 <= 0f && i == 0) { Tri(V(0, j), V(1, j), V(1, j + 1)); continue; } // (真ん中の点のまわり)
+                    Tri(V(i, j), V(i + 1, j), V(i + 1, j + 1));
+                    Tri(V(i, j), V(i + 1, j + 1), V(i, j + 1));
+                }
+            var mesh = new Mesh { name = name };
+            mesh.SetVertices(verts);
+            mesh.SetNormals(normals);
+            mesh.SetTriangles(tris, 0);
+            mesh.RecalculateBounds();
+            mesh = SaveMeshIfEditing(mesh, name);
+            meshes[name] = mesh;
+            return mesh;
+        }
+
+        /// <summary>
+        /// 床一面の砂利 (小石を count 個)。nearTracks の割合は線路のまわりに寄せる (線路の砂利の道床)。
+        /// 小石は宝石と同じ八面体をつぶしたり伸ばしたりして、角ばった石に見せる。
+        /// 近くの明かりで照らされるように、床と同じく扇形の区画 (sectors 個) ごとに1つのメッシュにまとめる
+        /// </summary>
+        void BuildGravel(Transform parent, string name, int count, float nearTracks, int sectors, Material mat)
+        {
+            var src = OctahedronMesh();
+            var parts = new List<CombineInstance>[sectors];
+            for (int s = 0; s < sectors; s++) parts[s] = new List<CombineInstance>();
+            for (int i = 0; i < count; i++)
+            {
+                Vector3 p;
+                if (Random.value < nearTracks && mineTrackPoints.Count > 0)
+                {
+                    var q = mineTrackPoints[Random.Range(0, mineTrackPoints.Count)];
+                    if (q.y > CaveFloor + 0.5f) { i--; continue; } // (高架の線路の下には寄せない)
+                    var off = Random.insideUnitCircle * 1.1f;
+                    p = new Vector3(q.x + off.x, 0f, q.z + off.y);
+                }
+                else
+                {
+                    float a = Random.Range(0f, Mathf.PI * 2f), r = Mathf.Sqrt(Random.Range(9f, 900f)); // (広い所にも均等に)
+                    p = new Vector3(Mathf.Sin(a) * r, 0f, Mathf.Cos(a) * r);
+                }
+                float s = Random.Range(0.06f, 0.2f);
+                var scale = new Vector3(s * Random.Range(0.8f, 1.5f), s * Random.Range(0.35f, 0.7f), s * Random.Range(0.8f, 1.5f));
+                p.y = FloorAt(p.x, p.z) + scale.y * 0.15f;
+                float ang = Mathf.Repeat(Mathf.Atan2(p.x, p.z), Mathf.PI * 2f);
+                int sector = Mathf.Min(sectors - 1, (int)(ang / (Mathf.PI * 2f) * sectors));
+                parts[sector].Add(new CombineInstance { mesh = src, transform = Matrix4x4.TRS(p, Quaternion.Euler(Random.Range(-20f, 20f), Random.Range(0f, 360f), Random.Range(-20f, 20f)), scale) });
+            }
+            var group = Group(parent, name);
+            for (int s = 0; s < sectors; s++)
+            {
+                if (parts[s].Count == 0) continue;
+                string meshName = $"{name}_{s}";
+                if (!meshes.TryGetValue(meshName, out var mesh))
+                {
+                    mesh = new Mesh { name = meshName };
+                    mesh.CombineMeshes(parts[s].ToArray(), true, true);
+                    mesh.RecalculateBounds();
+                    mesh = SaveMeshIfEditing(mesh, meshName);
+                    meshes[meshName] = mesh;
+                }
+                MeshObj(group, $"{name}_{s}", mesh, Vector3.zero, mat);
+            }
+        }
+
         // 2本のレールと枕木。高架の線路は、ときどき床まで木の脚を立てる
         void BuildRails(Transform cave, MineTrack track, Material steel, Material sleeper, bool trestle)
         {
@@ -486,11 +641,15 @@ namespace ShootingGallery
             var rockBrown = Mat("Mine_RockBrown", new Color(0.36f, 0.26f, 0.18f), null, false, 0.42f);
             Material[] rocks = { rock, rockDark, rockBrown };
 
-            Prim(PrimitiveType.Cylinder, "CaveFloor", shell, new Vector3(0f, CaveFloor - 0.1f, 0f), new Vector3(72f, 0.1f, 72f), rockBrown, false);
-            for (int i = 0; i < 70; i++) // 床のでこぼこと小石
+            // 床: なだらかな起伏とでこぼこのある地面 (壁ぎわはせり上がる) と、一面の砂利 (線路のまわりに多め)
+            var floorMat = Mat("Mine_Floor", new Color(0.27f, 0.22f, 0.17f), null, false, 0.05f, true);
+            BuildCaveFloor(shell, floorMat);
+            BuildGravel(shell, "Mine_Gravel", 700, 0.45f, 12, Mat("Mine_GravelStone", new Color(0.3f, 0.28f, 0.26f), null, false, 0.15f, true));
+            BuildGravel(shell, "Mine_GravelBrown", 500, 0.3f, 12, Mat("Mine_GravelBrownStone", new Color(0.33f, 0.24f, 0.16f), null, false, 0.15f, true));
+            for (int i = 0; i < 70; i++) // 床に転がる大きめの石
             {
                 float a = Random.Range(0f, Mathf.PI * 2f), r = Random.Range(3f, 32f);
-                var p = new Vector3(Mathf.Sin(a) * r, CaveFloor, Mathf.Cos(a) * r);
+                var p = OnFloor(new Vector3(Mathf.Sin(a) * r, 0f, Mathf.Cos(a) * r));
                 if (NearTrack(p, 1.3f)) continue;
                 float w = Random.Range(0.3f, 2.2f);
                 Rock("FloorRock", shell, p, new Vector3(w, w * Random.Range(0.3f, 0.7f), w * Random.Range(0.7f, 1.3f)), rocks[i % 3], false);
@@ -545,7 +704,7 @@ namespace ShootingGallery
             for (int i = 0; i < 40; i++)
             {
                 float a = Random.Range(0f, Mathf.PI * 2f), r = Random.Range(4f, 29f);
-                var p = new Vector3(Mathf.Sin(a) * r, CaveFloor, Mathf.Cos(a) * r);
+                var p = OnFloor(new Vector3(Mathf.Sin(a) * r, 0f, Mathf.Cos(a) * r));
                 if (NearTrack(p, 2f)) continue;
                 float h = Random.Range(1f, 4f);
                 var sg = Group(shell, "Stalagmite");
@@ -563,7 +722,7 @@ namespace ShootingGallery
                 float a = Random.Range(0f, Mathf.PI * 2f);
                 bool wall = i % 3 != 0;
                 float r = wall ? Random.Range(25f, 28f) : Random.Range(6f, 22f);
-                var p = new Vector3(Mathf.Sin(a) * r, wall ? CaveFloor + Random.Range(0f, 9f) : CaveFloor, Mathf.Cos(a) * r);
+                var p = OnFloor(new Vector3(Mathf.Sin(a) * r, 0f, Mathf.Cos(a) * r)) + Vector3.up * (wall ? Random.Range(0f, 9f) : 0f);
                 if (!wall && NearTrack(p, 1.6f)) continue;
                 var c = Group(shell, "Crystals");
                 c.localPosition = p;
@@ -590,14 +749,21 @@ namespace ShootingGallery
         }
 
         /// <summary>宝石の種類: 名前・点数・光る材質・破片の材質 (安い順)</summary>
+        // 宝石の材質 (暗い洞窟の中で、自分で輝いて見えるように、強めに光らせる)
         (string name, int points, Material glow, Material shard)[] GemMaterials() => new[]
         {
-            ("AMETHYST", 100, Mat("Gem_Amethyst", new Color(0.7f, 0.35f, 1f), new Color(0.9f, 0.35f, 1.6f), false, 0.9f), Mat("Gem_Amethyst", new Color(0.7f, 0.35f, 1f), new Color(0.9f, 0.35f, 1.6f), false, 0.9f)),
-            ("EMERALD", 200, Mat("Gem_Emerald", new Color(0.2f, 1f, 0.45f), new Color(0.2f, 1.6f, 0.5f), false, 0.9f), Mat("Gem_Emerald", new Color(0.2f, 1f, 0.45f), new Color(0.2f, 1.6f, 0.5f), false, 0.9f)),
-            ("SAPPHIRE", 300, Mat("Gem_Sapphire", new Color(0.2f, 0.45f, 1f), new Color(0.25f, 0.6f, 2f), false, 0.9f), Mat("Gem_Sapphire", new Color(0.2f, 0.45f, 1f), new Color(0.25f, 0.6f, 2f), false, 0.9f)),
-            ("RUBY", 500, Mat("Gem_Ruby", new Color(1f, 0.15f, 0.25f), new Color(2f, 0.2f, 0.35f), false, 0.9f), Mat("Gem_Ruby", new Color(1f, 0.15f, 0.25f), new Color(2f, 0.2f, 0.35f), false, 0.9f)),
-            ("DIAMOND", 1000, Mat("Gem_Diamond", new Color(0.9f, 0.97f, 1f), new Color(2.2f, 2.6f, 3f), false, 1f), Mat("Gem_Diamond", new Color(0.9f, 0.97f, 1f), new Color(2.2f, 2.6f, 3f), false, 1f)),
+            ("AMETHYST", 100, GemMat("Gem_Amethyst", new Color(0.7f, 0.35f, 1f), new Color(1.6f, 0.65f, 2.9f), 0.9f), GemMat("Gem_Amethyst", new Color(0.7f, 0.35f, 1f), new Color(1.6f, 0.65f, 2.9f), 0.9f)),
+            ("EMERALD", 200, GemMat("Gem_Emerald", new Color(0.2f, 1f, 0.45f), new Color(0.35f, 2.9f, 0.9f), 0.9f), GemMat("Gem_Emerald", new Color(0.2f, 1f, 0.45f), new Color(0.35f, 2.9f, 0.9f), 0.9f)),
+            ("SAPPHIRE", 300, GemMat("Gem_Sapphire", new Color(0.2f, 0.45f, 1f), new Color(0.45f, 1.1f, 3.6f), 0.9f), GemMat("Gem_Sapphire", new Color(0.2f, 0.45f, 1f), new Color(0.45f, 1.1f, 3.6f), 0.9f)),
+            ("RUBY", 500, GemMat("Gem_Ruby", new Color(1f, 0.15f, 0.25f), new Color(3.6f, 0.35f, 0.6f), 0.9f), GemMat("Gem_Ruby", new Color(1f, 0.15f, 0.25f), new Color(3.6f, 0.35f, 0.6f), 0.9f)),
+            ("DIAMOND", 1000, GemMat("Gem_Diamond", new Color(0.9f, 0.97f, 1f), new Color(3.6f, 4.2f, 4.8f), 1f), GemMat("Gem_Diamond", new Color(0.9f, 0.97f, 1f), new Color(3.6f, 4.2f, 4.8f), 1f)),
         };
+
+        Material GemMat(string name, Color color, Color glow, float smoothness) => Mat(name, color, glow, false, smoothness);
+
+        // 金・銀の鉱石 (壁の鉱脈・トロッコの荷台・やぐらの飾り)。暗い洞窟の中で、ほんのり輝いて見えるように光らせる
+        Material OreGold => Mat("Ore_Gold", new Color(1f, 0.8f, 0.25f), new Color(1.3f, 0.9f, 0.15f), false, 0.8f);
+        Material OreSilver => Mat("Ore_Silver", new Color(0.85f, 0.87f, 0.92f), new Color(0.6f, 0.62f, 0.7f), false, 0.85f);
 
         /// <summary>真ん中のやぐら (プレイヤーの昇降台が止まる所): 4本の柱・すじかい・床の枠・はしご・ランタン・天井までの案内の綱・看板</summary>
         void BuildCaveTower(Transform cave, Material wood, Material woodDark, Material lantern)
@@ -629,8 +795,11 @@ namespace ShootingGallery
             MakeText(sign.transform, "SignText", "GEM MINE", new Vector3(0f, 0f, -0.6f), 0.6f, new Color(0.15f, 0.08f, 0.03f)).transform.localScale = new Vector3(1f / 1.6f, 1f / 0.45f, 1f);
         }
 
-        /// <summary>洞窟の飾り: 木の支え (柱と梁)、木箱・たる・鉱石の山・立てかけたつるはし</summary>
-        void BuildCaveDecor(Transform cave, Material wood, Material woodDark, Material lantern)
+        /// <summary>
+        /// 洞窟の飾り: 木の支え (柱と梁。梁にランタンを吊るす)、木箱・たる・鉱石の山・立てかけたつるはし。
+        /// 支えのランタンの明かりを flicker に足す
+        /// </summary>
+        void BuildCaveDecor(Transform cave, Material wood, Material woodDark, List<Light> flicker)
         {
             var decor = Group(cave, "Decor");
             // 壁ぎわの木の支え
@@ -638,19 +807,19 @@ namespace ShootingGallery
             {
                 float a = (i * 45f + 22f) * Mathf.Deg2Rad, r = 23.5f;
                 var frame = Group(decor, "Support");
-                frame.localPosition = new Vector3(Mathf.Sin(a) * r, CaveFloor, Mathf.Cos(a) * r);
+                frame.localPosition = OnFloor(new Vector3(Mathf.Sin(a) * r, 0f, Mathf.Cos(a) * r));
                 frame.localRotation = Quaternion.LookRotation(frame.localPosition);
                 foreach (float s in new[] { -1f, 1f })
                     Prim(PrimitiveType.Cube, "SupportPost", frame, new Vector3(s * 1.6f, 2.2f, 0f), new Vector3(0.3f, 4.4f, 0.3f), wood, false).transform.localRotation = Quaternion.Euler(0f, 0f, s * Random.Range(-4f, 4f));
                 Prim(PrimitiveType.Cube, "SupportBeam", frame, new Vector3(0f, 4.4f, 0f), new Vector3(3.8f, 0.35f, 0.35f), wood, false);
-                Prim(PrimitiveType.Sphere, "SupportLantern", frame, new Vector3(0f, 4f, -0.25f), new Vector3(0.14f, 0.2f, 0.14f), lantern, false);
+                HurricaneLantern(frame, new Vector3(0f, 4.22f, -0.32f), 1.4f, 0f, flicker); // 梁の手前に吊るす
             }
             // 木箱・たる・鉱石の山・つるはし
-            var ore = Mat("Ore_Gold", new Color(1f, 0.8f, 0.25f), new Color(0.35f, 0.25f, 0.02f), false, 0.8f);
+            var ore = OreGold;
             for (int i = 0; i < 14; i++)
             {
                 float a = Random.Range(0f, Mathf.PI * 2f), r = Random.Range(3.2f, 22f);
-                var p = new Vector3(Mathf.Sin(a) * r, CaveFloor, Mathf.Cos(a) * r);
+                var p = OnFloor(new Vector3(Mathf.Sin(a) * r, 0f, Mathf.Cos(a) * r));
                 if (NearTrack(p, 1.8f)) continue;
                 var g = Group(decor, "Prop");
                 g.localPosition = p;
@@ -683,28 +852,27 @@ namespace ShootingGallery
 
         // 洞窟の明かり: やぐらの上と、まわりのいくつかにゆらめくオレンジのランプ (影なし)。壁の結晶のそばには、結晶の色の弱い明かり。
         // ゆらめかせるランプを返す
-        List<Light> BuildCaveLights(Transform cave)
+        /// <summary>
+        /// 洞窟の明かり: 天井から鎖で吊るしたランタン (近くだけを照らす) と、結晶の色の明かり。
+        /// ゆらめかせるランタンの明かりを flicker に足す (壁ぎわの支えのランタンは BuildCaveDecor で足す)
+        /// </summary>
+        void BuildCaveLights(Transform cave, List<Light> flicker, List<Transform> flames)
         {
-            var flicker = new List<Light>();
             var lights = Group(cave, "CaveLights");
-            var spots = new List<Vector3> { new Vector3(0f, 2.5f, 0f) };
-            for (int i = 0; i < 4; i++)
+            // 天井から長い鎖で吊るしたランタン (洞窟の中ほどの暗がりに、ぽつぽつと)
+            for (int i = 0; i < 5; i++)
             {
-                float a = (i * 90f + 45f) * Mathf.Deg2Rad;
-                spots.Add(new Vector3(Mathf.Sin(a) * 17f, CaveFloor + 4f, Mathf.Cos(a) * 17f));
+                float a = (i * 72f + 36f) * Mathf.Deg2Rad, r = i % 2 == 0 ? 10f : 13f;
+                const float HangY = 4.5f;
+                HurricaneLantern(lights, new Vector3(Mathf.Sin(a) * r, HangY, Mathf.Cos(a) * r), 1.6f, CaveCeiling - HangY, flicker);
             }
-            for (int i = 0; i < spots.Count; i++)
+            // 床に立てたたいまつ (ランタンとランタンの間の暗がりに。線路の上には立てない)
+            for (int i = 0; i < 6; i++)
             {
-                var lg = new GameObject("CaveLight");
-                lg.transform.SetParent(lights, false);
-                lg.transform.localPosition = spots[i];
-                var l = lg.AddComponent<Light>();
-                l.type = LightType.Point;
-                l.range = i == 0 ? 20f : 18f;
-                l.intensity = i == 0 ? 2.2f : 3f;
-                l.color = new Color(1f, 0.72f, 0.4f);
-                l.shadows = LightShadows.None;
-                flicker.Add(l);
+                float a = (i * 60f + 10f) * Mathf.Deg2Rad, r = 17f;
+                var p = new Vector3(Mathf.Sin(a) * r, 0f, Mathf.Cos(a) * r);
+                for (int k = 0; k < 8 && NearTrack(p, 1.8f); k++) p *= 1.08f; // (線路にかかる時は、少し外へずらす)
+                StandingTorch(lights, OnFloor(p), flicker, flames);
             }
             // 結晶の色の明かり (紫・青・緑・水色。壁を色づかせる)
             Color[] glows = { new Color(0.7f, 0.35f, 1f), new Color(0.3f, 0.5f, 1f), new Color(0.3f, 1f, 0.5f), new Color(0.4f, 0.9f, 1f) };
@@ -713,20 +881,149 @@ namespace ShootingGallery
                 float a = (i * 90f + Random.Range(-15f, 15f)) * Mathf.Deg2Rad;
                 var lg = new GameObject("CrystalLight");
                 lg.transform.SetParent(lights, false);
-                lg.transform.localPosition = new Vector3(Mathf.Sin(a) * 22f, CaveFloor + 2f, Mathf.Cos(a) * 22f);
+                lg.transform.localPosition = OnFloor(new Vector3(Mathf.Sin(a) * 22f, 0f, Mathf.Cos(a) * 22f)) + Vector3.up * 2f;
                 var l = lg.AddComponent<Light>();
                 l.type = LightType.Point;
-                l.range = 12f;
-                l.intensity = 2.2f;
+                l.range = 10f;
+                l.intensity = 2.2f; // 結晶のまわりの壁だけを、宝石の色にほんのり染める
                 l.color = glows[i];
                 l.shadows = LightShadows.None;
                 var c = Group(lights, "GlowCrystals");
-                c.localPosition = new Vector3(Mathf.Sin(a) * 23.5f, CaveFloor, Mathf.Cos(a) * 23.5f);
+                c.localPosition = OnFloor(new Vector3(Mathf.Sin(a) * 23.5f, 0f, Mathf.Cos(a) * 23.5f));
                 c.localRotation = Quaternion.LookRotation(-c.localPosition);
                 CrystalCluster(c, GemMaterials()[(i % 3) + 1].glow, 2.2f, 7); // 明かりのもとの大きな結晶
                 MineSparkle(c, new Vector3(0f, 2.4f, 0.3f), 1.6f);
             }
-            return flicker;
+        }
+
+        // ランプの部品の色
+        Material LampMetal => Mat("Mine_LampMetal", new Color(0.24f, 0.16f, 0.11f), null, false, 0.35f);       // 錆びた金属
+        Material LampGlass => Mat("Mine_LampGlass", new Color(1f, 0.95f, 0.82f), new Color(2.4f, 1.8f, 0.95f)); // 灯った火屋のガラス
+
+        /// <summary>
+        /// 吊るしたハリケーンランタン (石油ランプ): 錆びた台座とふた、白く光るガラスの火屋、両脇の支柱、火屋を守る針金、上のつる。
+        /// pos = つるの上 (吊るす所)、scale = 大きさ (1 で高さ約 0.5m)、chain = そこから上へ伸びる鎖の長さ。
+        /// flicker を渡すと、火屋のまわりの数メートルだけを照らす明かりを付けて、そこに足す (ゆらめかせる)
+        /// </summary>
+        void HurricaneLantern(Transform parent, Vector3 pos, float scale, float chain, List<Light> flicker)
+        {
+            var g = Group(parent, "HurricaneLantern");
+            g.localPosition = pos;
+            g.localRotation = Quaternion.Euler(0f, Random.Range(0f, 360f), 0f);
+            g.localScale = Vector3.one * scale;
+            var metal = LampMetal;
+            if (chain > 0f)
+                Prim(PrimitiveType.Cylinder, "Chain", g, new Vector3(0f, chain / scale / 2f, 0f), new Vector3(0.012f, chain / scale / 2f, 0.012f), metal, false);
+            // つる (半円の取っ手)
+            for (int k = 0; k <= 6; k++)
+            {
+                float a = Mathf.PI * k / 6f;
+                var seg = Prim(PrimitiveType.Cube, "Bail", g, new Vector3(Mathf.Cos(a) * 0.09f, -0.1f + Mathf.Sin(a) * 0.09f, 0f), new Vector3(0.01f, 0.05f, 0.01f), metal, false);
+                seg.transform.localRotation = Quaternion.Euler(0f, 0f, a * Mathf.Rad2Deg);
+            }
+            // ふた (2段) と、台座 (油つぼ) と、下のふち
+            Prim(PrimitiveType.Cylinder, "CapTop", g, new Vector3(0f, -0.085f, 0f), new Vector3(0.12f, 0.015f, 0.12f), metal, false);
+            Prim(PrimitiveType.Cylinder, "Cap", g, new Vector3(0f, -0.115f, 0f), new Vector3(0.2f, 0.018f, 0.2f), metal, false);
+            Prim(PrimitiveType.Cylinder, "Fount", g, new Vector3(0f, -0.4f, 0f), new Vector3(0.22f, 0.03f, 0.22f), metal, false);
+            Prim(PrimitiveType.Cylinder, "FountRim", g, new Vector3(0f, -0.435f, 0f), new Vector3(0.24f, 0.008f, 0.24f), metal, false);
+            // 白く光るガラスの火屋
+            Prim(PrimitiveType.Sphere, "Globe", g, new Vector3(0f, -0.255f, 0f), new Vector3(0.19f, 0.25f, 0.19f), LampGlass, false);
+            // 両脇の支柱 (台座からふたまで) と、火屋を守る針金
+            foreach (float s in new[] { -1f, 1f })
+                Prim(PrimitiveType.Cylinder, "SideTube", g, new Vector3(s * 0.125f, -0.26f, 0f), new Vector3(0.018f, 0.14f, 0.018f), metal, false);
+            FlatRing(g, "GuardWire", 0.105f, -0.2f, 0.008f, 0.008f, 12, metal);
+            FlatRing(g, "GuardWire", 0.105f, -0.31f, 0.008f, 0.008f, 12, metal);
+            if (flicker == null) return;
+            // 火屋のまわりの数メートルだけを照らす、暖かい明かり
+            var lg = new GameObject("LanternLight");
+            lg.transform.SetParent(g, false);
+            lg.transform.localPosition = new Vector3(0f, -0.26f, 0f);
+            var l = lg.AddComponent<Light>();
+            l.type = LightType.Point;
+            l.range = 10f;      // まわりの床や壁が、このランタンから照らされているのが分かる広さ
+            l.intensity = 3f;
+            l.color = new Color(1f, 0.75f, 0.45f);
+            l.shadows = LightShadows.None;
+            flicker.Add(l);
+        }
+
+        /// <summary>
+        /// 床に立てたたいまつ: 根元を石で囲んだ木の棒の先に、鉄のかご。かごの中で炎 (外は橙、中は黄色) がゆらめき、まわりを広く照らす。
+        /// pos = 根元 (床の上)。明かりを flicker に、炎を flames に足す (MineCave がゆらめかせる)
+        /// </summary>
+        void StandingTorch(Transform parent, Vector3 pos, List<Light> flicker, List<Transform> flames)
+        {
+            var g = Group(parent, "Torch");
+            g.localPosition = pos;
+            g.localRotation = Quaternion.Euler(Random.Range(-4f, 4f), Random.Range(0f, 360f), Random.Range(-4f, 4f));
+            const float H = 1.8f; // 棒の長さ
+            var rockMat = Mat("Mine_RockDark", new Color(0.2f, 0.18f, 0.17f), null, false, 0.42f);
+            for (int k = 0; k < 4; k++) // 根元を囲む石
+            {
+                float a = k * Mathf.PI / 2f + 0.4f;
+                Rock("TorchStone", g, new Vector3(Mathf.Sin(a) * 0.16f, 0.06f, Mathf.Cos(a) * 0.16f), Vector3.one * Random.Range(0.16f, 0.24f), rockMat, false);
+            }
+            Prim(PrimitiveType.Cylinder, "TorchPole", g, new Vector3(0f, H / 2f, 0f), new Vector3(0.07f, H / 2f, 0.07f), Mat("Mine_WoodDark", new Color(0.25f, 0.16f, 0.09f), null, false, 0.15f), false);
+            // 鉄のかご (下の皿と、2本の輪)
+            var metal = LampMetal;
+            Prim(PrimitiveType.Cylinder, "TorchCup", g, new Vector3(0f, H + 0.02f, 0f), new Vector3(0.16f, 0.02f, 0.16f), metal, false);
+            FlatRing(g, "TorchCage", 0.1f, H + 0.1f, 0.015f, 0.015f, 10, metal);
+            FlatRing(g, "TorchCage", 0.12f, H + 0.2f, 0.015f, 0.015f, 10, metal);
+            // 炎 (光るだけ。明かりの影響を受けない)
+            var flame = Group(g, "Flame");
+            flame.localPosition = new Vector3(0f, H + 0.06f, 0f);
+            Prim(PrimitiveType.Sphere, "FlameOuter", flame, new Vector3(0f, 0.17f, 0f), new Vector3(0.24f, 0.42f, 0.24f), Mat("Mine_FlameOuter", new Color(2.6f, 0.9f, 0.2f), null, true), false);
+            Prim(PrimitiveType.Sphere, "FlameInner", flame, new Vector3(0f, 0.12f, 0f), new Vector3(0.13f, 0.24f, 0.13f), Mat("Mine_FlameInner", new Color(3f, 2.4f, 0.9f), null, true), false);
+            flames.Add(flame);
+            // まわりを広く照らす、赤みのある明かり
+            var lg = new GameObject("TorchLight");
+            lg.transform.SetParent(g, false);
+            lg.transform.localPosition = new Vector3(0f, H + 0.35f, 0f);
+            var l = lg.AddComponent<Light>();
+            l.type = LightType.Point;
+            l.range = 11f;
+            l.intensity = 3.2f;
+            l.color = new Color(1f, 0.58f, 0.25f);
+            l.shadows = LightShadows.None;
+            flicker.Add(l);
+        }
+
+        /// <summary>
+        /// 手すりの上に上向きに生えた、かご付きのランプ: 金属の台座から、白く光るガラスのドームが上向きに出て、針金のかごで囲まれている。
+        /// pos = 台座の下 (手すりの上)。上を向いたドームのまわりを照らす明かりを付ける (電気の明かりなので、ゆらめかせない)
+        /// </summary>
+        void CageLamp(Transform parent, Vector3 pos, float range, float intensity)
+        {
+            var g = Group(parent, "CageLamp");
+            g.localPosition = pos;
+            var metal = LampMetal;
+            const float R = 0.08f; // ドームの半径
+            Prim(PrimitiveType.Cylinder, "Base", g, new Vector3(0f, 0.015f, 0f), new Vector3(R * 2.5f, 0.015f, R * 2.5f), metal, false);
+            Prim(PrimitiveType.Cylinder, "Rim", g, new Vector3(0f, 0.035f, 0f), new Vector3(R * 2.25f, 0.006f, R * 2.25f), metal, false);
+            Prim(PrimitiveType.Sphere, "Dome", g, new Vector3(0f, 0.035f, 0f), new Vector3(R * 2f, R * 2.2f, R * 2f), LampGlass, false);
+            // かご: ドームの上で交わる2本の針金の弧と、まわりを囲む横の輪
+            foreach (float yaw in new[] { 0f, 90f })
+            {
+                var arc = Group(g, "CageArc");
+                arc.localPosition = new Vector3(0f, 0.035f, 0f);
+                arc.localRotation = Quaternion.Euler(0f, yaw, 0f);
+                for (int k = 0; k <= 8; k++)
+                {
+                    float a = Mathf.PI * k / 8f;
+                    var seg = Prim(PrimitiveType.Cube, "Wire", arc, new Vector3(Mathf.Cos(a) * (R + 0.008f), Mathf.Sin(a) * (R * 1.1f + 0.008f), 0f), new Vector3(0.008f, 0.04f, 0.008f), metal, false);
+                    seg.transform.localRotation = Quaternion.Euler(0f, 0f, a * Mathf.Rad2Deg);
+                }
+            }
+            FlatRing(g, "CageRing", R + 0.008f, 0.075f, 0.008f, 0.008f, 14, metal);
+            var lg = new GameObject("CageLampLight");
+            lg.transform.SetParent(g, false);
+            lg.transform.localPosition = new Vector3(0f, 0.12f, 0f);
+            var l = lg.AddComponent<Light>();
+            l.type = LightType.Point;
+            l.range = range;
+            l.intensity = intensity;
+            l.color = new Color(1f, 0.88f, 0.7f);
+            l.shadows = LightShadows.None;
         }
 
         // コウモリの群れ: 洞窟の中をぐるぐる飛び回る (群れごとに高さ・半径・速さ・向きが違う)。羽はぱたぱた動く
@@ -802,8 +1099,8 @@ namespace ShootingGallery
             var visual = Group(mount, "LoadVisual");
             var gemKinds = GemMaterials();
             var copper = Mat("Ore_Copper", new Color(0.78f, 0.45f, 0.25f), new Color(0.12f, 0.05f, 0.02f), false, 0.7f);
-            var silver = Mat("Ore_Silver", new Color(0.85f, 0.87f, 0.92f), new Color(0.12f, 0.12f, 0.14f), false, 0.85f);
-            var gold = Mat("Ore_Gold", new Color(1f, 0.8f, 0.25f), new Color(0.35f, 0.25f, 0.02f), false, 0.8f);
+            var silver = OreSilver;
+            var gold = OreGold;
             var oreRock = Mat("Mine_RockDark", new Color(0.2f, 0.18f, 0.17f), null, false, 0.42f);
             var loads = new List<GameObject>
             {
@@ -894,8 +1191,8 @@ namespace ShootingGallery
                 float a = (i * 360f / kindOf.Length + Random.Range(-4f, 4f)) * Mathf.Deg2Rad;
                 bool wall = i % 3 != 2;
                 float r = wall ? Random.Range(20f, 24.5f) : Random.Range(9f, 18f);
-                var p = new Vector3(Mathf.Sin(a) * r, wall ? CaveFloor + Random.Range(0.5f, 6f) : CaveFloor, Mathf.Cos(a) * r);
-                if (!wall && NearTrack(p, 2.2f)) p += new Vector3(p.x, 0f, p.z).normalized * 3f;
+                var p = OnFloor(new Vector3(Mathf.Sin(a) * r, 0f, Mathf.Cos(a) * r)) + Vector3.up * (wall ? Random.Range(0.5f, 6f) : 0f);
+                if (!wall && NearTrack(p, 2.2f)) p = OnFloor(p + new Vector3(p.x, 0f, p.z).normalized * 3f);
                 float size = 1.25f + kindOf[i] * 0.2f; // 大きめ (遠くからでもよく見える)
 
                 var root = Group(cave, $"Gem_{kind.name}_{i}");
@@ -938,6 +1235,124 @@ namespace ShootingGallery
                 gems.Add(gem);
             }
             return gems;
+        }
+
+        /// <summary>天井からちょろちょろ崩れ落ちる小石 (飾り。隠しておき、MineCave が使い回す)</summary>
+        Transform[] BuildFallingRocks(Transform cave)
+        {
+            var group = Group(cave, "FallingRocks");
+            Material[] mats =
+            {
+                Mat("Mine_Rock", new Color(0.32f, 0.29f, 0.27f), null, false, 0.42f),
+                Mat("Mine_RockBrown", new Color(0.36f, 0.26f, 0.18f), null, false, 0.42f),
+                Mat("Mine_RockDark", new Color(0.2f, 0.18f, 0.17f), null, false, 0.42f),
+            };
+            var rocks = new Transform[40];
+            for (int i = 0; i < rocks.Length; i++)
+            {
+                float s = Random.Range(0.08f, 0.16f);
+                var r = Rock("Pebble", group, Vector3.zero, new Vector3(s, s * Random.Range(0.6f, 1f), s * Random.Range(0.7f, 1.2f)), mats[i % mats.Length], false);
+                r.SetActive(false);
+                rocks[i] = r.transform;
+            }
+            return rocks;
+        }
+
+        /// <summary>
+        /// ときどき天井から落ちてくる宝石 (的)。床に当たるまでに撃てば点数が入る。上下にとがった1つの宝石 (八面体。落ちながら回る) と、
+        /// 当てやすい大きめの当たり判定、落ちる後ろの光の尾、上に浮かぶ点数。隠しておき、MineCave が落とす
+        /// </summary>
+        MineGem[] BuildFallingGems(Transform cave)
+        {
+            var kinds = GemMaterials();
+            var sparkle = TransparentMat("Gem_Sparkle", new Color(1f, 1f, 1f, 0.6f));
+            int[] kindOf = { 2, 3, 3, 4, 1, 4, 2, 3 }; // サファイア・ルビー・ダイヤが多め (落ちてくる宝石は高い)
+            var list = new List<MineGem>();
+            for (int i = 0; i < kindOf.Length; i++)
+            {
+                var kind = kinds[kindOf[i]];
+                var root = Group(cave, $"FallingGem_{kind.name}_{i}");
+                var mount = Group(root, "Mount");
+                var visual = Group(mount, "Visual");
+                const float Size = 0.7f;
+                var spin = Group(visual, "Spin");
+                spin.localPosition = new Vector3(0f, Size * 0.5f, 0f);
+                var gemShape = new GameObject("Gem");
+                gemShape.transform.SetParent(spin, false);
+                gemShape.transform.localScale = new Vector3(Size * 0.75f, Size, Size * 0.75f); // 少し縦長
+                gemShape.AddComponent<MeshFilter>().sharedMesh = OctahedronMesh();
+                gemShape.AddComponent<MeshRenderer>().sharedMaterial = kind.glow;
+                // 当たり判定: 落ちてくる物でも当てやすいように大きめ
+                var hit = Prim(PrimitiveType.Sphere, "GemHit", visual, new Vector3(0f, Size * 0.5f, 0f), Vector3.one * Size * 2.4f, kind.glow);
+                hit.GetComponent<Renderer>().enabled = false;
+                // 点数 (宝石の上。いつもプレイヤーの方を向く。回らない)
+                var sign = Group(visual, "PointSign");
+                sign.localPosition = new Vector3(0f, Size * 1.9f, 0f);
+                sign.gameObject.AddComponent<FaceCenter>();
+                var label = MakeText(sign, "Points", kind.points.ToString(), Vector3.zero, 0.45f, kind.points >= 1000 ? new Color(0.9f, 1f, 1f) : kind.points >= 500 ? new Color(1f, 0.55f, 0.6f) : new Color(1f, 0.95f, 0.5f));
+                Prim(PrimitiveType.Cube, "Board", sign, new Vector3(0f, 0f, 0.03f), new Vector3(0.45f * 2.9f, 0.45f * 1.35f, 0.03f), Mat("Mine_PointBoard", new Color(0.12f, 0.08f, 0.05f)), false);
+                // 落ちる後ろの光の尾 (宝石の色)
+                var trail = spin.gameObject.AddComponent<TrailRenderer>();
+                trail.sharedMaterial = kind.glow;
+                trail.time = 0.35f;
+                trail.widthMultiplier = Size * 0.5f;
+                trail.widthCurve = AnimationCurve.Linear(0f, 1f, 1f, 0f);
+                trail.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                trail.emitting = false;
+
+                var target = mount.gameObject.AddComponent<Target>();
+                target.kind = TargetKind.MineObject;
+                target.manualControl = true;
+                target.shrinkOnHit = true;
+                target.visual = visual;
+                target.SetAvailable(false);
+
+                var gem = root.gameObject.AddComponent<MineGem>();
+                gem.displayName = kind.name;
+                gem.points = kind.points;
+                gem.hitTarget = target;
+                gem.pointLabel = label;
+                gem.shardMaterial = kind.shard;
+                gem.sparkleMaterial = sparkle;
+                gem.spinPart = spin;
+                gem.fallTrail = trail;
+                root.gameObject.SetActive(false);
+                list.Add(gem);
+            }
+            return list.ToArray();
+        }
+
+        /// <summary>上下にとがった宝石の形 (八面体。高さ・幅 1、まん中が原点)。面ごとに角ばって光る</summary>
+        Mesh OctahedronMesh()
+        {
+            const string name = "Gem_Octahedron";
+            if (meshes.TryGetValue(name, out var cached)) return cached;
+            Vector3 top = Vector3.up * 0.5f, bottom = Vector3.down * 0.5f;
+            Vector3[] ring = { new Vector3(0.5f, 0f, 0f), new Vector3(0f, 0f, 0.5f), new Vector3(-0.5f, 0f, 0f), new Vector3(0f, 0f, -0.5f) };
+            var verts = new List<Vector3>();
+            var tris = new List<int>();
+            // 面ごとに頂点を分けて (角ばって見えるように)、外から見て時計回りが表になるように並べる
+            void Tri(Vector3 a, Vector3 b, Vector3 c)
+            {
+                var center = (a + b + c) / 3f;
+                if (Vector3.Dot(Vector3.Cross(b - a, c - a), center) < 0f) (b, c) = (c, b);
+                int k = verts.Count;
+                verts.Add(a); verts.Add(b); verts.Add(c);
+                tris.Add(k); tris.Add(k + 1); tris.Add(k + 2);
+            }
+            for (int i = 0; i < 4; i++)
+            {
+                Tri(top, ring[i], ring[(i + 1) % 4]);
+                Tri(bottom, ring[i], ring[(i + 1) % 4]);
+            }
+            var mesh = new Mesh { name = name };
+            mesh.SetVertices(verts);
+            mesh.SetTriangles(tris, 0);
+            mesh.RecalculateNormals();
+            mesh.RecalculateBounds();
+            mesh = SaveMeshIfEditing(mesh, name);
+            meshes[name] = mesh;
+            return mesh;
         }
 
         /// <summary>つるはしの的: 土色の板に、斜めのつるはしと小さな宝石、「MINE」の文字</summary>

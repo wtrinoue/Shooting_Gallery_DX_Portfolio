@@ -51,8 +51,35 @@ namespace ShootingGallery
                 Mat("Hanabi_White", new Color(2.4f, 2.4f, 2.2f), null, true),
             };
             stage.fireworkShellMaterial = Mat("Hanabi_Shell", new Color(2f, 1.6f, 1f), null, true);
+            stage.nightSky = BuildFestivalSky(root, out var clusters);
+            stage.starClusters = clusters;
             go.SetActive(true);
             return stage;
+        }
+
+        /// <summary>
+        /// 夏祭りの星空: 空いっぱいの星 (色の違う固まりごとにまたたく) と、空を斜めに横切る天の川。
+        /// カメラの見える距離 (100m) より手前、花火 (60m くらいまで) より奥に置き、地平線より上にだけ散らす。隠した状態で作る
+        /// </summary>
+        GameObject BuildFestivalSky(Transform root, out Renderer[] clusters)
+        {
+            var sky = Group(root, "FestivalSky");
+            Color[] starColors =
+            {
+                new Color(1f, 1f, 1f), new Color(0.75f, 0.85f, 1f), new Color(1f, 0.93f, 0.75f),
+                new Color(1f, 0.8f, 0.6f), new Color(0.7f, 0.95f, 1f), new Color(0.95f, 0.85f, 1f)
+            };
+            var list = new List<Renderer>();
+            for (int c = 0; c < 10; c++)
+                list.Add(StarCluster(sky, $"Stars_{c}", StarFieldMesh($"FestivalStars_{c}", 170, 72f, 94f, 0.14f, 0.5f, null, 0.04f),
+                                     Mat($"Festival_Star_{c % starColors.Length}", starColors[c % starColors.Length], null, true)));
+            var band = new Vector3(0.5f, 0.35f, 0.8f).normalized; // (天の川が空の高い所を横切るように)
+            for (int c = 0; c < 6; c++)
+                list.Add(StarCluster(sky, $"MilkyWay_{c}", StarFieldMesh($"FestivalMilkyWay_{c}", 320, 76f, 95f, 0.08f, 0.22f, band, 0.04f),
+                                     Mat($"Festival_MilkyWay_{c % 3}", Color.Lerp(starColors[c % 3], new Color(0.8f, 0.85f, 1f), 0.5f), null, true)));
+            clusters = list.ToArray();
+            sky.gameObject.SetActive(false);
+            return sky.gameObject;
         }
 
         // ------------------------------------------------------------------

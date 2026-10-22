@@ -32,7 +32,7 @@ namespace ShootingGallery
         public Target startTarget;
         [Tooltip("タイトルの WORLD GATE の的 (START の横)。撃つと、別の世界へ飛ぶ的が並んだ6軒の屋台に囲まれる")]
         public Target worldGateTarget;
-        [Tooltip("操作方法の看板 (プレイヤーの背中側)。タイトルの間だけ表示する (ゲーム中はフィーバーの屋台が並ぶ場所なので隠す)")]
+        [Tooltip("タイトルの看板 (メイン屋台の左に操作方法、右にクレジット)。タイトルの間だけ表示する (ゲーム中はフィーバーの屋台が並ぶ場所なので隠す)")]
         public GameObject controlsBoard;
         [Tooltip("タイトルの間だけ穴をふさぐ平らな床のふたと、穴のふち (ラウンドが始まるとふたが消え、ふちとハッチが出る)")]
         public GameObject pitCover;
@@ -120,7 +120,7 @@ namespace ShootingGallery
         public MineCave mineCave;
         public Color mineSkyColor = new Color(0.02f, 0.015f, 0.01f);
         public Color mineFogColor = new Color(0.04f, 0.03f, 0.025f);
-        public Color mineAmbient = new Color(0.24f, 0.2f, 0.18f); // 暗め (ランプと結晶の明かりで照らされた所が浮かび上がるように)
+        public Color mineAmbient = new Color(0.035f, 0.03f, 0.03f); // 真っ暗に近い (光る宝石・鉱脈と、ランプの明かりで照らされた所だけが浮かび上がるように)
 
         [Header("Submarine (潜水艦モード: 潜水艦の的を撃つと、床が砂になって屋台が斜めに埋もれ、あたりが海に。丸い潜水艦に包まれて海の底へ沈み、魚雷で撃つ)")]
         public SubmarineDive submarineDive;
@@ -196,6 +196,29 @@ namespace ShootingGallery
         void HoldStallsFor(float seconds) => stallsReturnUntil = Mathf.Max(stallsReturnUntil, Time.time + seconds);
 
         // ---- モード専用の武器の戻し方 ----
+
+        /// <summary>
+        /// 今遊んでいる別の世界のモードの残り時間 (どのモードでもなければ -1)。各モードはこれが 0 になった瞬間に終わって戻り始める (Update)。
+        /// 終わった後 (帰りの演出の間) は 0
+        /// </summary>
+        float ActiveStageTimeLeft()
+        {
+            if (NavalActive) return navalBattle.TimeLeft;
+            if (SkyActive) return skyBattle.TimeLeft;
+            if (NinjaActive) return ninjaDojo.TimeLeft;
+            if (KaijuActive) return kaijuCity.TimeLeft;
+            if (CasinoActive) return casinoHall.TimeLeft;
+            if (WesternActive) return westernTrain.TimeLeft;
+            if (SpaceActive) return spaceStage.TimeLeft;
+            if (GhostActive) return ghostManor.TimeLeft;
+            if (MineActive) return mineCave.TimeLeft;
+            if (SubmarineActive) return submarineDive.TimeLeft;
+            if (MusicActive) return concertHall.TimeLeft;
+            if (MuseumActive) return artMuseum.TimeLeft;
+            if (UnknownActive) return unknownStage.TimeLeft;
+            if (FestivalActive) return festivalStage.TimeLeft;
+            return -1f;
+        }
 
         bool stageWeaponPending;          // モードが終わって、専用の武器をハンドガンに戻すのを待っている
         WeaponType pendingStageWeapon;
@@ -481,6 +504,9 @@ namespace ShootingGallery
                 if (MuseumActive && artMuseum.TimeLeft <= 0f) EndMuseum();
                 if (UnknownActive && unknownStage.TimeLeft <= 0f) EndUnknown();
                 UpdateFestival(); // 見ている屋台の武器に持ち替える / 時間切れ
+                // モード専用の武器のゲージを、モードの残り時間に合わせる (ゲージが空になった瞬間に、元の世界へ戻り始める)
+                float stageLeft = ActiveStageTimeLeft();
+                if (stageLeft >= 0f) player.SyncStageWeaponTime(stageLeft);
                 if (timeLeft <= 0f) EndRound();
             }
 
@@ -783,7 +809,7 @@ namespace ShootingGallery
                 if (State != GameState.Playing) StartWorldGate(); // 別の世界へ飛ぶ的だけが並んだ6軒の屋台に囲まれる
                 return;
             }
-            // 操作方法の看板のクレジット / ライセンスの的 (タイトルの間でも撃てる。点数なし)
+            // クレジットの看板のページ送りの的 (タイトルの間でも撃てる。点数なし)
             if (target.kind == TargetKind.Credits)
             {
                 var viewer = target.GetComponentInParent<CreditsViewer>(true);

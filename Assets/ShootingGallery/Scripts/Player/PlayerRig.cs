@@ -74,6 +74,7 @@ namespace ShootingGallery
         float weaponTimeLeft;
         float weaponDuration;
         bool stageWeapon; // モード専用の武器 (時間が来ても自動では戻らない。GameManager が屋台が見えてから戻す)
+        bool stageGaugeFresh; // モード専用の武器を渡したばかり (次にモードの残り時間に合わせる時、その時間をゲージの満タンにする)
         bool dualWield;
 
         bool? xrModeApplied;
@@ -247,7 +248,7 @@ namespace ShootingGallery
                 }
             }
             var def = Weapons.Get(weapon);
-            rightGun.SetInfo(rightGun.IsCharging ? "CHARGING..." : rightGun.IsReloading ? (weapon == WeaponType.Poi ? "NEXT POI..." : "RELOADING...") : def.displayName); // 残りの弾は銃の上の弾の列で見せる
+            rightGun.SetInfo(rightGun.IsCharging ? "CHARGING..." : rightGun.NeedsReload ? $"RELOAD {rightGun.Loaded}/{def.magazine} : PULL TRIGGER" :rightGun.IsReloading ? (weapon == WeaponType.Poi ? "NEXT POI..." : "RELOADING...") : def.displayName); // 残りの弾は銃の上の弾の列で見せる
             if (leftGun != null) leftGun.SetInfo("");
 
             // 弾込めのゲージで見せる武器 (コルク銃・ポイ): 撃つと空になり、たまっていく。満タンになったら撃てる (武器の色に変わる)
@@ -301,6 +302,20 @@ namespace ShootingGallery
         {
             GiveWeapon(type, duration);
             stageWeapon = true;
+            stageGaugeFresh = true;
+        }
+
+        /// <summary>
+        /// モード専用の武器のゲージを、モードの残り時間 (timeLeft) に合わせる (GameManager が毎フレーム呼ぶ)。
+        /// モードはこの残り時間が 0 になった瞬間に元の世界へ戻り始めるので、ゲージが空になった瞬間に戻り始める
+        /// </summary>
+        public void SyncStageWeaponTime(float timeLeft)
+        {
+            if (!stageWeapon) return;
+            timeLeft = Mathf.Max(0f, timeLeft);
+            weaponDuration = stageGaugeFresh ? timeLeft : Mathf.Max(weaponDuration, timeLeft);
+            stageGaugeFresh = false;
+            weaponTimeLeft = timeLeft;
         }
 
         public void GiveWeapon(WeaponType type, float duration)

@@ -167,7 +167,7 @@ namespace ShootingGallery
             var mainStall = BuildStallContent(mainShell, Gimmick.Classic, mainCloth);
             var startTarget = BuildStartTarget(mainShell);
             var worldGateTarget = BuildWorldGateTarget(mainShell); // START の横の WORLD GATE の的
-            var controlsBoard = BuildControlsBoard(); // 背中側の操作方法の看板 (シーンに生成した時も見えるまま置く)
+            var controlsBoard = BuildControlsBoard(); // メイン屋台の左右のタイトルの看板 (左に操作方法、右にクレジット。シーンに生成した時も見えるまま置く)
             // START の的はシーンに生成した時も見えるまま置く (タイトルで最初に出る的。再生時は GameManager が出し入れする)
             msgText.text = LoadingText(++stepsDone, stepsTotal);
             LogStep("メイン屋台", step);

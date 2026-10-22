@@ -21,6 +21,7 @@ namespace ShootingGallery
         public int magazine;         // 続けて撃てる弾の数 (0 なら弾切れなし)。撃ちきると reloadTime 秒の弾込め
         public float reloadTime;
         public bool reloadGauge;     // true なら銃の上のゲージで弾込めの進み具合を見せる (撃つと空になり、満たされたらまた撃てる)
+        public int reloadStep;       // 0 より大きければ、撃ちきっても自動では込めず、トリガーを引くたびにこの数ずつ込める (弾の列は込めた分が緑色にたまる。満タンで撃てる)
     }
 
     public static class Weapons
@@ -47,8 +48,8 @@ namespace ShootingGallery
                     return new WeaponDef { displayName = "FIRE BREATH", fireInterval = 0.35f, automatic = true, pellets = 1, projectile = true, projectileSpeed = 18f, blastRadius = 1.3f, projectileGravity = 2f };
                 case WeaponType.Dart: // カジノモード専用。ダーツを投げる (まっすぐ飛び、当たった所に刺さる)。白いレーザーで狙う
                     return new WeaponDef { displayName = "DARTS", fireInterval = 0.25f, automatic = false, pellets = 1, range = 30f, projectileSpeed = 20f };
-                case WeaponType.Revolver: // 西部劇モード専用。6発撃つと弾込めの時間が入る
-                    return new WeaponDef { displayName = "REVOLVER", fireInterval = 0.22f, automatic = false, pellets = 1, spreadDeg = 0f, range = 60f, magazine = 6, reloadTime = 1.6f };
+                case WeaponType.Revolver: // 西部劇モード専用。6発撃ちきったら、トリガーを引くたびに1発ずつ込める (6発込めたら撃てる)
+                    return new WeaponDef { displayName = "REVOLVER", fireInterval = 0.22f, automatic = false, pellets = 1, spreadDeg = 0f, range = 60f, magazine = 6, reloadTime = 1.6f, reloadStep = 1 };
                 case WeaponType.Missile: // 宇宙モード専用。ミサイルが煙を引いてまっすぐ速く飛び、当たった所で爆発する
                     return new WeaponDef { displayName = "MISSILE", fireInterval = 0.4f, automatic = false, pellets = 1, projectile = true, projectileSpeed = 26f, blastRadius = 1.5f, projectileGravity = 0f };
                 case WeaponType.Torpedo: // 潜水艦モード専用。プロペラで少しゆっくり進む魚雷。泡を引いてまっすぐ進み、当たった所で爆発する
