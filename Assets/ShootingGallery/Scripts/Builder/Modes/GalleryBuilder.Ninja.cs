@@ -10,9 +10,10 @@ namespace ShootingGallery
     public partial class GalleryBuilder
     {
         const float DojoR = 3.4f;      // 中心から壁の内側までの距離
-        const float DojoH = 3.0f;      // 天井の高さ
-        const float DoorTop = 2.4f;    // ふすま (鴨居) の高さ
-        const float InnerDepth = 20f;  // 奥座敷の奥行き
+        const float DojoH = 3.5f;      // 天井の高さ
+        const float DoorTop = 2.6f;    // ふすま (鴨居) の高さ
+        const float InnerDepth = 26f;  // 奥座敷の奥行き
+        const float DepthK = InnerDepth / 20f; // (忍者や行灯の場所は、奥行き 20m の時に決めたものを、この倍率で奥へ広げる)
 
         NinjaDojo BuildNinjaDojo()
         {
@@ -60,7 +61,8 @@ namespace ShootingGallery
 
         Material DojoWood => Mat("Dojo_Wood", new Color(0.36f, 0.22f, 0.12f), null, false, 0.35f);
         Material DojoWoodDark => Mat("Dojo_WoodDark", new Color(0.16f, 0.1f, 0.06f));
-        Material DojoPlaster => Mat("Dojo_Plaster", new Color(0.9f, 0.86f, 0.76f));
+        Material DojoPlaster => Mat("Dojo_Plaster", new Color(0.72f, 0.85f, 0.42f)); // 黄緑の壁 (部屋の基調の色。忍者の紺・ワインレッド・濃いオレンジが目立つように)
+        Material FusumaPaper => Mat("Fusuma_Paper", new Color(0.82f, 0.92f, 0.56f));  // 黄緑がかったふすま・掛け軸の紙
 
         /// <summary>
         /// 正面の壁 (ローカル: 根元の真ん中が原点、+Z が外)。両端の柱・鴨居・上の白い壁と「NINJA」の額、一面のふすま4枚。
@@ -129,7 +131,7 @@ namespace ShootingGallery
                         Prim(PrimitiveType.Cube, "ShojiH", w, new Vector3(0f, 1.6f + k * 0.36f, -0.01f), new Vector3(2.4f, 0.025f, 0.012f), DojoWoodDark, false);
                     break;
                 default: // 掛け軸 (墨の丸)
-                    Prim(PrimitiveType.Cube, "Scroll", w, new Vector3(0f, 1.55f, -0.005f), new Vector3(0.6f, 1.4f, 0.01f), Mat("Fusuma_Paper", new Color(0.93f, 0.88f, 0.74f)), false);
+                    Prim(PrimitiveType.Cube, "Scroll", w, new Vector3(0f, 1.55f, -0.005f), new Vector3(0.6f, 1.4f, 0.01f), FusumaPaper, false);
                     foreach (float y in new[] { 0.83f, 2.27f })
                         Prim(PrimitiveType.Cube, "Roller", w, new Vector3(0f, y, -0.01f), new Vector3(0.68f, 0.04f, 0.03f), DojoWoodDark, false);
                     var ring = Group(w, "Enso");
@@ -142,7 +144,7 @@ namespace ShootingGallery
         /// <summary>ふすま1枚: クリーム色の紙に黒い縁、引き手。金の月か青い波の絵</summary>
         Transform Fusuma(Transform parent, Vector3 pos, float width, float height, bool moon)
         {
-            var paper = Mat("Fusuma_Paper", new Color(0.93f, 0.88f, 0.74f));
+            var paper = FusumaPaper;
             var frame = Mat("Fusuma_Frame", new Color(0.12f, 0.08f, 0.06f));
             var door = Group(parent, "Fusuma");
             door.localPosition = pos;
@@ -197,6 +199,7 @@ namespace ShootingGallery
             float tw = 2f * DojoR / TatamiCols;
             int rows = Mathf.FloorToInt(InnerDepth / TatamiDepth);
             var tatamiTraps = new (int col, int row, int points)[] { (1, 3, 100), (2, 6, 100), (0, 9, 200), (3, 12, 300), (1, 15, 300), (2, 18, 500), (1, 21, 1000) };
+            for (int i = 0; i < tatamiTraps.Length; i++) tatamiTraps[i].row = Mathf.RoundToInt(tatamiTraps[i].row * DepthK);
             for (int r = 0; r < rows; r++)
                 for (int c = 0; c < TatamiCols; c++)
                 {
@@ -264,7 +267,7 @@ namespace ShootingGallery
             }
 
             // ---- 天井と梁。忍者が出てくる天井板は下へ開く ----
-            var hatches = new (float x, float z, int points)[] { (-1.5f, z0 + 5f, 300), (1.5f, z0 + 10f, 300), (0f, z0 + 16f, 500) };
+            var hatches = new (float x, float z, int points)[] { (-1.5f, z0 + 5f * DepthK, 300), (1.5f, z0 + 10f * DepthK, 300), (0f, z0 + 16f * DepthK, 500) };
             Prim(PrimitiveType.Cube, "InnerCeiling", room, new Vector3(0f, DojoH + 0.05f, midZ), new Vector3(2f * DojoR + 0.3f, 0.1f, InnerDepth), DojoWoodDark, false);
             for (float z = z0 + 0.6f; z < zEnd; z += 1.1f)
             {
@@ -281,12 +284,16 @@ namespace ShootingGallery
                 // 逆さまにぶら下がって出てくる (倒れる時は天井の方へ跳ね上がる)
                 var ninja = NinjaPanel(room, new Vector3(x, DojoH - 0.05f, z), points);
                 ninja.transform.localRotation = Quaternion.Euler(0f, 0f, 180f);
-                var label = ninja.visual.Find("Points");
+                var label = ninja.visual.Find("Figure/Points");
                 if (label != null) label.localRotation = Quaternion.Euler(0f, 0f, 180f); // 点数の文字は読める向きに
                 Prim(PrimitiveType.Cylinder, "Rope", ninja.visual, new Vector3(0f, -0.1f, 0f), new Vector3(0.02f, 0.1f, 0.02f), Mat("Rope", new Color(0.85f, 0.8f, 0.65f)), false);
                 AddTrap(ninja, hinge, Vector3.zero, new Vector3(-95f, 0f, 0f), new Vector3(0f, 1.8f, 0f)); // 天井裏から降りてくる
                 panels.Add(ninja);
             }
+
+            // ---- 何もない畳の上に、煙とともにどろろんと現れる忍者 (仕掛けの所とは重ならない場所) ----
+            foreach (var (x, z, points) in new[] { (-2.2f, z0 + 3.3f * DepthK, 200), (2.2f, z0 + 6.3f * DepthK, 300), (0.6f, z0 + 8.9f * DepthK, 300), (-1.9f, z0 + 11.5f * DepthK, 500), (2f, z0 + 15.5f * DepthK, 500) })
+                panels.Add(SmokeNinja(room, new Vector3(x, 0.07f, z), points));
 
             // ---- 途中の2つの仕切り (欄間と柱)。奥行きが分かりやすくなる ----
             foreach (float z in new[] { z0 + InnerDepth / 3f, z0 + InnerDepth * 2f / 3f })
@@ -310,7 +317,7 @@ namespace ShootingGallery
 
             // ---- 両側の行灯と、部屋を照らす明かり ----
             var andon = Mat("Andon", new Color(1f, 0.88f, 0.65f), new Color(1.6f, 1.1f, 0.5f));
-            foreach (float z in new[] { z0 + 3f, z0 + 10f, z0 + 17f })
+            foreach (float z in new[] { z0 + 3f * DepthK, z0 + 10f * DepthK, z0 + 17f * DepthK })
             {
                 foreach (float s in new[] { -1f, 1f })
                 {
@@ -342,8 +349,9 @@ namespace ShootingGallery
                 Prim(PrimitiveType.Cube, "TatamiEdge", mat.transform.parent, pos + new Vector3(0f, 0.072f, s * (TatamiDepth / 2f - 0.04f)), new Vector3(width - 0.03f, 0.004f, 0.04f), edge, false);
         }
 
-        // 忍者の隠れ場所の仕掛けを付ける (忍者が出ている間だけ板が開き、忍者は hideOffset の所から出てくる)
-        static void AddTrap(Target ninja, Transform flap, Vector3 flapOffset, Vector3 flapEuler, Vector3 hideOffset)
+        // 忍者の隠れ場所の仕掛けを付ける (忍者が出ている間だけ板が開き、忍者は hideOffset の所から出てくる)。出てくるたびにポーズが変わる。
+        // 畳・ふすま・天井板から出てくる忍者は、煙なしでふつうに出てくる (煙は、何もない所に現れる忍者だけ: SmokeNinja)
+        void AddTrap(Target ninja, Transform flap, Vector3 flapOffset, Vector3 flapEuler, Vector3 hideOffset)
         {
             var trap = ninja.gameObject.AddComponent<NinjaTrap>();
             trap.target = ninja;
@@ -351,63 +359,95 @@ namespace ShootingGallery
             trap.flapOpenOffset = flapOffset;
             trap.flapOpenEuler = flapEuler;
             trap.hideOffset = hideOffset;
+            trap.pose = ninja.GetComponent<NinjaPose>();
+        }
+
+        // 何もない所 (奥座敷の床の上) に、前触れもなく煙とともにどろろんと現れる忍者。消える時も煙
+        Target SmokeNinja(Transform room, Vector3 pos, int points)
+        {
+            var ninja = NinjaPanel(room, pos, points);
+            ninja.transform.localRotation = Quaternion.LookRotation(new Vector3(pos.x, 0f, pos.z)); // プレイヤーの方を向く
+            var trap = ninja.gameObject.AddComponent<NinjaTrap>();
+            trap.target = ninja;
+            trap.openTime = 0.01f; // その場にぱっと現れる
+            trap.smoke = TransparentMat("Ninja_Smoke", new Color(0.88f, 0.9f, 0.92f, 0.65f));
+            trap.pose = ninja.GetComponent<NinjaPose>();
+            return ninja;
         }
 
         /// <summary>
-        /// 忍者のパネル (根元が原点。後ろへ倒れて寝ている)。黒い装束に覆面、目だけ出ていて、刀と手裏剣を構えている。
-        /// 胸の白い丸に点数。点数で色が変わる (100 黒 / 200 紺 / 300 赤 / 500 以上 金)。
+        /// 忍者のパネル (根元が原点。後ろへ倒れて寝ている)。覆面の忍者で、目だけ出ている。腕は肩、脚は腰から動き、出てくるたびにポーズが変わる (NinjaPose)。
+        /// 黄緑の部屋の中で目立つように、装束は点数ごとにはっきりした色 (100 紺 / 200 ワインレッド / 300 濃いオレンジ / 500 以上 金) で、帯は反対の色。
+        /// 胸の大きな白い丸に、太い図形の数字で点数。
         /// </summary>
         Target NinjaPanel(Transform parent, Vector3 basePos, int points)
         {
             var root = Group(parent, $"Ninja_{points}");
             root.localPosition = basePos;
             var pivot = Group(root, "Pivot");
+            var figure = Group(pivot, "Figure"); // 体全体 (低く構える時に下がる)
 
-            Color suit = points >= 500 ? new Color(0.85f, 0.65f, 0.15f) : points >= 300 ? new Color(0.5f, 0.06f, 0.08f)
-                       : points >= 200 ? new Color(0.1f, 0.13f, 0.32f) : new Color(0.08f, 0.08f, 0.1f);
-            Color sash = points >= 500 ? new Color(0.6f, 0.05f, 0.05f) : points >= 300 ? new Color(0.1f, 0.1f, 0.1f)
-                       : points >= 200 ? new Color(1f, 0.8f, 0.2f) : new Color(0.85f, 0.12f, 0.1f);
+            Color suit = points >= 500 ? new Color(0.9f, 0.68f, 0.12f) : points >= 300 ? new Color(0.9f, 0.38f, 0.04f)
+                       : points >= 200 ? new Color(0.5f, 0.04f, 0.13f) : new Color(0.07f, 0.11f, 0.4f);
+            Color sash = points >= 500 ? new Color(0.5f, 0.04f, 0.13f) : points >= 300 ? new Color(0.07f, 0.11f, 0.4f)
+                       : points >= 200 ? new Color(1f, 0.8f, 0.2f) : new Color(1f, 0.45f, 0.08f);
             int tier = points >= 500 ? 500 : points >= 300 ? 300 : points >= 200 ? 200 : 100;
-            var suitMat = Mat($"Ninja_Suit_{tier}", suit, tier >= 500 ? new Color(0.25f, 0.18f, 0.02f) : null, false, tier >= 500 ? 0.7f : 0.2f);
+            var suitMat = Mat($"Ninja_Suit_{tier}", suit, tier >= 500 ? new Color(0.25f, 0.18f, 0.02f) : suit * 0.12f, false, tier >= 500 ? 0.7f : 0.25f);
             var sashMat = Mat($"Ninja_Sash_{tier}", sash);
             var skin = Mat("Pilot_Skin", new Color(0.95f, 0.75f, 0.6f));
             var black = Mat("Ninja_Eye", new Color(0.02f, 0.02f, 0.02f));
             var steel = Mat("Shuriken_Steel", new Color(0.75f, 0.77f, 0.8f), null, false, 0.85f);
 
-            // 体 (当たり判定あり)
-            foreach (float s in new[] { -1f, 1f })
-                Prim(PrimitiveType.Cube, "Leg", pivot, new Vector3(s * 0.1f, 0.3f, 0f), new Vector3(0.14f, 0.6f, 0.03f), suitMat);
-            Prim(PrimitiveType.Cube, "Body", pivot, new Vector3(0f, 0.85f, 0f), new Vector3(0.44f, 0.52f, 0.03f), suitMat);
-            Prim(PrimitiveType.Cube, "Sash", pivot, new Vector3(0f, 0.63f, -0.003f), new Vector3(0.46f, 0.06f, 0.03f), sashMat, false);
-            var armL = Prim(PrimitiveType.Cube, "ArmL", pivot, new Vector3(-0.3f, 1.0f, 0f), new Vector3(0.1f, 0.42f, 0.03f), suitMat);
-            armL.transform.localRotation = Quaternion.Euler(0f, 0f, -35f);
-            var armR = Prim(PrimitiveType.Cube, "ArmR", pivot, new Vector3(0.3f, 0.92f, 0f), new Vector3(0.1f, 0.42f, 0.03f), suitMat);
-            armR.transform.localRotation = Quaternion.Euler(0f, 0f, 30f);
-            Prim(PrimitiveType.Sphere, "Head", pivot, new Vector3(0f, 1.3f, 0f), new Vector3(0.34f, 0.36f, 0.05f), suitMat);
+            // 脚 (腰から動く)。当たり判定あり
+            Transform Limb(string name, Vector3 joint, float length, float width)
+            {
+                var j = Group(figure, name);
+                j.localPosition = joint;
+                Prim(PrimitiveType.Cube, name + "Part", j, new Vector3(0f, -length / 2f, 0f), new Vector3(width, length, 0.03f), suitMat);
+                return j;
+            }
+            var legL = Limb("LegL", new Vector3(-0.1f, 0.6f, 0f), 0.6f, 0.14f);
+            var legR = Limb("LegR", new Vector3(0.1f, 0.6f, 0f), 0.6f, 0.14f);
+            Prim(PrimitiveType.Cube, "Body", figure, new Vector3(0f, 0.85f, 0f), new Vector3(0.44f, 0.52f, 0.03f), suitMat);
+            Prim(PrimitiveType.Cube, "Sash", figure, new Vector3(0f, 0.63f, -0.003f), new Vector3(0.46f, 0.07f, 0.03f), sashMat, false);
+            // 腕 (肩から動く)
+            var armL = Limb("ArmL", new Vector3(-0.21f, 1.07f, 0.002f), 0.42f, 0.1f);
+            var armR = Limb("ArmR", new Vector3(0.21f, 1.07f, 0.002f), 0.42f, 0.1f);
+            Prim(PrimitiveType.Sphere, "Head", figure, new Vector3(0f, 1.3f, 0f), new Vector3(0.34f, 0.36f, 0.05f), suitMat);
             // 覆面から出た目元と、鋭い目
-            Prim(PrimitiveType.Cube, "EyeBand", pivot, new Vector3(0f, 1.32f, -0.022f), new Vector3(0.26f, 0.075f, 0.01f), skin, false);
+            Prim(PrimitiveType.Cube, "EyeBand", figure, new Vector3(0f, 1.32f, -0.022f), new Vector3(0.26f, 0.075f, 0.01f), skin, false);
             foreach (float s in new[] { -1f, 1f })
             {
-                Prim(PrimitiveType.Sphere, "Eye", pivot, new Vector3(s * 0.06f, 1.32f, -0.028f), new Vector3(0.045f, 0.025f, 0.008f), black, false);
-                var brow = Prim(PrimitiveType.Cube, "Brow", pivot, new Vector3(s * 0.065f, 1.355f, -0.028f), new Vector3(0.07f, 0.014f, 0.006f), black, false);
+                Prim(PrimitiveType.Sphere, "Eye", figure, new Vector3(s * 0.06f, 1.32f, -0.028f), new Vector3(0.045f, 0.025f, 0.008f), black, false);
+                var brow = Prim(PrimitiveType.Cube, "Brow", figure, new Vector3(s * 0.065f, 1.355f, -0.028f), new Vector3(0.07f, 0.014f, 0.006f), black, false);
                 brow.transform.localRotation = Quaternion.Euler(0f, 0f, s * -15f);
             }
             // 頭の結び目 (はちまきの端)
-            var knot = Prim(PrimitiveType.Cube, "Knot", pivot, new Vector3(0.22f, 1.4f, 0.005f), new Vector3(0.22f, 0.05f, 0.02f), sashMat, false);
+            var knot = Prim(PrimitiveType.Cube, "Knot", figure, new Vector3(0.22f, 1.4f, 0.005f), new Vector3(0.22f, 0.05f, 0.02f), sashMat, false);
             knot.transform.localRotation = Quaternion.Euler(0f, 0f, -25f);
-            // 右手に刀、左手に手裏剣
-            var blade = Prim(PrimitiveType.Cube, "Katana", pivot, new Vector3(0.47f, 1.35f, -0.01f), new Vector3(0.03f, 0.7f, 0.01f), steel, false);
-            blade.transform.localRotation = Quaternion.Euler(0f, 0f, -15f);
-            Prim(PrimitiveType.Cube, "Tsuba", pivot, new Vector3(0.39f, 1.03f, -0.012f), new Vector3(0.09f, 0.025f, 0.012f), black, false);
+            // 右手の刀 (手の先から、腕と同じ向きに伸びる) と、左手の手裏剣
+            var katana = Group(armR, "Katana");
+            katana.localPosition = new Vector3(0f, -0.42f, -0.012f);
+            Prim(PrimitiveType.Cube, "Blade", katana, new Vector3(0f, -0.36f, 0f), new Vector3(0.03f, 0.7f, 0.01f), steel, false);
+            Prim(PrimitiveType.Cube, "Tsuba", katana, new Vector3(0f, -0.01f, 0f), new Vector3(0.09f, 0.025f, 0.012f), black, false);
+            var held = Group(armL, "HeldShuriken");
+            held.localPosition = new Vector3(0f, -0.44f, -0.012f);
             for (int i = 0; i < 4; i++)
-            {
-                var star = Prim(PrimitiveType.Cube, "HeldShuriken", pivot, new Vector3(-0.44f, 1.24f, -0.012f), new Vector3(0.025f, 0.13f, 0.006f), steel, false);
-                star.transform.localRotation = Quaternion.Euler(0f, 0f, i * 45f);
-            }
-            // 胸の点数
-            var disc = Prim(PrimitiveType.Cylinder, "PointDisc", pivot, new Vector3(0f, 0.88f, -0.018f), new Vector3(0.26f, 0.003f, 0.26f), Mat("Target_White", Color.white), false);
+                Prim(PrimitiveType.Cube, "Blade", held, Vector3.zero, new Vector3(0.025f, 0.13f, 0.006f), steel, false).transform.localRotation = Quaternion.Euler(0f, 0f, i * 45f);
+            // 胸の点数 (大きな白い丸に、太い図形の数字)
+            var disc = Prim(PrimitiveType.Cylinder, "PointDisc", figure, new Vector3(0f, 0.86f, -0.018f), new Vector3(0.36f, 0.003f, 0.36f), Mat("Target_White", Color.white), false);
             disc.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-            MakeText(pivot, "Points", points.ToString(), new Vector3(0f, 0.88f, -0.022f), points >= 1000 ? 0.07f : 0.09f, new Color(0.1f, 0.1f, 0.1f));
+            PointDigits(figure, points, new Vector3(0f, 0.86f, -0.024f), 0.31f, 0.17f, DigitMat);
+
+            var pose = root.gameObject.AddComponent<NinjaPose>();
+            pose.figure = figure;
+            pose.armL = armL;
+            pose.armR = armR;
+            pose.legL = legL;
+            pose.legR = legR;
+            pose.katana = katana.gameObject;
+            pose.shuriken = held.gameObject;
+            pose.Apply(0);
 
             var target = root.gameObject.AddComponent<Target>();
             target.kind = TargetKind.NinjaPanel;

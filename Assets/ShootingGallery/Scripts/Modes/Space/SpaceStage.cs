@@ -72,6 +72,8 @@ namespace ShootingGallery
 
         /// <summary>暗くなる時 (GameManager が宇宙の暗さにする)</summary>
         public event System.Action Darken;
+        /// <summary>星々がきらめき始める時 (GameManager が宇宙の BGM を流し始める)</summary>
+        public event System.Action StarsAppear;
         /// <summary>星が消えて床が戻り始める時 (GameManager がいつもの夜の明るさへ戻す)</summary>
         public event System.Action Restore;
         /// <summary>的を壊した (点数はもう入っている。GameManager が大きな的の時に演出を出す)</summary>
@@ -187,6 +189,7 @@ namespace ShootingGallery
             groundRoutine = StartCoroutine(FadeGround(1f));
             yield return new WaitForSeconds(0.8f);
             // 2. 星々が1つ、また1つときらめき始める
+            StarsAppear?.Invoke();
             Sfx.Play("twinkle");
             bool second = false;
             for (float t = 0f; t < starFadeIn; t += Time.deltaTime)

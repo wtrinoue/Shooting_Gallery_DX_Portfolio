@@ -5,7 +5,7 @@ using UnityEngine;
 namespace ShootingGallery
 {
     /// <summary>
-    /// クレジットとライセンス全文のパネル (メイン屋台の右のクレジットの看板)。
+    /// クレジットとライセンス全文のパネル (操作方法の看板のいちばん下の CREDITS の的を撃つと、看板の前に開く)。
     /// 文章 (Resources/THIRD_PARTY_NOTICES.txt) をページに分けて大きな文字で出し、パネルの下の的 (前へ / 次へ) を撃ってページを送る。
     /// openButton があれば、それを撃つと開く / 閉じる パネルになる (なければ、いつも開いたまま)。
     /// 使っているライブラリ (WebXR Export: Apache License 2.0) の「ライセンスの写しを渡す」条件を、どのビルド (PC・Quest・WebGL) でも満たすためのもの。
@@ -38,7 +38,13 @@ namespace ShootingGallery
             BuildPages();
             if (AlwaysOpen) return;
             if (panel != null) panel.SetActive(false);
-            // 文字 (TextMesh) は前にある板を透けて描かれるので、パネルの後ろになる看板の文字を覚えておく (パネルと CREDITS の的の文字は除く)
+            CollectBoardTexts();
+        }
+
+        // 文字 (TextMesh) は前にある板を透けて描かれるので、パネルの後ろになる看板の文字を覚えておく (パネルと CREDITS の的の文字は除く)
+        void CollectBoardTexts()
+        {
+            boardTexts.Clear();
             foreach (var tm in GetComponentsInChildren<TextMesh>(true))
             {
                 var t = tm.transform;
@@ -80,6 +86,7 @@ namespace ShootingGallery
         {
             if (panel == null) return;
             panel.SetActive(true);
+            if (boardTexts.Count == 0) CollectBoardTexts(); // (その場で生成した時は、Awake の時にまだ的が渡されていない)
             SetBoardTexts(false);
             ShowPage(0);
             Sfx.Play("pickup");

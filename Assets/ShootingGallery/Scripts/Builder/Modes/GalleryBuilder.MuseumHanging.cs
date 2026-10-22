@@ -113,7 +113,8 @@ namespace ShootingGallery
             swing.speed = Random.Range(0.45f, 0.65f);
             swing.phase = Random.Range(0f, 6.28f);
 
-            AddArtField(root, Artwork.Kind.Hanging, Vector3.down * drop, Mathf.Max(size.x, size.y) * 0.5f + 1.2f);
+            AddArtField(root, Artwork.Kind.Hanging, Vector3.down * drop, Mathf.Max(size.x, size.y) * 0.5f + 0.4f); // (作品のすぐまわりだけ。広いとちかちかする)
+            AddGlint(art, body, Vector3.zero, new Vector2(size.x, size.y), true, 0f, lump); // 白い粘土の塊の表面ぜんたいを、包むように流れる光の帯
             root.gameObject.SetActive(false);
             return art;
         }

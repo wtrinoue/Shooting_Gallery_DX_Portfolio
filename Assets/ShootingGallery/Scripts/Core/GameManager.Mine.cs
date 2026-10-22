@@ -10,8 +10,6 @@ namespace ShootingGallery
         bool mineStallsAway; // 降りていって、屋台を止めて沈めてあるか
         bool mineFogWasOn;   // 発掘モードの間は霧を切る。始まる前に霧が出ていたか (上がり始めたら元に戻す)
         bool mineFogOff;
-        float mineReflectionWas = 1f; // 洞窟の中では空の映り込みを切る。切る前の強さ
-        bool mineReflectionOff;
 
         // 発掘モードの間は霧をなくす / 元に戻す
         void SetMineFog(bool off)
@@ -24,21 +22,6 @@ namespace ShootingGallery
                 RenderSettings.fog = false;
             }
             else RenderSettings.fog = mineFogWasOn;
-        }
-
-        // 洞窟の中では、空の景色の映り込み (環境の反射) を切る / 元に戻す。
-        // つやのある床や岩は、明かりが当たっていなくても空の明るい景色を映して、浅い角度で見ると一面に明るく見えてしまうので
-        // (地下には空がないので、ランタンや宝石の明かりで照らされた所だけが明るく見えるように)
-        void SetMineReflection(bool off)
-        {
-            if (off == mineReflectionOff) return;
-            mineReflectionOff = off;
-            if (off)
-            {
-                mineReflectionWas = RenderSettings.reflectionIntensity;
-                RenderSettings.reflectionIntensity = 0f;
-            }
-            else RenderSettings.reflectionIntensity = mineReflectionWas;
         }
 
         /// <summary>この的をつるはしの的 (発掘モード) に化けさせてよいか (WeaponDropper が聞く)。条件は海戦モードと同じ</summary>
@@ -66,6 +49,7 @@ namespace ShootingGallery
             SetShownStallTargets(false);
             ResetView(true); // 下へ降りる前に、いつもの視点にそろえる (そこからの深さで動かすので)
             mineCave.Begin(player.transform);
+            PlayStageBgm(mineBgm);
             SetMineFog(true); // 霧なし (縦穴も洞窟も、くっきり見える)
             player.GiveStageWeapon(WeaponType.Pickaxe, mineCave.duration); // つるはしを回しながら投げる
             // 縦穴を降りる間に、だんだん暗くなる
@@ -88,7 +72,6 @@ namespace ShootingGallery
         // 縦穴を抜けて洞窟に入った: 洞窟の明るさ (霧は発掘モードの間ずっと切ってある)
         void OnMineCave()
         {
-            SetMineReflection(true); // 空の映り込みを切る (照らされていない床や岩は暗いまま)
             FadeAmbience(mineFogColor, mineAmbient, mineSkyColor, 1.5f);
             if (State == GameState.Playing) ShowMessage("WELCOME TO THE MINE!\nSHOOT THE GEMS & MINE CARTS!", 3f, new Color(1f, 0.75f, 0.35f));
         }
@@ -97,7 +80,6 @@ namespace ShootingGallery
         void OnMineRising()
         {
             SetMineFog(false); // いつもの霧に戻す
-            SetMineReflection(false);
             RenderSettings.fogStartDistance = normalFogStart;
             RenderSettings.fogEndDistance = normalFogEnd;
             FadeAmbience(normalFogColor, normalAmbient, normalSkyColor, mineCave.ascendTime * 0.8f);
@@ -123,12 +105,12 @@ namespace ShootingGallery
         void EndMine()
         {
             if (!MineActive) return;
+            if (State != GameState.Playing) StopStageBgm(mineBgm, true); // (ラウンドの終わり・リセットの時はすぐ止める。ふだんは地上に戻ってから OnMineClosed で)
             int hits = mineCave.Hits;
             bool immediate = State != GameState.Playing;
             if (immediate)
             {
                 SetMineFog(false);
-                SetMineReflection(false);
                 RenderSettings.fogStartDistance = normalFogStart;
                 RenderSettings.fogEndDistance = normalFogEnd;
                 FadeAmbience(normalFogColor, normalAmbient, normalSkyColor, 0.05f);
@@ -147,6 +129,7 @@ namespace ShootingGallery
         // 上がりきって穴が土で埋まり、土の床が消えた: ハッチを戻し、しまっておいた屋台の的を出す
         void OnMineClosed()
         {
+            StopStageBgm(mineBgm); // 地上に戻ってきた: BGM をふわっと止める
             ShowHatch();
             if (State == GameState.Playing && !ChallengeActive) SetShownStallTargets(true);
         }

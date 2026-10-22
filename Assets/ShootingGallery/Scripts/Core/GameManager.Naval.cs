@@ -40,6 +40,7 @@ namespace ShootingGallery
             if (IsFever) navalStalls.AddRange(activeFeverStalls);
             navalBattle.dropDelay = navalBattle.seaRiseTime * 0.6f + navalSinkTime * 0.75f; // 屋台が船の外へはね飛んだ後に甲板がせり上がる
             navalBattle.Begin(yaw); // 船首を撃った的の方へ (屋台をはね飛ばす向きは、この船の向きで決まる)
+            PlayStageBgm(navalBgm);
             // 海が床を覆ったころから、屋台ごとに少しずらして、船の外の海へはね飛び、流されて船の後ろで沈む
             for (int i = 0; i < navalStalls.Count; i++)
                 navalStalls[i].CastAdrift(navalBattle.transform, navalBattle.shipHalfWidth, navalBattle.shipSternZ, navalBattle.SeaWorldY,
@@ -54,6 +55,7 @@ namespace ShootingGallery
         void EndNaval()
         {
             if (!NavalActive) return;
+            StopStageBgm(navalBgm, State != GameState.Playing); // (ラウンドの終わり・リセットの時はすぐ止める)
             int sunk = navalBattle.Sunk;
             navalBattle.End();
             ReleaseStageWeapon(WeaponType.Bazooka);

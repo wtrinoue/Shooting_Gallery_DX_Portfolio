@@ -978,7 +978,7 @@ namespace ShootingGallery
         void BuildMoneyPanel(Transform hud, GameManager gm)
         {
             var panel = Group(hud, "MoneyPanel");
-            panel.localPosition = new Vector3(0f, 0.47f, 0f);
+            panel.localPosition = new Vector3(0f, 0.62f, 0f); // (HUD の文字の上)
             const float W = 0.62f, H = 0.2f;
             // 下に夏祭りの残り時間 (減っていくバーと秒数)
             var timeRow = Group(panel, "TimeRow");

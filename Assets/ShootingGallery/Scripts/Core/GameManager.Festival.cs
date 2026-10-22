@@ -34,6 +34,7 @@ namespace ShootingGallery
             festivalStage.riseDelay = StallsAwayTime; // いつもの屋台が沈みきってから、夏祭りの屋台がせり上がる
             festivalStage.moveTime = stallMoveDuration;
             festivalStage.Begin(yaw);
+            PlayStageBgm(festivalBgm);
             // 空高く上がる遠くの花火と、その奥の星空 (95m くらいまで) が霧でかすまないように、霧はカメラの見える距離 (100m) より遠くから
             RenderSettings.fogStartDistance = Mathf.Max(normalFogStart, 100f);
             RenderSettings.fogEndDistance = Mathf.Max(normalFogEnd, 180f);
@@ -54,7 +55,7 @@ namespace ShootingGallery
             }
             var w = festivalStage.WeaponFor(player.head.transform.forward, player.Weapon);
             if (w == player.Weapon) return;
-            player.GiveStageWeapon(w, festivalStage.TimeLeft);
+            player.SwitchStageWeapon(w); // (ゲージは続きから)
             Sfx.Play("click");
         }
 
@@ -62,6 +63,7 @@ namespace ShootingGallery
         void EndFestival()
         {
             if (!FestivalActive) return;
+            StopStageBgm(festivalBgm, State != GameState.Playing); // (ラウンドの終わり・リセットの時はすぐ止める)
             int hits = festivalStage.Hits;
             bool immediate = State != GameState.Playing;
             festivalStage.End(immediate);

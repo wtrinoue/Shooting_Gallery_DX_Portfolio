@@ -188,6 +188,7 @@ namespace ShootingGallery
 
             // 洞窟と縦穴は暗いので、影は落とさない (重くしないように)
             foreach (var r in root.GetComponentsInChildren<Renderer>(true)) r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            NoSkyReflections(root);
 
             var mine = go.AddComponent<MineCave>();
             mine.digCover = cover.gameObject;
@@ -422,6 +423,31 @@ namespace ShootingGallery
             foreach (var q in mineTrackPoints)
                 if ((new Vector2(p.x - q.x, p.z - q.z)).sqrMagnitude < dist * dist) return true;
             return false;
+        }
+
+        /// <summary>
+        /// 地下には空がないので、洞窟の材質は空の景色を映さないようにする (環境の反射を切る)。
+        /// 映すと、明かりの当たっていない床や岩まで空の明るい景色で一面に明るく見えてしまう。
+        /// (実行中に RenderSettings.reflectionIntensity を切り替えると、映り込みの環境が作り直されて物が水色に光ることがあるので、材質の側で切る)
+        /// 発掘モード専用の材質だけを対象にする (ほかのモードと使い回している材質は変えない)
+        /// </summary>
+        void NoSkyReflections(Transform root)
+        {
+            string[] prefixes = { "Mine_", "Rail_", "Ore_", "Gem_", "Cart_" };
+            var done = new HashSet<Material>();
+            foreach (var r in root.GetComponentsInChildren<Renderer>(true))
+                foreach (var m in r.sharedMaterials)
+                {
+                    if (m == null || !done.Add(m) || !m.HasProperty("_EnvironmentReflections")) continue;
+                    bool ours = false;
+                    foreach (var p in prefixes) if (m.name.StartsWith(p)) { ours = true; break; }
+                    if (!ours) continue;
+                    m.SetFloat("_EnvironmentReflections", 0f);
+                    m.EnableKeyword("_ENVIRONMENTREFLECTIONS_OFF");
+#if UNITY_EDITOR
+                    if (editMode) UnityEditor.EditorUtility.SetDirty(m); // (シーンに生成した時は、保存した材質にも残す)
+#endif
+                }
         }
 
         // いちばん近い線路の点までの、水平の距離

@@ -418,7 +418,6 @@ namespace ShootingGallery
                     var gem = free[Random.Range(0, free.Count)];
                     var spot = RandomCeilingSpot(5f, 14f);
                     Dust(spot, 1f);
-                    Sfx.Play("crack");
                     for (int i = 0; i < 4; i++) pendingRocks.Add((now + i * 0.12f, spot + new Vector3(Random.Range(-0.4f, 0.4f), 0f, Random.Range(-0.4f, 0.4f)), Random.Range(0.6f, 1f)));
                     pendingDrops.Add((now + 0.7f, spot, gem));
                 }

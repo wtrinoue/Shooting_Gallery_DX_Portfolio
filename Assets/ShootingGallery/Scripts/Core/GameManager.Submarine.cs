@@ -30,6 +30,7 @@ namespace ShootingGallery
             SetShownStallTargets(false);
             ResetView(true); // もぐる前に、いつもの視点にそろえる (そこからの深さで動かすので)
             submarineDive.Begin(player.transform, player.head.transform);
+            PlayStageBgm(submarineBgm);
             player.GiveStageWeapon(WeaponType.Torpedo, submarineDive.duration);
             Sfx.Play("stageup");
             ShowMessage("SUBMARINE MODE!!", 2f, new Color(1f, 0.85f, 0.25f));
@@ -83,6 +84,7 @@ namespace ShootingGallery
         void EndSubmarine()
         {
             if (!SubmarineActive) return;
+            if (State != GameState.Playing) StopStageBgm(submarineBgm, true); // (ラウンドの終わり・リセットの時はすぐ止める。ふだんは地上に戻ってから OnSubClosed で)
             int hits = submarineDive.Hits;
             bool immediate = State != GameState.Playing;
             submarineDive.End(immediate);
@@ -98,6 +100,7 @@ namespace ShootingGallery
         // 砂の床が消えた: ハッチを戻し、屋台の的を出す
         void OnSubClosed()
         {
+            StopStageBgm(submarineBgm); // 地上に戻ってきた: BGM をふわっと止める
             ShowHatch();
             if (State == GameState.Playing && !ChallengeActive) SetShownStallTargets(true);
         }

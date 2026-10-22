@@ -53,7 +53,21 @@ namespace ShootingGallery.EditorTools
             assets.museumBgm = AssetDatabase.LoadAssetAtPath<AudioClip>(GalleryBuilder.MuseumBgmPath);
             assets.concertBgm = AssetDatabase.LoadAssetAtPath<AudioClip>(GalleryBuilder.ConcertBgmPath);
             assets.skyBgm = AssetDatabase.LoadAssetAtPath<AudioClip>(GalleryBuilder.SkyBgmPath);
+            assets.festivalBgm = AssetDatabase.LoadAssetAtPath<AudioClip>(GalleryBuilder.FestivalBgmPath);
+            assets.ghostBgm = AssetDatabase.LoadAssetAtPath<AudioClip>(GalleryBuilder.GhostBgmPath);
+            assets.kaijuBgm = AssetDatabase.LoadAssetAtPath<AudioClip>(GalleryBuilder.KaijuBgmPath);
+            assets.mineBgm = AssetDatabase.LoadAssetAtPath<AudioClip>(GalleryBuilder.MineBgmPath);
+            assets.navalBgm = AssetDatabase.LoadAssetAtPath<AudioClip>(GalleryBuilder.NavalBgmPath);
+            assets.westernBgm = AssetDatabase.LoadAssetAtPath<AudioClip>(GalleryBuilder.WesternBgmPath);
+            assets.spaceBgm = AssetDatabase.LoadAssetAtPath<AudioClip>(GalleryBuilder.SpaceBgmPath);
+            assets.submarineBgm = AssetDatabase.LoadAssetAtPath<AudioClip>(GalleryBuilder.SubmarineBgmPath);
+            assets.ninjaBgm = AssetDatabase.LoadAssetAtPath<AudioClip>(GalleryBuilder.NinjaBgmPath);
+            assets.unknownBgm = AssetDatabase.LoadAssetAtPath<AudioClip>(GalleryBuilder.UnknownBgmPath);
+            assets.revolverShot = AssetDatabase.LoadAssetAtPath<AudioClip>(GalleryBuilder.RevolverShotPath);
+            assets.revolverReload = AssetDatabase.LoadAssetAtPath<AudioClip>(GalleryBuilder.RevolverReloadPath);
+            assets.roundBgm = AssetDatabase.LoadAssetAtPath<AudioClip>(GalleryBuilder.RoundBgmPath);
             assets.concertBeatMap = AssetDatabase.LoadAssetAtPath<TextAsset>(GalleryBuilder.ConcertBeatMapPath);
+            assets.pocochiImage = AssetDatabase.LoadAssetAtPath<Texture2D>(GalleryBuilder.PocochiImagePath);
 
             var shaders = new List<Shader>();
             foreach (var guid in AssetDatabase.FindAssets("t:Shader", new[] { ShaderDir }))
@@ -80,7 +94,7 @@ namespace ShootingGallery.EditorTools
             EditorUtility.SetDirty(assets);
             AssetDatabase.SaveAssets();
             if (log || created)
-                Debug.Log($"[GalleryRuntimeAssets] 実機用のアセット一覧をそろえました (BGM {Count(assets.casinoBgm, assets.museumBgm, assets.concertBgm, assets.skyBgm)}/4, " +
+                Debug.Log($"[GalleryRuntimeAssets] 実機用のアセット一覧をそろえました (BGM {Count(assets.casinoBgm, assets.museumBgm, assets.concertBgm, assets.skyBgm, assets.festivalBgm, assets.ghostBgm, assets.kaijuBgm, assets.mineBgm, assets.navalBgm, assets.westernBgm, assets.spaceBgm, assets.submarineBgm, assets.ninjaBgm, assets.roundBgm, assets.unknownBgm)}/15, " +
                           $"拍の表 {(assets.concertBeatMap != null ? "あり" : "なし")}, シェーダー {shaders.Count}, 材質 {materials.Count})" +
                           (materials.Count == 0 ? "\n材質がありません。一度「シーンに生成」を押して、材質を作ってからビルドしてください" : ""));
         }

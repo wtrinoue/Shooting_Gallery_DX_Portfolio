@@ -26,6 +26,8 @@ namespace ShootingGallery
         public float cloudSpeed = 1.2f;
         [Tooltip("街の地面の上面の高さ (大きい間はこの分だけお祭りの地面の下へ沈めておく)")]
         public float groundTop = 0.03f;
+        [Tooltip("小さくなりきった時の街の大きさの倍率 (1 より小さいほど、プレイヤーが大きくなって街を見下ろす)")]
+        public float finalScale = 0.6f;
 
         [Header("Timing")]
         [Tooltip("始まってから終わるまでの秒数 (屋台が縮む・街が伸びる時間も含む)")]
@@ -87,6 +89,7 @@ namespace ShootingGallery
         /// </summary>
         public void SetCityScale(float scale, float progress)
         {
+            scale *= finalScale; // (街を見下ろすように、もう一回り小さく)
             transform.localScale = Vector3.one * scale;
             transform.localPosition = Vector3.down * ((groundTop * scale + 0.01f) * (1f - Mathf.Clamp01(progress)));
         }

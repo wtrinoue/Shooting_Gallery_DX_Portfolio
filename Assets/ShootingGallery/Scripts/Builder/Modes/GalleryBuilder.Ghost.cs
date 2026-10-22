@@ -10,7 +10,9 @@ namespace ShootingGallery
     /// </summary>
     public partial class GalleryBuilder
     {
-        const float ManorZ = 32f; // お化け屋敷の正面までの距離
+        const float ManorZ = 46f; // お化け屋敷の真ん中までの距離 (高さ約 28m の全体が、見上げずに視界に収まるくらい遠く)
+        // 月の場所 (お化け屋敷の左上の、ずっと遠く。お化け屋敷より奥なので手前にかぶらない)。空のドームの明るい所もこの向き
+        static readonly Vector3 GhostMoonPos = new Vector3(-0.45f, 0.6f, 0.66f).normalized * 80f;
 
         GhostManor BuildGhost()
         {
@@ -48,7 +50,7 @@ namespace ShootingGallery
                 Prim(PrimitiveType.Sphere, "Clod", ground, new Vector3(Mathf.Sin(a) * r, 0.02f, Mathf.Cos(a) * r), Vector3.one * Random.Range(0.08f, 0.22f), i % 2 == 0 ? soilDark : pebble, false);
             }
             // お化け屋敷へ続く、くねくねした土の道
-            for (int i = 0; i < 9; i++)
+            for (int i = 0; i < 13; i++) // (お化け屋敷の玄関まで)
             {
                 float z0 = 1.5f + i * 3.1f;
                 var path = Prim(PrimitiveType.Cube, "Path", ground, new Vector3(Mathf.Sin(i * 0.9f) * 0.7f, 0.004f, z0 + 1.55f), new Vector3(2.2f, 0.01f, 3.4f), soilLight, false);
@@ -58,19 +60,60 @@ namespace ShootingGallery
             // ---- 朽ちてぎざぎざの濃い灰色の木 ----
             var bark = Mat("Ghost_Bark", new Color(0.2f, 0.2f, 0.21f), null, false, 0.05f);
             var barkDark = Mat("Ghost_BarkDark", new Color(0.12f, 0.12f, 0.13f), null, false, 0.05f);
+            // 朽ちた家の場所 (角度・距離・大きさ・窓が光るか)。お化け屋敷 (正面) の手前の左右と、横に
+            // 奥のほう (28〜44m) にも、ぽつぽつと朽ちた家が続く (お化け屋敷の正面 ±25° は空けておく)
+            var housePlaces = new (float deg, float r, float scale, bool glow)[]
+            {
+                (22f, 19f, 1f, false), (58f, 23f, 1.1f, true), (282f, 21f, 1f, false), (338f, 17f, 0.95f, true),
+                (40f, 36f, 1.2f, false), (95f, 31f, 1.1f, true), (135f, 40f, 1.25f, false), (200f, 34f, 1.15f, true), (245f, 42f, 1.2f, false), (310f, 33f, 1.1f, true),
+            };
+            Vector3 HousePos(float deg, float r) => new Vector3(Mathf.Sin(deg * Mathf.Deg2Rad) * r, 0f, Mathf.Cos(deg * Mathf.Deg2Rad) * r);
+            bool NearHouse(Vector3 p)
+            {
+                foreach (var h in housePlaces) if ((HousePos(h.deg, h.r) - p).magnitude < 4.5f) return true;
+                return false;
+            }
+
             var trees = Group(root, "DeadTrees");
             shown.Add(trees.gameObject);
             float[] treeAngles = { 40f, 75f, 110f, 150f, 185f, 220f, 255f, 300f, 330f };
             for (int i = 0; i < treeAngles.Length; i++)
             {
                 float a = (treeAngles[i] + Random.Range(-8f, 8f)) * Mathf.Deg2Rad;
-                float r = i % 3 == 0 ? Random.Range(9.2f, 11f) : Random.Range(12f, 24f); // お墓 (〜8m) より外
-                DeadTree(trees, new Vector3(Mathf.Sin(a) * r, 0f, Mathf.Cos(a) * r), Random.Range(3.5f, 6.5f), i % 2 == 0 ? bark : barkDark);
+                float r = i % 3 == 0 ? Random.Range(13.5f, 15f) : Random.Range(15f, 26f); // お墓 (〜13m) より外
+                var tp = new Vector3(Mathf.Sin(a) * r, 0f, Mathf.Cos(a) * r);
+                if (NearHouse(tp)) continue; // (朽ちた家と重ならないように)
+                DeadTree(trees, tp, Random.Range(3.5f, 6.5f), i % 2 == 0 ? bark : barkDark);
             }
+            // 奥の木立 (28〜55m。遠いほど大きく、まばらに。お化け屋敷の正面 ±18° は空けて、お屋敷が見えるように)
+            for (int i = 0; i < 22; i++)
+            {
+                float deg = 18f + (i + Random.Range(-0.35f, 0.35f)) * (324f / 22f);
+                float r = Random.Range(28f, 55f);
+                var tp = new Vector3(Mathf.Sin(deg * Mathf.Deg2Rad) * r, 0f, Mathf.Cos(deg * Mathf.Deg2Rad) * r);
+                if (NearHouse(tp)) continue;
+                DeadTree(trees, tp, Random.Range(5f, 9f) * Mathf.Lerp(1f, 1.3f, (r - 28f) / 27f), i % 2 == 0 ? barkDark : bark);
+            }
+
+            // ---- 朽ちた家 (お化け屋敷のまわりにぽつぽつと。1軒は窓が緑に光る) ----
+            var ruins = Group(root, "Ruins");
+            shown.Add(ruins.gameObject);
+            foreach (var h in housePlaces)
+                RuinedHouse(ruins, HousePos(h.deg, h.r), h.scale, h.glow, 100 + (int)h.deg);
 
             // ---- 古井戸 ----
             var well = BuildWell(root, new Vector3(-4.3f, 0f, 4.3f), out var bucket, out var rope, out var crank);
             shown.Add(well.gameObject);
+
+            // ---- 魔女の鍋 (井戸の右、プレイヤーの左手前。泡と火は組み上げずに GhostManor が動かす) ----
+            var cauldronRoot = Group(root, "Cauldron");
+            shown.Add(cauldronRoot.gameObject);
+            var cauldronFx = Group(root, "CauldronFx");
+            shown.Add(cauldronFx.gameObject);
+            var bubbles = new List<Transform>();
+            var flames = new List<Transform>();
+            float ca = 292f * Mathf.Deg2Rad;
+            WitchCauldron(cauldronRoot, new Vector3(Mathf.Sin(ca), 0f, Mathf.Cos(ca)) * 3.6f, cauldronFx, bubbles, flames, out float brewY);
 
             // ---- お墓 (ゾンビと骸骨はこの前の土から出てくる) ----
             var graves = Group(root, "Graves");
@@ -80,7 +123,7 @@ namespace ShootingGallery
             for (int i = 0; i < graveAngles.Length; i++)
             {
                 float a = (graveAngles[i] + Random.Range(-6f, 6f)) * Mathf.Deg2Rad;
-                float r = Random.Range(5.2f, 7.8f);
+                float r = 4.8f + (i % 3) * 3.6f + Random.Range(0f, 1.2f); // 近い・中くらい・遠い の3段 (4.8〜13m。出てくるゾンビとの距離がばらばらに)
                 var dir = new Vector3(Mathf.Sin(a), 0f, Mathf.Cos(a));
                 Grave(graves, dir * r, dir, i);
                 spots.Add(dir * (r - 0.75f)); // お墓の手前の盛り土
@@ -108,6 +151,9 @@ namespace ShootingGallery
             // ---- 紫の空の月・雲・星 ----
             var sky = BuildGhostSky(root);
             shown.Add(sky.gameObject);
+            // 空のドーム (月に近いほど明るく、離れるほど暗い紫。組み上げずに、GhostManor がすっと出す)
+            var dome = BuildGhostSkyDome(root, GhostMoonPos);
+            shown.Add(dome.gameObject);
 
             // ---- 鬼火 (的ではない) ----
             var wispRoot = Group(root, "Wisps");
@@ -147,10 +193,14 @@ namespace ShootingGallery
             manorComp.showDuringStage = shown.ToArray();
             // 組み上げる順番: 土のでこぼこ (真ん中から外へ) → 木・お墓・井戸・お化け屋敷 (下の部品から上へ) → 月と雲 → 鬼火
             manorComp.soil = soilDisc.transform;
-            manorComp.assembleRoots = new[] { ground, trees, graves, well, manor, sky, wispRoot };
-            manorComp.assembleDelays = new[] { 0f, 0.8f, 0.9f, 1.1f, 1.0f, 3.6f, 4.1f };
-            manorComp.assembleSpreads = new[] { 1.8f, 1.8f, 1.3f, 1.0f, 3.4f, 1.0f, 0.5f };
-            manorComp.assembleRadial = new[] { true, false, false, false, false, false, false };
+            manorComp.assembleRoots = new[] { ground, trees, ruins, graves, well, cauldronRoot, manor, sky, wispRoot };
+            manorComp.assembleDelays = new[] { 0f, 0.8f, 0.9f, 0.9f, 1.1f, 1.2f, 1.0f, 3.6f, 4.1f };
+            manorComp.assembleSpreads = new[] { 1.8f, 1.8f, 2.2f, 1.3f, 1.0f, 0.8f, 3.4f, 1.0f, 0.5f };
+            manorComp.assembleRadial = new[] { true, false, false, false, false, false, false, false, false };
+            manorComp.skyDome = dome;
+            manorComp.cauldronBubbles = bubbles.ToArray();
+            manorComp.cauldronFlames = flames.ToArray();
+            manorComp.cauldronSurfaceY = brewY;
             manorComp.wellBucket = bucket;
             manorComp.wellRope = rope;
             manorComp.wellCrank = crank;
@@ -680,21 +730,25 @@ namespace ShootingGallery
         Transform BuildGhostSky(Transform parent)
         {
             var sky = Group(parent, "GhostSky");
-            // 月 (お化け屋敷の左上。霧で少し紫にかすむ)
-            var moonPos = new Vector3(-24f, 40f, 56f);
+            // 月 (お化け屋敷の左上の、ずっと遠く。大きく、まわりに光のかさ。霧で少し紫にかすむ)
+            const float MoonD = 26f; // 直径 (見かけの大きさは前の約2倍)
+            var moonPos = GhostMoonPos;
             var moon = Group(sky, "Moon");
             moon.localPosition = moonPos;
             moon.localRotation = Quaternion.LookRotation(moonPos);
-            Prim(PrimitiveType.Sphere, "MoonBody", moon, Vector3.zero, Vector3.one * 12f, Mat("Ghost_Moon", new Color(1f, 0.96f, 0.8f), new Color(2.6f, 2.4f, 1.7f)), false);
+            Prim(PrimitiveType.Sphere, "MoonBody", moon, Vector3.zero, Vector3.one * MoonD, Mat("Ghost_Moon", new Color(1f, 0.96f, 0.8f), new Color(2.6f, 2.4f, 1.7f)), false);
             var crater = Mat("Ghost_MoonCrater", new Color(0.85f, 0.82f, 0.68f), new Color(1.7f, 1.55f, 1.05f));
+            float ck = MoonD / 12f; // (クレーターの位置と大きさを、月の大きさに合わせる)
             Vector2[] craters = { new Vector2(-2f, 1.5f), new Vector2(1.8f, 2.2f), new Vector2(0.6f, -1.8f), new Vector2(-1.2f, -0.6f), new Vector2(2.6f, -0.8f) };
-            foreach (var c in craters)
+            foreach (var c0 in craters)
             {
-                float z = -Mathf.Sqrt(Mathf.Max(0f, 36f - c.sqrMagnitude)) + 0.25f;
-                Prim(PrimitiveType.Sphere, "Crater", moon, new Vector3(c.x, c.y, z), new Vector3(1.6f, 1.6f, 0.5f) * Random.Range(0.6f, 1.2f), crater, false);
+                var c = c0 * ck;
+                float rr = MoonD / 2f;
+                float z = -Mathf.Sqrt(Mathf.Max(0f, rr * rr - c.sqrMagnitude)) + 0.25f * ck;
+                Prim(PrimitiveType.Sphere, "Crater", moon, new Vector3(c.x, c.y, z), new Vector3(1.6f, 1.6f, 0.5f) * ck * Random.Range(0.6f, 1.2f), crater, false);
             }
-            Prim(PrimitiveType.Sphere, "MoonHalo", moon, Vector3.zero, Vector3.one * 20f, TransparentMat("Ghost_MoonHalo", new Color(0.9f, 0.85f, 1f, 0.12f)), false);
-            Prim(PrimitiveType.Sphere, "MoonHalo2", moon, Vector3.zero, Vector3.one * 32f, TransparentMat("Ghost_MoonHalo2", new Color(0.75f, 0.6f, 1f, 0.06f)), false);
+            Prim(PrimitiveType.Sphere, "MoonHalo", moon, Vector3.zero, Vector3.one * MoonD * 1.7f, TransparentMat("Ghost_MoonHalo", new Color(0.9f, 0.85f, 1f, 0.14f)), false);
+            Prim(PrimitiveType.Sphere, "MoonHalo2", moon, Vector3.zero, Vector3.one * MoonD * 2.6f, TransparentMat("Ghost_MoonHalo2", new Color(0.75f, 0.6f, 1f, 0.07f)), false);
             // ゆっくり流れる紫の雲
             var clouds = Group(sky, "Clouds");
             var spin = clouds.gameObject.AddComponent<Rotator>();
@@ -784,9 +838,10 @@ namespace ShootingGallery
             spook.kind = GhostSpook.Kind.Ghost;
             spook.displayName = "GHOST";
             spook.pointChoices = new[] { 100, 200, 300 };
-            spook.orbitRadius = new Vector2(4.5f, 8f);
-            spook.orbitHeight = new Vector2(1.3f, 3.2f);
-            spook.orbitSpeed = new Vector2(14f, 28f);
+            spook.orbitRadius = new Vector2(4f, 15f);        // 近くから遠くまで、ばらばらの距離
+            spook.orbitHeight = new Vector2(1.3f, 4f);
+            spook.orbitLinearSpeed = new Vector2(1f, 2f);    // 距離を保ったまま、横へゆったり流れる (m/秒)
+            spook.orbitLife = new Vector2(8f, 11f);          // (照らす時間がいるので、少し長めに出ている)
             spook.puffMaterial = puff;
             return spook;
         }
@@ -828,10 +883,10 @@ namespace ShootingGallery
             spook.kind = GhostSpook.Kind.Witch;
             spook.displayName = "WITCH";
             spook.pointChoices = new[] { 500, 1000 };
-            spook.orbitRadius = new Vector2(9f, 13f);
-            spook.orbitHeight = new Vector2(3.5f, 6.5f);
-            spook.orbitSpeed = new Vector2(26f, 38f);
-            spook.orbitLife = new Vector2(6f, 8f);
+            spook.orbitRadius = new Vector2(8f, 20f);
+            spook.orbitHeight = new Vector2(3.5f, 8f);
+            spook.orbitLinearSpeed = new Vector2(2.5f, 4f); // 魔女はお化けより速く飛ぶ (m/秒)
+            spook.orbitLife = new Vector2(7f, 9f);
             spook.bobHeight = 0.5f;
             spook.puffMaterial = puff;
             spook.puffSize = 1.2f;

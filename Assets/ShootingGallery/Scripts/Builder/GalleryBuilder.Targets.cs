@@ -79,10 +79,14 @@ namespace ShootingGallery
             return target;
         }
 
+        // タイトルの的の横の間隔 (左から 2 MIN / 100,000 POINTS / WORLD GATE。円の直径 0.55m の間を少し空ける)
+        const float TitleTargetGap = 0.72f;
+
+        /// <summary>真ん中のタイトルの的「100,000 POINTS」: 撃つと、100,000 点を取るまでの時間を競うラウンドが始まる (赤い的)</summary>
         Target BuildStartTarget(Transform stall)
         {
             var root = Group(stall, "Target_Start");
-            root.localPosition = new Vector3(-0.5f, 0f, -0.6f); // 右に WORLD GATE の的
+            root.localPosition = new Vector3(0f, 0f, -0.6f); // 左に 2 MIN、右に WORLD GATE の的
             var target = root.gameObject.AddComponent<Target>();
             target.kind = TargetKind.Start;
             target.points = 0;
@@ -93,7 +97,30 @@ namespace ShootingGallery
             TitleTargetStand(pivot, y + 0.62f - 0.55f / 2f);
             var red = Mat("Target_StartRed", new Color(0.85f, 0.1f, 0.1f), new Color(0.3f, 0f, 0f));
             Bullseye(pivot, y + 0.62f, 0.55f, red, Mat("Target_White", Color.white), red);
-            MakeText(pivot, "Label", "START", new Vector3(0f, y + 0.62f, -0.03f), 0.13f, new Color(0.1f, 0.1f, 0.1f));
+            var ink = new Color(0.1f, 0.1f, 0.1f);
+            MakeText(pivot, "Label", "100,000", new Vector3(0f, y + 0.685f, -0.03f), 0.1f, ink);
+            MakeText(pivot, "Label2", "POINTS", new Vector3(0f, y + 0.555f, -0.03f), 0.09f, ink);
+            return target;
+        }
+
+        /// <summary>左のタイトルの的「2 MIN」: 撃つと、2分間でどれだけ点を取れるかのタイムアタックが始まる (緑の的)</summary>
+        Target BuildTimeAttackTarget(Transform stall)
+        {
+            var root = Group(stall, "Target_TimeAttack");
+            root.localPosition = new Vector3(-TitleTargetGap, 0f, -0.6f);
+            var target = root.gameObject.AddComponent<Target>();
+            target.kind = TargetKind.TimeAttack;
+            target.points = 0;
+            target.respawnDelay = 1f;
+            var pivot = Group(root, "Pivot");
+            target.visual = pivot;
+            const float y = TitleTargetY;
+            TitleTargetStand(pivot, y + 0.62f - 0.55f / 2f);
+            var green = Mat("Target_TimeGreen", new Color(0.15f, 0.65f, 0.25f), new Color(0.03f, 0.2f, 0.06f));
+            Bullseye(pivot, y + 0.62f, 0.55f, green, Mat("Target_White", Color.white), Mat("Target_TimeYellow", new Color(1f, 0.85f, 0.2f), new Color(0.3f, 0.2f, 0f)));
+            var ink = new Color(0.1f, 0.1f, 0.1f);
+            MakeText(pivot, "Label", "2", new Vector3(0f, y + 0.685f, -0.03f), 0.12f, ink);
+            MakeText(pivot, "Label2", "MIN", new Vector3(0f, y + 0.555f, -0.03f), 0.1f, ink);
             return target;
         }
 

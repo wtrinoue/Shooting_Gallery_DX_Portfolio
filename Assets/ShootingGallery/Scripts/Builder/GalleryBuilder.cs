@@ -166,6 +166,7 @@ namespace ShootingGallery
             // ---- 2. メイン屋台の的 ----
             var mainStall = BuildStallContent(mainShell, Gimmick.Classic, mainCloth);
             var startTarget = BuildStartTarget(mainShell);
+            var timeAttackTarget = BuildTimeAttackTarget(mainShell); // START の左の 2 MIN の的 (タイムアタック)
             var worldGateTarget = BuildWorldGateTarget(mainShell); // START の横の WORLD GATE の的
             var controlsBoard = BuildControlsBoard(); // メイン屋台の左右のタイトルの看板 (左に操作方法、右にクレジット。シーンに生成した時も見えるまま置く)
             // START の的はシーンに生成した時も見えるまま置く (タイトルで最初に出る的。再生時は GameManager が出し入れする)
@@ -270,14 +271,17 @@ namespace ShootingGallery
             gm.artMuseum = artMuseum;
             gm.unknownStage = unknownStage;
             gm.festivalStage = festivalStage;
+            AssignStageBgm(gm); // 夏祭り・幽霊・怪獣・鉱山・海戦・西部劇の BGM (GalleryBuilder.StageBgm.cs)
             BuildMoneyPanel(hudText.transform.parent, gm); // 夏祭りモードのお金と残り時間の表示 (HUD の上の方)
             gm.deluxeMainStall = deluxeMain;
             gm.deluxeFeverStalls = deluxeFever;
             gm.fireworkMaterials = FireworkMaterials();
             gm.stallRadius = stallRadius;
             gm.startTarget = startTarget;
+            gm.timeAttackTarget = timeAttackTarget;
             gm.worldGateTarget = worldGateTarget;
             gm.controlsBoard = controlsBoard;
+            gm.goalSign = BuildGoalSign(GameManager.GoalScore); // ラウンドの始まりに降りてくる、プロペラの付いた看板
             gm.hudText = hudText;
             gm.messageText = msgText;
             gm.font = font;
@@ -314,11 +318,19 @@ namespace ShootingGallery
         {
             var hud = new GameObject("HUD");
             hud.transform.SetParent(world, false);
-            hud.transform.localPosition = new Vector3(0f, 2.05f, 2.2f);
+            // のれん (屋台の幕) の下のふちより上に、いちばん下の文字が来る高さ (目の高さ + 0.88m)
+            hud.transform.localPosition = new Vector3(0f, 2.48f, 2.2f);
             var follow = hud.AddComponent<HudFollow>();
             follow.head = player.head.transform;
-            var hudText = MakeText(hud.transform, "HudText", "", new Vector3(0f, 0.12f, 0f), 0.11f, Color.white, overlay: true);
-            var msgText = MakeText(hud.transform, "MessageText", "", new Vector3(0f, -0.35f, 0f), 0.16f, Color.white, overlay: true);
+            follow.heightOffset = 0.88f;
+            // メッセージ (下) は下のふちをそろえて上へ伸び、HUD の文字 (上) はその上に下のふちをそろえて上へ伸びる (行が増えても、いちばん下は動かない)
+            var hudText = MakeText(hud.transform, "HudText", "", new Vector3(0f, 0.16f, 0f), 0.11f, Color.white, overlay: true);
+            hudText.anchor = TextAnchor.LowerCenter;
+            var msgText = MakeText(hud.transform, "MessageText", "", new Vector3(0f, -0.38f, 0f), 0.16f, Color.white, overlay: true);
+            msgText.anchor = TextAnchor.LowerCenter;
+            // 明るい所でも暗い所でも読めるように、黒いふちを付ける
+            hudText.gameObject.AddComponent<TextOutline>().thickness = 0.11f * 0.05f;
+            msgText.gameObject.AddComponent<TextOutline>().thickness = 0.16f * 0.05f;
             return (hudText, msgText);
         }
 

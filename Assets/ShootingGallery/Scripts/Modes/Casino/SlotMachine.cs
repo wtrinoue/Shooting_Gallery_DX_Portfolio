@@ -14,8 +14,10 @@ namespace ShootingGallery
 
         [Tooltip("スロット全体の当たり判定 (kind = SlotMachine, stayUpOnHit。visual は空のオブジェクト)")]
         public Target target;
-        [Tooltip("レバー (根元が軸。ローカル X まわりに倒れる)")]
+        [Tooltip("レバー (根元が軸。ローカル X まわりに、プレイヤーの方 (-Z) へお辞儀する)")]
         public Transform lever;
+        [Tooltip("「SHOOT!」の目印を置く所 (レバーの玉の真上)")]
+        public Transform leverHint;
         [Tooltip("3つのリール (ローカル X まわりに回る。絵柄は symbols の順に、等間隔でぐるりと並べてある)")]
         public Transform[] reels;
         [Tooltip("リールに並んだ絵柄 (上から順。リールの1周分)")]
@@ -30,12 +32,12 @@ namespace ShootingGallery
         [Header("Timing")]
         public float spinSpeed = 900f;   // 度/秒
         [Tooltip("左のリールが止まり始めるまでの秒数。次のリールはここから stopGap 秒ずつ遅れる")]
-        public float firstStop = 1.0f;
-        public float stopGap = 0.5f;
-        public float stopTime = 0.45f;
+        public float firstStop = 0.6f;
+        public float stopGap = 0.3f;
+        public float stopTime = 0.3f; // (撃ってから 0.6 + 0.3 × 2 + 0.3 = 1.5 秒で出目が決まる)
 
-        /// <summary>リールが全部止まった (出目の点数, 出目の強さ, 出目の文字)</summary>
-        public event System.Action<int, Tier, string> Result;
+        /// <summary>リールが全部止まった (このスロット, 出目の点数, 出目の強さ, 出目の文字)</summary>
+        public event System.Action<SlotMachine, int, Tier, string> Result;
         public bool IsSpinning { get; private set; }
 
         float spinStart;
@@ -166,12 +168,19 @@ namespace ShootingGallery
         void Update()
         {
             float dt = Time.deltaTime;
-            // レバー: すぐ下がって、ゆっくり戻る
+            // レバー: プレイヤーの方へぐっとお辞儀して、少し止まってから、ばねのように揺れながら起き上がる
             if (leverT < 1f)
             {
-                leverT = Mathf.Min(1f, leverT + dt / 0.6f);
-                float down = leverT < 0.2f ? leverT / 0.2f : 1f - (leverT - 0.2f) / 0.8f;
-                lever.localRotation = Quaternion.Euler(70f * down, 0f, 0f);
+                leverT = Mathf.Min(1f, leverT + dt / 0.9f);
+                float down;
+                if (leverT < 0.15f) down = Mathf.SmoothStep(0f, 1f, leverT / 0.15f);
+                else if (leverT < 0.3f) down = 1f;
+                else
+                {
+                    float u = (leverT - 0.3f) / 0.7f;
+                    down = Mathf.Cos(u * Mathf.PI * 2.5f) * (1f - u) * (1f - u); // 起き上がって、少し行き過ぎて戻る
+                }
+                lever.localRotation = Quaternion.Euler(-75f * down, 0f, 0f);
             }
 
             if (IsSpinning) UpdateReels(dt);
@@ -214,7 +223,7 @@ namespace ShootingGallery
             winUntil = resultTier >= Tier.Win ? Time.time + (resultTier == Tier.Jackpot ? 4f : 2.5f) : 0f;
             string face = "";
             for (int i = 0; i < reels.Length; i++) face += (i > 0 ? " " : "") + symbols[result[i]];
-            Result?.Invoke(resultPoints, resultTier, face);
+            Result?.Invoke(this, resultPoints, resultTier, face);
         }
 
         void SetReel(int i, float a)

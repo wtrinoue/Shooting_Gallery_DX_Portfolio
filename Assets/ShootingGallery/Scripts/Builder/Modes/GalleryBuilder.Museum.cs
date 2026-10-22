@@ -465,9 +465,29 @@ namespace ShootingGallery
             art.tool = tool;
             art.chipMaterial = chip;
             art.sparkleMaterial = sparkle;
-            AddArtField(root, Artwork.Kind.Canvas, body.localPosition + body.localRotation * canvasRoot.localPosition, Mathf.Max(w, h) * 0.5f + 0.9f);
+            AddArtField(root, Artwork.Kind.Canvas, body.localPosition + body.localRotation * canvasRoot.localPosition, Mathf.Max(w, h) * 0.5f + 0.25f); // (絵のすぐまわりだけ。広いと、近くを飛ぶたびに形が変わってちかちかする)
+            AddGlint(art, canvasRoot, new Vector3(0f, 0f, -0.03f), new Vector2(w, h), false, 0f); // 絵の面の上を流れる光の帯
             root.gameObject.SetActive(false);
             return art;
+        }
+
+        // まだ当てられる作品の上を流れる光の帯 (袈裟懸けに左上から右下へ。完成すると出なくなる)。
+        // anchor のローカルの center を真ん中に、幅・高さ size の四角形の中に流す。faceCamera なら、作品の手前 depth の所でプレイヤーの方を向ける
+        void AddGlint(Artwork art, Transform anchor, Vector3 center, Vector2 size, bool faceCamera, float depth, Transform wrapSource = null)
+        {
+            var glint = art.gameObject.AddComponent<ArtGlint>();
+            glint.art = art;
+            glint.anchor = anchor;
+            glint.center = center;
+            glint.size = size;
+            glint.faceCamera = faceCamera;
+            glint.depth = depth;
+            glint.material = TransparentMat("Art_Glint", new Color(1f, 1f, 1f, 0.55f));
+            if (wrapSource != null) // (板ではなく、形の表面ぜんたいを包んで流す)
+            {
+                glint.wrapSource = wrapSource;
+                glint.wrapMaterial = VertexColorMat("Art_GlintWrap", Color.white);
+            }
         }
 
         // イマジネーションの玉が近づくと、筆 / トンカチに変わる範囲 (当たり判定とは別。物理は使わない)
@@ -547,7 +567,8 @@ namespace ShootingGallery
             art.tool = tool;
             art.chipMaterial = chip;
             art.sparkleMaterial = sparkle;
-            AddArtField(root, Artwork.Kind.Sculpture, new Vector3(0f, PlinthH + 0.6f, 0f), 1.3f);
+            AddArtField(root, Artwork.Kind.Sculpture, new Vector3(0f, PlinthH + 0.6f, 0f), 0.8f); // (彫刻のすぐまわりだけ)
+            AddGlint(art, body, new Vector3(0f, 0.55f, 0f), new Vector2(0.55f, 1.1f), true, 0.3f); // 白い塊の手前を流れる光の帯
             root.gameObject.SetActive(false);
             return art;
         }

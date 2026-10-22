@@ -7,7 +7,7 @@ namespace ShootingGallery
     {
         public Transform head;
         public float distance = 2.2f;
-        public float heightOffset = 0.45f;
+        public float heightOffset = 0.88f; // (いちばん下の文字が、屋台ののれんの下のふちより上に見える高さ)
         public float followSpeed = 2.5f;
 
         void LateUpdate()

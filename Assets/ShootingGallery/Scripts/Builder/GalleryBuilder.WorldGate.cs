@@ -19,7 +19,7 @@ namespace ShootingGallery
         Target BuildWorldGateTarget(Transform stall)
         {
             var root = Group(stall, "Target_WorldGate");
-            root.localPosition = new Vector3(0.5f, 0f, -0.6f); // 屋台の床から立てる (START の的と同じ)
+            root.localPosition = new Vector3(TitleTargetGap, 0f, -0.6f); // 屋台の床から立てる (タイトルの的の右。左から 2 MIN / 100,000 POINTS / WORLD GATE)
             var target = root.gameObject.AddComponent<Target>();
             target.kind = TargetKind.WorldGate;
             target.points = 0;

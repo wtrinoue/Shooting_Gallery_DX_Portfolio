@@ -47,7 +47,7 @@ namespace ShootingGallery
             // 大きな街が遠くまで見えるように、霧を遠くからにする
             RenderSettings.fogStartDistance = Mathf.Max(normalFogStart, 35f);
             RenderSettings.fogEndDistance = Mathf.Max(normalFogEnd, 140f);
-            Sfx.Play("roar");
+            PlayStageBgm(kaijuBgm); // (怪獣の叫び声はなし。BGM だけ)
             ShowMessage("KAIJU MODE!!", 2f, new Color(0.4f, 1f, 0.4f));
         }
 
@@ -59,7 +59,6 @@ namespace ShootingGallery
             FadeAmbience(kaijuFogColor, kaijuAmbient, kaijuSkyColor);
             if (State != GameState.Playing) return;
             player.GiveStageWeapon(WeaponType.FireBall, kaijuCity.TimeLeft);
-            Sfx.Play("roar");
             ShowMessage("SMASH BUILDINGS, CARS,\nPLANES & HELICOPTERS!", 2.5f, new Color(0.4f, 1f, 0.4f));
         }
 
@@ -67,6 +66,7 @@ namespace ShootingGallery
         void EndKaiju()
         {
             if (!KaijuActive) return;
+            StopStageBgm(kaijuBgm, State != GameState.Playing); // (ラウンドの終わり・リセットの時はすぐ止める)
             int broken = kaijuCity.Destroyed;
             kaijuCity.End();
             ReleaseStageWeapon(WeaponType.FireBall);

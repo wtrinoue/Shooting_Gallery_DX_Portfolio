@@ -34,8 +34,23 @@ namespace ShootingGallery
         public GameObject revealFinale;
         [Tooltip("全部の明かりが点いた時に現れる物 (壁の豪華な飾り・ネオン・シャンデリアと明かり)")]
         public GameObject luxury;
+        [Tooltip("正面の壇の大きなスロット")]
         public SlotMachine slot;
+        [Tooltip("壁ぎわの小さなスロット (四方八方に。正面の大きなスロットは入れない)")]
+        public SlotMachine[] sideSlots = new SlotMachine[0];
+        [Tooltip("斜めに傾いたボールのルーレット")]
+        public BallRoulette[] roulettes = new BallRoulette[0];
+        [Tooltip("壁のダーツボード")]
         public RouletteWheel[] wheels;
+        [Tooltip("当たった時に飛び散るコインの材質")]
+        public Material coinMaterial;
+
+        /// <summary>全部のスロット (正面の大きなスロット + 壁ぎわの小さなスロット)</summary>
+        public System.Collections.Generic.IEnumerable<SlotMachine> AllSlots()
+        {
+            if (slot != null) yield return slot;
+            if (sideSlots != null) foreach (var s in sideSlots) if (s != null) yield return s;
+        }
 
         [Header("明かりが点く瞬間の演出")]
         [Tooltip("チカチカと点くネオン (名前が同じものは同じ調子で点く)")]
@@ -48,7 +63,7 @@ namespace ShootingGallery
 
         [Header("Timing")]
         [Tooltip("明かりが点いてから終わるまでの、ゲームの秒数")]
-        public float playTime = 16f;
+        public float playTime = 24f;
         [Tooltip("始まってから壁がせり上がり始めるまでの秒数 (屋台が沈み終わるのを待つ)")]
         public float dropDelay = 1.2f;
         [Tooltip("壁の板1枚がせり上がる秒数")]
@@ -213,8 +228,9 @@ namespace ShootingGallery
             StartBgm();
             StartCoroutine(LightShow());
             SpawnConfetti();
-            slot.Activate();
+            foreach (var s in AllSlots()) s.Activate();
             foreach (var w in wheels) w.Activate();
+            foreach (var r in roulettes) if (r != null) r.Activate();
             IsOpen = true;
             openTime = Time.time;
             anim = null;
@@ -225,8 +241,9 @@ namespace ShootingGallery
         {
             // 4. また視界をふさいで真っ暗に。何も見えない間に豪華な飾りを消し、地味な壁・天井・床だけにして、明るさも夜に戻す
             //    → しばらくして視界が開ける (地味な部屋の中) → 天井が外れ、壁がゆっくり地面へしまわれていく
-            slot.Deactivate();
+            foreach (var s in AllSlots()) s.Deactivate();
             foreach (var w in wheels) w.Deactivate();
+            foreach (var r in roulettes) if (r != null) r.Deactivate();
             Darken?.Invoke();
             Sfx.Play("blackout");
             ScreenFader.FadeTo(1f, blackoutTime);

@@ -22,8 +22,11 @@ namespace ShootingGallery
         public GameObject corkLoaded;
         [Header("怪獣 / カジノ / 西部劇")]
         [Tooltip("怪獣の口から吐く炎の玉と、燃え上がる爆発")]
-        public Material fireballMaterial;
+        public Material fireballMaterial;            // 炎の玉の芯 (白っぽく光る)
+        public Material fireballOuterMaterial;       // 炎の玉の外側 (半透明の橙。ギザギザのしずく)
+        public Material fireballTrailMaterial;       // 炎の尾 (色は TrailRenderer の色で付ける)
         public Material fireballExplosionMaterial;
+        public Material cannonballMaterial;          // 海戦の大砲の弾 (黒い鉄の玉)
         [Tooltip("投げたダーツの軸と羽根")]
         public Material dartShaftMaterial;
         public Material dartFlightMaterial;
@@ -106,7 +109,7 @@ namespace ShootingGallery
         public Renderer flashlightLens;
         public Material lensOnMaterial, lensOffMaterial;
         [Tooltip("照らして倒せる太さ (m)。光の筋のまわりのこの距離までの的に当たる")]
-        public float flashlightRadius = 0.6f;
+        public float flashlightRadius = 0.75f;
         [Tooltip("満タンから点けっぱなしで電池が切れるまでの秒数")]
         public float flashlightDrainTime = 3.5f;
         [Tooltip("空から満タンまで回復する秒数 (点けていない間に回復する)")]
@@ -154,6 +157,10 @@ namespace ShootingGallery
             foreach (var m in muzzles)
                 if (m != null && m.childCount > 0) m.GetChild(0).gameObject.SetActive(false);
             if (gaugeFill != null) gaugeFillRenderer = gaugeFill.GetComponent<Renderer>();
+            // 銃の上の表示 (武器の名前・ゲージ・弾の列・電池) の元の高さ。大きな武器の時は、ここから上へずらす
+            hudParts = new[] { infoText != null ? infoText.transform : null, gaugeRoot, ammoRoot, batteryRoot };
+            hudHome = new Vector3[hudParts.Length];
+            for (int i = 0; i < hudParts.Length; i++) if (hudParts[i] != null) hudHome[i] = hudParts[i].localPosition;
             gaugeBlock = new MaterialPropertyBlock();
             if (laser != null) redLaserMaterial = laser.sharedMaterial;
             if (laserDot != null)
@@ -174,11 +181,34 @@ namespace ShootingGallery
                 if (m != null && m.childCount > 0) m.GetChild(0).gameObject.SetActive(false);
         }
 
+        Transform[] hudParts = new Transform[0];
+        Vector3[] hudHome = new Vector3[0];
+
+        /// <summary>銃の上の表示を、元の高さからどれだけ上げるか (m)。見た目が大きくて表示が埋もれてしまう武器だけ上げる</summary>
+        static float HudLift(WeaponType type) => type switch
+        {
+            WeaponType.Bazooka => 0.1f, // 海戦の大砲: 砲身の上 (約 0.12m) より上へ
+            _ => 0f
+        };
+
+        bool modelHidden;
+
+        /// <summary>武器の見た目を隠す / 出す (操作方法の看板を見ている間は、手元をコントローラーの模型にするので。撃つことはできる)</summary>
+        public void SetModelHidden(bool hidden)
+        {
+            modelHidden = hidden;
+            for (int i = 0; i < models.Length; i++)
+                if (models[i] != null) models[i].SetActive(!hidden && i == (int)current);
+        }
+
         public void SetWeapon(WeaponType type)
         {
             current = type;
+            float lift = HudLift(type);
+            for (int i = 0; i < hudParts.Length; i++)
+                if (hudParts[i] != null) hudParts[i].localPosition = hudHome[i] + Vector3.up * lift;
             for (int i = 0; i < models.Length; i++)
-                if (models[i] != null) models[i].SetActive(i == (int)type);
+                if (models[i] != null) models[i].SetActive(!modelHidden && i == (int)type);
             if (missileLoaded != null) missileLoaded.SetActive(true); // 込める途中で止まっていても、持ち替えたら込めてある
             if (torpedoLoaded != null) torpedoLoaded.SetActive(true);
             // スナイパーは赤、手裏剣とダーツ (と夏祭りの武器) は白のレーザー
@@ -382,13 +412,13 @@ namespace ShootingGallery
             XRBridge.Haptic(hapticNode, 0.25f, 0.04f);
             if (loaded < def.magazine)
             {
-                Sfx.Play("click");
+                Sfx.Play(current == WeaponType.Revolver ? "revolverreload" : "click"); // (リボルバーは1発込めるたびに、弾を込める音)
                 return;
             }
             ammo = def.magazine;
             loaded = 0;
             nextFireTime = Mathf.Max(nextFireTime, Time.time + 0.12f);
-            Sfx.Play("reload");
+            Sfx.Play(current == WeaponType.Revolver ? "revolverreload" : "reload");
         }
 
         void LateUpdate()
@@ -469,18 +499,26 @@ namespace ShootingGallery
             Vector3 origin = muzzle.position, dir = muzzle.forward;
             float range = Weapons.Get(current).range;
             int n = Physics.SphereCastNonAlloc(origin, flashlightRadius, dir, castHits, range, hitMask, QueryTriggerInteraction.Ignore);
+            litThisFrame.Clear();
             for (int i = 0; i < n; i++)
             {
                 var h = castHits[i];
                 var t = h.collider.GetComponentInParent<Target>();
-                if (t == null || !t.IsUp) continue;
+                if (t == null || !t.IsUp || !litThisFrame.Add(t)) continue; // (1つの的は1フレームに1回だけ数える)
                 Vector3 point = h.distance > 0f ? h.point : h.collider.bounds.center; // 0 = 始めから光の中に重なっていた物
                 if (Physics.Linecast(origin, point, out var block, hitMask, QueryTriggerInteraction.Ignore)
                     && block.collider.GetComponentInParent<Target>() != t) continue;
-                t.Hit(point);
-                XRBridge.Haptic(hapticNode, 0.4f, 0.05f);
+                // 照らされた時間をためて、たまりきったらやられる (すぐには消えない。LightExposure)
+                if (LightExposure.Add(t, Time.deltaTime))
+                {
+                    t.Hit(point);
+                    XRBridge.Haptic(hapticNode, 0.6f, 0.08f);
+                }
+                else XRBridge.Haptic(hapticNode, 0.15f, 0.02f); // 照らしている間は、かすかに震える
             }
         }
+
+        readonly System.Collections.Generic.HashSet<Target> litThisFrame = new System.Collections.Generic.HashSet<Target>();
 
         // 電池の目盛り: 残りの分だけ左から点く (多い時は緑、減ると黄、少ないと赤)。切れて充電中は、たまった分が赤
         void UpdateBatteryRow()
@@ -583,12 +621,17 @@ namespace ShootingGallery
                     reloadRoutine = isActiveAndEnabled ? StartCoroutine(Reload(def.fireInterval * 0.9f, torpedoLoaded)) : null;
                 }
             }
+            else if (current == WeaponType.FireBall && fireballOuterMaterial != null)
+                FireBallShot.Spawn(origin, muzzle.forward, def.projectileSpeed, def.blastRadius, fireballOuterMaterial, fireballMaterial, fireballTrailMaterial,
+                                   fireballExplosionMaterial != null ? fireballExplosionMaterial : explosionMaterial);
             else if (def.projectile)
             {
                 bool fire = current == WeaponType.FireBall;
-                Bomb.Spawn(origin, muzzle.forward * def.projectileSpeed, def.blastRadius, fire && fireballMaterial != null ? fireballMaterial : bombMaterial,
+                bool cannon = current == WeaponType.Bazooka;
+                Bomb.Spawn(origin, muzzle.forward * def.projectileSpeed, def.blastRadius,
+                           fire && fireballMaterial != null ? fireballMaterial : cannon && cannonballMaterial != null ? cannonballMaterial : bombMaterial,
                            fire && fireballExplosionMaterial != null ? fireballExplosionMaterial : explosionMaterial,
-                           def.projectileGravity, current == WeaponType.Bazooka ? 0.14f : fire ? 0.2f : 0.09f);
+                           def.projectileGravity, cannon ? 0.14f : fire ? 0.2f : 0.09f);
             }
             else
                 FireHitscan(def, muzzle, origin);

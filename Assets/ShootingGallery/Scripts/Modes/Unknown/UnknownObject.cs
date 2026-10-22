@@ -203,7 +203,7 @@ namespace ShootingGallery
                 plasma.gameObject.SetActive(true);
                 PlacePlasma(Center(), 0.001f);
             }
-            Sfx.Play("warpzap");
+            Sfx.Play("warpzap", UnknownStage.SfxVolume);
             onDown?.Invoke(this);
         }
 

@@ -310,7 +310,7 @@ namespace ShootingGallery
                 return;
             }
             // 1回も出ていないチャレンジは、ラウンドの残りが少なくなったら (前のチャレンジから少し間をあけて) すぐに出す
-            if (gm.TimeLeft <= guaranteeByTimeLeft)
+            if (gm.TimeLeft <= guaranteeByTimeLeft || gm.GoalProgress >= 0.6f) // (普通のラウンドは時間切れがないので、目標の点数の 6 割を超えたら)
             {
                 float soon = Mathf.Max(Time.time, separatedUntil);
                 if (!sniperShown) nextSniperTime = Mathf.Min(nextSniperTime, soon);

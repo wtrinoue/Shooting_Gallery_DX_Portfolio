@@ -41,14 +41,20 @@ namespace ShootingGallery
             foreach (var s in ninjaStalls) s.Sink(stallMoveDuration);
 
             // 奥座敷の一番奥まで見えるように、霧を遠くからにする
-            RenderSettings.fogStartDistance = Mathf.Max(normalFogStart, 24f);
-            RenderSettings.fogEndDistance = Mathf.Max(normalFogEnd, 45f);
+            RenderSettings.fogStartDistance = Mathf.Max(normalFogStart, 30f);
+            RenderSettings.fogEndDistance = Mathf.Max(normalFogEnd, 55f);
             ninjaDojo.dropDelay = StallsAwayTime; // 屋台が沈みきってから壁が起き上がる
             ninjaDojo.Begin(yaw);
             player.GiveStageWeapon(WeaponType.Shuriken, ninjaDojo.duration + 0.5f); // 忍者モードの間はずっと手裏剣
             StartCoroutine(WhileActiveAfter(StallsAwayTime, () => NinjaActive, () => FadeAmbience(normalFogColor, ninjaAmbient))); // 屋台が沈みきってから
             Sfx.Play("stageup");
             ShowMessage("NINJA MODE!!", 2f, new Color(0.75f, 0.5f, 1f));
+        }
+
+        // 正面のふすまが開き始めた: 忍者の BGM を流し始める
+        void OnDojoDoorsOpening()
+        {
+            if (NinjaActive && State == GameState.Playing) PlayStageBgm(ninjaBgm);
         }
 
         // 正面のふすまが開いた: 忍者が出てくる合図
@@ -62,6 +68,7 @@ namespace ShootingGallery
         void EndNinja()
         {
             if (!NinjaActive) return;
+            StopStageBgm(ninjaBgm, State != GameState.Playing); // (ラウンドの終わり・リセットの時はすぐ止める)
             int hits = ninjaDojo.Hits;
             ninjaDojo.End();
             ReleaseStageWeapon(WeaponType.Shuriken);
