@@ -84,6 +84,8 @@ namespace ShootingGallery
             stage.shellRadius = 1.7f; // ひびが入るガラスの球の半径 (屋台のカウンターの手前 約 2.05m より内側)
             stage.grayHold = 1.8f;    // 灰色に止まったまま待つ秒数
             stage.crackTime = 2.6f;   // ひびが広がる秒数 (Sfx の crack の長さと同じ)
+            stage.colorHold = 0.5f;   // 帰り: 組み上がってから、灰色のまま止めておく秒数
+            stage.colorTime = 2.8f;   // 帰り: 灰色を少しずつ弱めて、元の色に戻しきるまでの秒数
             stage.shardSolidMaterial = ShaderMaterial("Unknown_ShardSolid", "ShootingGallery/Unknown Shard Solid");
             stage.shardDepthMaterial = ShaderMaterial("Unknown_ShardDepth", "ShootingGallery/Unknown Shard Depth");
             stage.space = space.gameObject;
@@ -246,13 +248,11 @@ namespace ShootingGallery
                 clock.localRotation = Quaternion.LookRotation(dir) * Quaternion.Euler(R(-20f, 20f), R(-30f, 30f), R(-20f, 20f));
                 clock.localScale = Vector3.one * R(1.5f, 2.8f);
                 BuildClockShape(clock, cream, Mat("Unknown_ClockInk", new Color(0.3f, 0.25f, 0.45f), null, false, 0.5f), gold, -R(40f, 120f));
-                // 小さな浮き島 (下が岩、上に草と木。ゆっくり回る)
+                // 小さな浮き島 (下が岩、上に草と木。背景なので止まったまま。ふしぎな空間で動くのは、的と時計の針だけ)
                 for (int k = 0; k < 2; k++)
                 {
                     var island = Item("FloatingIsland", At(25f, 8f, 20f, 3f, 9f));
-                    var spin = island.gameObject.AddComponent<Rotator>();
-                    spin.axis = Vector3.up;
-                    spin.speed = R(-12f, 12f);
+                    island.localRotation = Quaternion.Euler(0f, R(0f, 360f), 0f);
                     float size = R(0.8f, 1.6f);
                     Prim(PrimitiveType.Sphere, "Rock", island, new Vector3(0f, -0.5f, 0f) * size, new Vector3(2f, 1.6f, 2f) * size, rock, false);
                     Prim(PrimitiveType.Sphere, "RockTip", island, new Vector3(0f, -1.2f, 0f) * size, new Vector3(1f, 1.2f, 1f) * size, rock, false);
@@ -459,7 +459,7 @@ namespace ShootingGallery
                 Prim(PrimitiveType.Cylinder, "Silo", barn, new Vector3(3.2f, 2.8f, 0.5f), new Vector3(1.6f, 2.8f, 1.6f), silo, false);
                 Prim(PrimitiveType.Sphere, "SiloTop", barn, new Vector3(3.2f, 5.6f, 0.5f), new Vector3(1.6f, 1.2f, 1.6f), silo, false);
             }
-            // 風車 (羽根が回る)
+            // 風車 (背景なので止まったまま。ふしぎな空間で動くのは、的と時計の針だけ)
             var metal = Mat("Windmill_Metal", new Color(0.7f, 0.7f, 0.72f), new Color(0.08f, 0.08f, 0.08f), false, 0.6f);
             foreach (var (s, z) in new[] { (1f, 14f), (-1f, 38f) })
             {
@@ -467,9 +467,7 @@ namespace ShootingGallery
                 Prim(PrimitiveType.Cylinder, "WindmillTower", w, new Vector3(x, g + 2.2f, z), new Vector3(0.18f, 2.2f, 0.18f), metal, false);
                 var blades = Group(w, "WindmillBlades");
                 blades.localPosition = new Vector3(x, g + 4.5f, z - 0.2f);
-                var spin = blades.gameObject.AddComponent<Rotator>();
-                spin.axis = Vector3.forward;
-                spin.speed = 60f + z;
+                blades.localRotation = Quaternion.Euler(0f, 0f, z * 7f); // (2つの風車の羽根の角度をずらす)
                 for (int i = 0; i < 12; i++)
                     Prim(PrimitiveType.Cube, "Blade", blades, Quaternion.Euler(0f, 0f, i * 30f) * new Vector3(0f, 0.75f, 0f), new Vector3(0.18f, 1.3f, 0.02f), white, false)
                         .transform.localRotation = Quaternion.Euler(0f, 0f, i * 30f);
@@ -565,14 +563,11 @@ namespace ShootingGallery
                 Prim(PrimitiveType.Sphere, "Asteroid", w, v.P(Mathf.Lerp(-1.6f, 1.5f, k) + R(-0.2f, 0.2f), Mathf.Lerp(-1.3f, 0.1f, k) + R(-0.2f, 0.2f), z), Vector3.one * R(0.15f, 0.5f) * v.S(z) * 0.5f, rock, false)
                     .transform.localRotation = Quaternion.Euler(R(0f, 360f), R(0f, 360f), 0f);
             }
-            // 回る宇宙ステーション
+            // 宇宙ステーション (背景なので止まったまま)
             var station = Group(w, "Station");
             station.localPosition = v.P(-0.9f, 0.4f, 22f);
             station.localRotation = Quaternion.Euler(25f, 30f, 0f);
             var st = Group(station, "Spin");
-            var spin = st.gameObject.AddComponent<Rotator>();
-            spin.axis = Vector3.forward;
-            spin.speed = 12f;
             var hull = Mat("Ufo_Silver", new Color(0.8f, 0.82f, 0.88f), new Color(0.1f, 0.1f, 0.12f), false, 0.9f);
             RingSegments(st, "StationRing", 2.4f, 24, 0.4f, hull);
             Prim(PrimitiveType.Cylinder, "Hub", st, Vector3.zero, new Vector3(0.8f, 0.6f, 0.8f), hull, false).transform.localRotation = Quaternion.Euler(90f, 0f, 0f);

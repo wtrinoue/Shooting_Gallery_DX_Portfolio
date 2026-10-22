@@ -15,8 +15,9 @@ namespace ShootingGallery
     ///       宙には時計やドアも、ぽんと現れる。それを撃つ (時間制)。
     ///       しばらくすると空に大きなワープホールが開き、こちらへ迫ってきて、プレイヤーがその輪をくぐる (枠くぐり)。
     ///       輪の中には向こうの背景 (雲海の上の星空) が見えていて、くぐると背景がそのまま星空に入れ替わる。床・飾り・ゲートは何も変わらない。
-    ///   帰り: 散らばった破片とガラスが逆回しで戻ってきて、灰色の空間が組み上がる → 本物の屋台と入れ替え (Left。本物も灰色にしてある) →
-    ///         ひびが光りながらふさがってガラスが消え、灰色の世界に色が戻る → 屋台の前 (Closed)。
+    ///   帰り: ゲートは開いたまま (半透明の部品だけ消す)。散らばった破片とガラスが逆回しで戻ってきて、灰色の空間がきれいにつながって組み上がる
+    ///         (飛んでいる間はひびを見せない) → 本物の屋台と入れ替え (Left。本物も灰色にしてある)。張り合わさった瞬間、手前のガラスに細いひびが見える →
+    ///         灰色を少しずつ弱めて色が戻る (戻り始めると同時に、ひびはすっと消える) → 屋台の前 (Closed)。
     /// 写真は使わないので、奥行き・両目の立体感が最後まで残る。後処理エフェクトも使わない (VR・WebGL で軽く)。
     /// プレイヤーは動かない。屋台の出し入れ・点数の判断は GameManager が行い、ここは見た目と的の出し方だけを受け持つ。
     /// </summary>
@@ -57,8 +58,6 @@ namespace ShootingGallery
         public Transform[] gates;
         public float gateOpenTime = 0.7f;
         public float gateInterval = 0.45f;
-        [Tooltip("帰りにゲートが閉じる秒数")]
-        public float gateCloseTime = 0.5f;
         [Tooltip("ふしぎな空間の床")]
         public WonderFloor floor;
 
@@ -101,8 +100,13 @@ namespace ShootingGallery
         [Tooltip("帰り: 部品が戻ってくる (1つ) / 正面から真後ろまでの時間のずれ / ひびがふさがる / 色が戻る 秒数")]
         public float returnTime = 1.3f;
         public float returnSpread = 1.2f;
-        public float healTime = 0.8f;
-        public float colorTime = 1.6f;
+        [Tooltip("帰り: 組み上がってから灰色のまま止めておく秒数 / 灰色を少しずつ弱めて元の色に戻しきるまでの秒数")]
+        public float colorHold = 0.5f;
+        public float colorTime = 2.8f;
+        [Tooltip("帰り: 張り合わさった瞬間に見せる細いひびの太さ / 濃さ / 色が戻り始めてから消えきるまでの秒数")]
+        public float thinCrack = 0.3f;
+        public float thinCrackFade = 0.7f;
+        public float thinCrackOut = 0.3f;
 
         [Header("BGM (コードで作る、ふしぎで明るいオルゴールの曲)")]
         [Range(0f, 1f)] public float bgmVolume = 0.35f;
@@ -112,7 +116,7 @@ namespace ShootingGallery
         /// <summary>今回撃った数</summary>
         public int Hits { get; private set; }
         /// <summary>時間切れから、色が戻って屋台が見えるまでの秒数</summary>
-        public float CloseTime => returnTime + returnSpread + healTime + colorTime + 0.3f;
+        public float CloseTime => returnTime + returnSpread + colorHold + colorTime + 0.3f;
 
         /// <summary>行き: 割れる瞬間、本物を同じ形の灰色の破片に入れ替えた (GameManager が本物の屋台・ハッチを隠す)</summary>
         public event System.Action Swapped;
@@ -136,6 +140,7 @@ namespace ShootingGallery
             public int first;         // 頂点の始まり (1枚 4頂点)
             public Vector3 fallAxis;  // 頭を通る回す軸 (この軸で回すと、目から見て一片が下・外へずれていく)
             public float fallSpeed, fallAccel, spin;
+            public float maxFall;     // 回してよい角度 (度)。これ以上回すと、一番低い所を過ぎて反対側から上がってきてしまう
             public float delay;       // 割れ始めてから剥がれ始めるまでの秒数 (正面ほど早い)
         }
         // 一片ごとの、今の動き (頭を中心にした回転・遠ざかる倍率・消えていく大きさ)。ガラスと空間の破片で同じものを使う
@@ -158,6 +163,9 @@ namespace ShootingGallery
         bool[] groundWasActive;
         bool[] gateOpen;
         Vector3[] gateScale;
+        // ゲートの半透明の部品 (入り口の膜・奥の世界の星雲など) と名前の文字。帰りは、戻ってくる灰色の破片の上に透けないように消す
+        readonly List<Renderer> gateSeeThrough = new List<Renderer>();
+        readonly List<(TextMesh text, Color color)> gateTexts = new List<(TextMesh, Color)>();
         readonly List<UnknownObject> free = new List<UnknownObject>(); // 使い回す
         readonly List<Transform> roots = new List<Transform>();
         readonly GrayWorld gray = new GrayWorld();
@@ -187,6 +195,12 @@ namespace ShootingGallery
             {
                 gateScale[i] = gates[i].localScale;
                 MeshMerger.Merge(gates[i], null); // ゲートと奥の世界は、ゲートごとに材質ごとにまとめる (ゲートごと大きさを変えて開くので)
+                foreach (var r in gates[i].GetComponentsInChildren<Renderer>(true))
+                {
+                    var tm = r.GetComponent<TextMesh>();
+                    if (tm != null) gateTexts.Add((tm, tm.color));
+                    else if (r.sharedMaterial != null && r.sharedMaterial.renderQueue >= (int)UnityEngine.Rendering.RenderQueue.Transparent) gateSeeThrough.Add(r);
+                }
             }
             if (bigHole != null)
             {
@@ -437,21 +451,6 @@ namespace ShootingGallery
             gateOpen[i] = true;
         }
 
-        // しゅっと小さくなって閉じる
-        IEnumerator CloseGate(int i)
-        {
-            gateOpen[i] = false;
-            Sfx.Play("warpout", 0.4f);
-            var from = gates[i].localScale;
-            for (float t = 0f; t < 1f; t += Time.deltaTime / Mathf.Max(0.05f, gateCloseTime))
-            {
-                gates[i].localScale = from * Mathf.Max(0.001f, 1f - t * t);
-                yield return null;
-            }
-            gates[i].localScale = gateScale[i] * 0.001f;
-            gates[i].gameObject.SetActive(false);
-        }
-
         // ---- 大きなワープホール ----
 
         // 空に大きなホールが開き、こちらへ迫ってきて、プレイヤーがその輪をくぐる (枠くぐり)。床・飾り・ゲート・的は、そのまま何も変わらない。
@@ -526,19 +525,23 @@ namespace ShootingGallery
             bool shattered = shatter.Shown;
             if (!shattered) shatter.Clear();
             // 1. 散らばった破片とガラスが、逆回しのように遠くから飛んで戻ってくる (最後に割れた物から。カシャ、カシャ…)
-            //    ガラスの破片は灰色の空の色 (組み上がると、灰色の世界の景色になる)
+            //    ガラスの破片は灰色の空の色 (組み上がると、灰色の世界の景色になる)。帰りはひびを描かない (破片がきれいにつながって見えるように)
             SetSolid(shattered);
-            SetLook(1f, 0f, 1f);
-            // ゲートは閉じる (ゲートの膜や名前の文字は半透明で、灰色の破片より後に描かれて透けて見えてしまうので)
-            for (int i = 0; i < gates.Length; i++) if (gates[i].gameObject.activeSelf) StartCoroutine(CloseGate(i));
+            SetLook(0f, 0f, 1f);
+            // ゲートは閉じずに開いたまま (縮めると奥の世界の奥行きが見えてしまうので)。ただし半透明の部品は、灰色の破片より後に描かれて
+            // 透けて見えてしまうので消す (膜や星雲はうっすらなので、すぐ消す。名前の文字はすっと薄くして消す)
+            for (int i = 0; i < gates.Length; i++) gateOpen[i] = false;
+            foreach (var r in gateSeeThrough) if (r != null) r.enabled = false;
             shell.gameObject.SetActive(true);
             Sfx.Play("reassemble");
             float total = returnSpread + returnTime;
             for (float t = 0f; t < total; t += Time.deltaTime)
             {
                 PoseShardsReturning(t);
+                SetGateTextAlpha(1f - Mathf.Clamp01(t / 0.3f));
                 yield return null;
             }
+            SetGateTextAlpha(0f);
             ResetShards();
             shatter.Home();
             Sfx.Play("click");
@@ -551,30 +554,39 @@ namespace ShootingGallery
             gray.Apply(WorldRoot(), grayExcludeSet);
             SetAmbienceGray(1f, fogTo, ambientTo, skyTo);
             shatter.Clear();
-            SetSolid(false); // (後ろはもう本物の灰色の世界なので、ガラスは透ける見た目に戻して、ひびをふさぐ)
+            // 後ろはもう本物の灰色の世界なので、ガラスは透ける見た目に戻す。張り合わさったこの瞬間に、屋台より手前のガラスに細いひびが見える
+            // (破片が飛んでいる間は描かない。ガラスの破片の上に描くと、手前に組み上がる屋台の破片の奥に見えてしまうので)
+            SetSolid(false);
+            SetLook(thinCrack, 0f, thinCrackFade);
             ScreenFader.FadeTo(0.25f, 0.02f, Color.white); // (入れ替えた瞬間の明かりの変わり目を隠す)
             yield return null;
             ScreenFader.FadeTo(0f, 0.3f);
+            yield return new WaitForSeconds(colorHold); // (組み上がった灰色の世界を少し見せてから)
 
-            // 3. ひびが光りながらふさがり、ガラスが消える
-            for (float t = 0f; t < 1f; t += Time.deltaTime / Mathf.Max(0.05f, healTime))
+            // 3. 灰色にする強さを少しずつ弱めて、元の色に戻していく (形・明るさは変えず、色だけが戻る)
+            //    はじめと終わりはゆっくり、途中もほぼ同じ速さ (急に色づく所がないように、なめらかな曲線と直線の間をとる)
+            //    細いひびは、色が戻り始めると同時にすっと消える
+            Sfx.Play("twinkle");
+            float started = Time.time;
+            for (float t = 0f; t < 1f; t += Time.deltaTime / Mathf.Max(0.05f, colorTime))
             {
-                SetLook(1f - t, 1f, 1f - t * t);
+                float k = 1f - Mathf.Lerp(t, t * t * (3f - 2f * t), 0.5f);
+                gray.Set(k);
+                SetAmbienceGray(k, fogTo, ambientTo, skyTo);
+                if (shell.gameObject.activeSelf)
+                {
+                    float c = 1f - Mathf.Clamp01((Time.time - started) / Mathf.Max(0.01f, thinCrackOut));
+                    SetLook(thinCrack, 0f, thinCrackFade * c);
+                    if (c <= 0f) shell.gameObject.SetActive(false);
+                }
                 yield return null;
             }
             shell.gameObject.SetActive(false);
-
-            // 4. 灰色の世界に、ゆっくり色が戻る
-            Sfx.Play("twinkle");
-            for (float t = 0f; t < 1f; t += Time.deltaTime / Mathf.Max(0.05f, colorTime))
-            {
-                float k = 1f - t * t * (3f - 2f * t);
-                gray.Set(k);
-                SetAmbienceGray(k, fogTo, ambientTo, skyTo);
-                yield return null;
-            }
-            gray.Restore();
+            // 灰色の複製を元と同じ色にしきってから、元の材質に差し戻す (差し戻した瞬間に何も変わらないように)
+            gray.Set(0f);
             SetAmbienceGray(0f, fogTo, ambientTo, skyTo);
+            yield return null;
+            gray.Restore();
             Closed?.Invoke();
             anim = null;
         }
@@ -722,6 +734,9 @@ namespace ShootingGallery
                 var tangent = d - a * Vector3.Dot(a, d);
                 if (tangent.sqrMagnitude < 0.0001f) tangent = Vector3.Cross(a, Vector3.right);
                 s.fallAxis = Vector3.Cross(a, tangent).normalized; // (この軸で正に回すと、a が tangent の方へ動く)
+                // 回すと a は a·cosθ + t·sinθ の円をたどる。高さ a.y·cosθ + t.y·sinθ が一番低くなる角度 (atan2(t.y, a.y) + 180°) までにとどめる
+                var t1 = tangent.normalized;
+                s.maxFall = Mathf.Repeat(Mathf.Atan2(t1.y, a.y) * Mathf.Rad2Deg + 180f, 360f);
                 s.fallSpeed = Random.Range(fallSpeed.x, fallSpeed.y);
                 s.fallAccel = Random.Range(fallAccel.x, fallAccel.y);
                 s.spin = Random.Range(pieceSpin.x, pieceSpin.y) * (Random.value < 0.5f ? -1f : 1f);
@@ -758,6 +773,9 @@ namespace ShootingGallery
         {
             var s = shards[i];
             float angle = s.fallSpeed * ft + 0.5f * s.fallAccel * ft * ft;
+            // 落ちるだけ: 一番低い所 (maxFall) に近づくほどゆっくりになり、そこを越えない (越えると、足元を回って舞い上がって見える)
+            if (s.maxFall > 0.01f) angle = s.maxFall * (1f - Mathf.Exp(-angle / s.maxFall));
+            else angle = 0f;
             var rot = Quaternion.AngleAxis(angle, s.fallAxis) * Quaternion.AngleAxis(s.spin * ft, s.axis);
             float scale = 1f + recede * ft * ft;
             float k = ft / Mathf.Max(0.01f, glassFlyTime);
@@ -801,7 +819,17 @@ namespace ShootingGallery
                 gates[i].localScale = gateScale[i] * 0.001f;
                 gates[i].gameObject.SetActive(false);
             }
+            // 帰りに消したゲートの半透明の部品と文字を戻しておく (次に開く時のために)
+            foreach (var r in gateSeeThrough) if (r != null) r.enabled = true;
+            SetGateTextAlpha(1f);
             if (!on) SetGround(true);
+        }
+
+        // ゲートの名前の文字の濃さ (1 = 元の色)
+        void SetGateTextAlpha(float a)
+        {
+            foreach (var (text, color) in gateTexts)
+                if (text != null) text.color = new Color(color.r, color.g, color.b, color.a * a);
         }
 
         // いつもの床の部品 (地面・穴のふち) を出す / 消す
