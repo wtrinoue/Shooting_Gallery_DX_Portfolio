@@ -49,8 +49,8 @@ namespace ShootingGallery
             MakeText(board, "RightTitle", "RIGHT  右手", new Vector3(1.05f, 2.22f, -0.01f), 0.1f, new Color(1f, 0.9f, 0.6f));
             ControllerFigure(board, new Vector3(0.35f, 1.6f, -0.01f), true);
             ControlRow(board, new Vector3(0.7f, 1.95f, -0.01f), "TRIG", TriggerColor, "トリガー : 撃つ", "(マシンガンは押しっぱなしで連射)");
-            ControlRow(board, new Vector3(0.7f, 1.58f, -0.01f), "A", ResetColor, "A 長押し : 最初に戻る", "(リセット)");
-            ControlRow(board, new Vector3(0.7f, 1.21f, -0.01f), "B", EndlessColor, "B 長押し : エンドレスモード", "(時間切れなし)");
+            ControlRow(board, new Vector3(0.7f, 1.58f, -0.01f), "B", EndlessColor, "B 長押し : エンドレスモード", "(時間切れなし)"); // (B が上、A が下。ユーザーの指定)
+            ControlRow(board, new Vector3(0.7f, 1.21f, -0.01f), "A", ResetColor, "A 長押し : 最初に戻る", "(リセット)");
 
             // 下: 遊び方
             MakeText(board, "HowTo1", "2 MIN か 100,000 POINTS の的を撃ってゲーム開始！", new Vector3(0f, 0.85f, -0.01f), 0.1f, new Color(1f, 0.85f, 0.3f));
