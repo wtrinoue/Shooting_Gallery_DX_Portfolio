@@ -14,6 +14,7 @@ namespace ShootingGallery
         static readonly Color ResetColor = new Color(1f, 0.45f, 0.15f);
         static readonly Color EndlessColor = new Color(0.3f, 1f, 0.85f);
         static readonly Color DebugColor = new Color(0.6f, 1f, 0.3f);
+        static readonly Color LookColor = new Color(0.55f, 0.75f, 1f); // PC の「見回す」(右ドラッグ / WASD)
 
         // 看板を置く向き (メイン屋台 = 0度 から左右へ)。看板 (幅 4.5m) の端が、メイン屋台の屋根の角・提灯にかからない角度
         const float TitleBoardAngle = 75f;
@@ -39,18 +40,37 @@ namespace ShootingGallery
             Prim(PrimitiveType.Cube, "Banner", board, new Vector3(0f, 2.6f, 0.02f), new Vector3(4.5f, 0.34f, 0.06f), banner);
             MakeText(board, "Title", "HOW TO PLAY   操作方法", new Vector3(0f, 2.6f, -0.02f), 0.18f, Color.white);
 
+            // 操作の説明は2通り。VR のコントローラー (VRControls) と、マウスとキーボード (PCControls)。
+            // 看板のいちばん下の「VR ⇔ PC」のボタン (ControlsToggle) を撃つと切り替わる (GameManager.ToggleControlsDisplay)
+            var vr = Group(board, "VRControls");
             // 左手
-            MakeText(board, "LeftTitle", "LEFT  左手", new Vector3(-1.05f, 2.22f, -0.01f), 0.1f, new Color(1f, 0.9f, 0.6f));
-            ControllerFigure(board, new Vector3(-1.75f, 1.6f, -0.01f), false);
-            ControlRow(board, new Vector3(-1.4f, 1.82f, -0.01f), "TRIG", TriggerColor, "トリガー : 左の銃で撃つ", "(フィーバー中の二丁拳銃)");
-            ControlRow(board, new Vector3(-1.4f, 1.42f, -0.01f), "X", DebugColor, "X 長押し : デバッグモード", "(全部の的を試せる)");
-
+            MakeText(vr, "LeftTitle", "LEFT  左手", new Vector3(-1.05f, 2.22f, -0.01f), 0.1f, new Color(1f, 0.9f, 0.6f));
+            ControllerFigure(vr, new Vector3(-1.75f, 1.6f, -0.01f), false);
+            ControlRow(vr, new Vector3(-1.4f, 1.82f, -0.01f), "TRIG", TriggerColor, "トリガー : 左の銃で撃つ", "(フィーバー中の二丁拳銃)");
+            ControlRow(vr, new Vector3(-1.4f, 1.42f, -0.01f), "X", DebugColor, "X 長押し : デバッグモード", "(全部の的を試せる)");
             // 右手
-            MakeText(board, "RightTitle", "RIGHT  右手", new Vector3(1.05f, 2.22f, -0.01f), 0.1f, new Color(1f, 0.9f, 0.6f));
-            ControllerFigure(board, new Vector3(0.35f, 1.6f, -0.01f), true);
-            ControlRow(board, new Vector3(0.7f, 1.95f, -0.01f), "TRIG", TriggerColor, "トリガー : 撃つ", "(マシンガンは押しっぱなしで連射)");
-            ControlRow(board, new Vector3(0.7f, 1.58f, -0.01f), "B", EndlessColor, "B 長押し : エンドレスモード", "(時間切れなし)"); // (B が上、A が下。ユーザーの指定)
-            ControlRow(board, new Vector3(0.7f, 1.21f, -0.01f), "A", ResetColor, "A 長押し : 最初に戻る", "(リセット)");
+            MakeText(vr, "RightTitle", "RIGHT  右手", new Vector3(1.05f, 2.22f, -0.01f), 0.1f, new Color(1f, 0.9f, 0.6f));
+            ControllerFigure(vr, new Vector3(0.35f, 1.6f, -0.01f), true);
+            ControlRow(vr, new Vector3(0.7f, 1.95f, -0.01f), "TRIG", TriggerColor, "トリガー : 撃つ", "(マシンガンは押しっぱなしで連射)");
+            ControlRow(vr, new Vector3(0.7f, 1.58f, -0.01f), "B", EndlessColor, "B 長押し : エンドレスモード", "(時間切れなし)"); // (B が上、A が下。ユーザーの指定)
+            ControlRow(vr, new Vector3(0.7f, 1.21f, -0.01f), "A", ResetColor, "A 長押し : 最初に戻る", "(リセット)");
+
+            var pc = Group(board, "PCControls");
+            // 左: キーボード。上に数字キー (上から 1 / 2 / 3。VR の X / B / A と同じく長押し) を詰めて、下に WASD の並びの絵と「見回す」(ユーザーの指定)
+            MakeText(pc, "KeyboardTitle", "KEYBOARD  キーボード", new Vector3(-1.05f, 2.22f, -0.01f), 0.1f, new Color(1f, 0.9f, 0.6f));
+            ControlRow(pc, new Vector3(-1.9f, 1.98f, -0.01f), "1", DebugColor, "1 長押し : デバッグモード", "(全部の的を試せる)");
+            ControlRow(pc, new Vector3(-1.9f, 1.74f, -0.01f), "2", EndlessColor, "2 長押し : エンドレスモード", "(時間切れなし)");
+            ControlRow(pc, new Vector3(-1.9f, 1.5f, -0.01f), "3", ResetColor, "3 長押し : 最初に戻る", "(リセット)");
+            WasdFigure(pc, new Vector3(-1.62f, 1.19f, -0.01f));
+            LeftText(pc, "LookMain", "WASD : 見回す", new Vector3(-1.36f, 1.22f, -0.01f), 0.07f, LookColor);
+            LeftText(pc, "LookSub", "(右ドラッグでも見回せる)", new Vector3(-1.36f, 1.135f, -0.01f), 0.045f, new Color(0.85f, 0.85f, 0.9f));
+            // 右: マウス (撃つ・見回す)。マウスは右手で持つので右の欄 (ユーザーの指定)。
+            // 左の銃のボタン (前の F キー) はない: フィーバー中などの二丁拳銃は、左クリック / Space で左右いっしょに撃つ
+            MakeText(pc, "MouseTitle", "MOUSE  マウス", new Vector3(1.05f, 2.22f, -0.01f), 0.1f, new Color(1f, 0.9f, 0.6f));
+            MouseFigure(pc, new Vector3(0.35f, 1.55f, -0.01f));
+            ControlRow(pc, new Vector3(0.7f, 1.85f, -0.01f), "L", TriggerColor, "左クリック / Space : 撃つ", "(押しっぱなしで連射 / 二丁拳銃は左右いっしょに)");
+            ControlRow(pc, new Vector3(0.7f, 1.4f, -0.01f), "R", LookColor, "右ドラッグ : 見回す", "(マウスの先を狙う)");
+            pc.gameObject.SetActive(false); // (はじめは VR の表示。再生中は GameManager が、VR が動いているかで最初の表示を決める)
 
             // 下: 遊び方
             MakeText(board, "HowTo1", "2 MIN か 100,000 POINTS の的を撃ってゲーム開始！", new Vector3(0f, 0.85f, -0.01f), 0.1f, new Color(1f, 0.85f, 0.3f));
@@ -131,7 +151,9 @@ namespace ShootingGallery
         void BuildCredits(Transform board, Material panelMat, Material gold)
         {
             var dark = new Color(0.05f, 0.05f, 0.08f);
-            var open = CreditsButton(board, "CreditsButton", new Vector3(0f, 0.27f, -0.04f), new Vector2(2.3f, 0.26f), "CREDITS / LICENSES  (shoot)", new Color(0.95f, 0.8f, 0.35f), 0.075f, dark);
+            var open = CreditsButton(board, "CreditsButton", new Vector3(-0.6f, 0.27f, -0.04f), new Vector2(2.1f, 0.26f), "CREDITS / LICENSES  (shoot)", new Color(0.95f, 0.8f, 0.35f), 0.075f, dark);
+            // 右隣: 操作方法の説明を VR ⇔ PC で切り替えるボタン (CREDITS と同じ看板のボタン。PC は銃で、VR はコントローラーの白い玉で押せる。GameManager.ToggleControlsDisplay)
+            CreditsButton(board, "ControlsToggle", new Vector3(1.35f, 0.27f, -0.04f), new Vector2(1.4f, 0.26f), "VR ⇔ PC  表示切替", new Color(0.55f, 0.75f, 1f), 0.075f, dark);
 
             var panel = Group(board, "CreditsPanel");
             panel.localPosition = new Vector3(0f, 1.5f, -0.15f); // 看板の前に開く
@@ -274,6 +296,40 @@ namespace ShootingGallery
         /// コントローラーの絵 (Quest 3 を上から見た形): 大きな丸い灰色の面に、上のスティックと3つのボタン。面の下から外側へ白い握りが伸びる。
         /// 握りの横に赤いトリガー。ボタンの色は説明の印と同じ (Y・メニュー・Meta は使わないので灰色)
         /// </summary>
+        /// <summary>操作方法の看板 (PC) のマウスの絵: 白い丸い胴に、左ボタン (撃つ色)・右ボタン (見回す色)・ホイールとコード</summary>
+        void MouseFigure(Transform parent, Vector3 pos)
+        {
+            var m = Group(parent, "MouseFigure");
+            m.localPosition = pos;
+            var body = Mat("Controller_Body", new Color(0.9f, 0.9f, 0.92f), new Color(0.15f, 0.15f, 0.17f));
+            var dark = Mat("Controller_Stick", new Color(0.12f, 0.12f, 0.13f));
+            Prim(PrimitiveType.Capsule, "Body", m, Vector3.zero, new Vector3(0.17f, 0.13f, 0.03f), body, false);
+            Prim(PrimitiveType.Cube, "LeftButton", m, new Vector3(-0.038f, 0.06f, -0.02f), new Vector3(0.07f, 0.09f, 0.01f), Mat("Controls_L", TriggerColor, TriggerColor * 0.6f, true), false);
+            Prim(PrimitiveType.Cube, "RightButton", m, new Vector3(0.038f, 0.06f, -0.02f), new Vector3(0.07f, 0.09f, 0.01f), Mat("Controls_R", LookColor, LookColor * 0.6f, true), false);
+            Prim(PrimitiveType.Cube, "Wheel", m, new Vector3(0f, 0.065f, -0.026f), new Vector3(0.012f, 0.045f, 0.01f), dark, false);
+            Prim(PrimitiveType.Cube, "Cord", m, new Vector3(0f, 0.19f, 0f), new Vector3(0.012f, 0.1f, 0.01f), dark, false);
+        }
+
+        /// <summary>
+        /// 操作方法の看板 (PC) の WASD の絵: キーボードと同じ並び (上の段に W、下の段に A S D) の「見回す」色のキー。pos は S のキーの少し上 (W と S の間)
+        ///     W
+        ///   A S D
+        /// </summary>
+        void WasdFigure(Transform parent, Vector3 pos)
+        {
+            var k = Group(parent, "WasdFigure");
+            k.localPosition = pos;
+            const float Key = 0.11f, Step = 0.125f;
+            var keyMat = Mat("Controls_WASD", LookColor, LookColor * 0.6f, true);
+            var keys = new[] { ("W", new Vector2(0f, 0.5f)), ("A", new Vector2(-1f, -0.5f)), ("S", new Vector2(0f, -0.5f)), ("D", new Vector2(1f, -0.5f)) };
+            foreach (var (label, cell) in keys)
+            {
+                var p = new Vector3(cell.x * Step, cell.y * Step, -0.01f);
+                Prim(PrimitiveType.Cube, "Key", k, p, new Vector3(Key, Key, 0.03f), keyMat, false);
+                MakeText(k, "KeyText", label, p + new Vector3(0f, 0f, -0.017f), 0.065f, new Color(0.05f, 0.05f, 0.08f));
+            }
+        }
+
         void ControllerFigure(Transform parent, Vector3 pos, bool right)
         {
             var c = Group(parent, right ? "RightController" : "LeftController");

@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.XR;
+using UnityEngine.InputSystem.Utilities; // (InputSystem.onAnyButtonPress.Call)
 
 namespace ShootingGallery
 {
@@ -8,7 +9,8 @@ namespace ShootingGallery
     /// プレイヤー。中心から移動せず、見回して撃つだけ。
     /// 右手トリガーで右の銃を撃つ。フィーバー中の左手の銃は左手トリガーで撃つ。
     /// 右手の A ボタンを長押しすると (インジケーターがたまりきると) 最初に戻る。B ボタンの長押しでエンドレスモード、左手の X ボタンの長押しでデバッグモードが始まる。
-    /// VRデバイスが無い時はマウスでテストできる (右ドラッグか WASD で視点, 左クリック/Spaceで右の銃, Fキーで左の銃, 1 キー長押しでデバッグ, 2 キー長押しでエンドレス, 3 キー長押しでリセット。VR のボタンと同じく長押しで発動)。
+    /// VRデバイスが無い時はマウスでテストできる (右ドラッグか WASD で視点, 左クリック/Spaceで撃つ (二丁拳銃の時は左右の銃をいっしょに。左の銃はカーソルの少し左を狙う), 1 キー長押しでデバッグ, 2 キー長押しでエンドレス, 3 キー長押しでリセット。VR のボタンと同じく長押しで発動)。
+    /// 長押しのボタンは1つずつ (最初に押し始めたボタンを離すまで、ほかはたまらない)。
     /// </summary>
     public class PlayerRig : MonoBehaviour
     {
@@ -34,6 +36,8 @@ namespace ShootingGallery
         public float mouseSensitivity = 0.15f;
         [Tooltip("PC: WASD キーで視点を回す速さ (度/秒)。A / D で左右、W / S で上下")]
         public float keyLookSpeed = 90f;
+        [Tooltip("PC: 左の銃 (二丁拳銃) がカーソルより左を狙う量 (狙う点までの距離に対する割合。0.035 で約 2°)")]
+        public float desktopLeftAimOffset = 0.035f;
 
         [Header("リセット (右手の A ボタン長押し)")]
         [Tooltip("最初に戻るまで押し続ける秒数")]
@@ -102,6 +106,25 @@ namespace ShootingGallery
 
         /// <summary>視点を元に戻している途中か</summary>
         public bool IsRestoringView => viewRoutine != null;
+
+        // ---- 今どちらの操作で遊んでいるか (タイトルの操作方法の看板で、最初にどちらの説明を見せるかに使う) ----
+
+        /// <summary>
+        /// VR のコントローラーで遊んでいるか (false = マウスとキーボード)。最後に押されたボタンの種類で決める。
+        /// VR が動いていない時はいつも false。VR に入った時は true から始める。
+        /// </summary>
+        public bool UsingVRControls { get; private set; }
+        System.IDisposable anyButtonListener; // InputSystem.onAnyButtonPress の登録 (ボタンが押された時だけ呼ばれる。毎フレーム調べない)
+
+        // 何かのボタンが押された: 今と違う種類 (VR のコントローラー ⇔ マウス・キーボード) の時だけ切り替える。
+        // 同じ種類なら何もしない (早期リターン)。ヘッドセットの位置・向きはボタンではないので数えない (置いてあるだけで切り替わらないように)
+        void OnAnyButton(InputControl control)
+        {
+            bool vr = control.device is XRController;
+            if (vr == UsingVRControls) return;
+            if (vr && !XRBridge.IsActive) return; // (VR が動いていない時は、マウスとキーボードのまま)
+            UsingVRControls = vr;
+        }
 
         // 今の視点の高さの元 (CameraOffset)。VR は身長に合わせた値 (まだなら床の取り方に応じた値)、VR でなければ 0
         Vector3 HomeCameraOffset()
@@ -175,8 +198,7 @@ namespace ShootingGallery
             rightTrigger.AddBinding("<Keyboard>/space");
 
             leftTrigger = new InputAction("LeftTrigger", InputActionType.Button);
-            leftTrigger.AddBinding("<XRController>{LeftHand}/trigger");
-            leftTrigger.AddBinding("<Keyboard>/f");
+            leftTrigger.AddBinding("<XRController>{LeftHand}/trigger"); // (PC には左の銃のボタンはない。二丁拳銃の時は左クリック / Space で両方撃つ)
 
             resetButton = new InputAction("Reset", InputActionType.Button);
             // ボタンは用途 ({PrimaryButton} など) でも指定する: WebXR のコントローラーは名前が buttonA / buttonB で、primaryButton では見つからない
@@ -206,11 +228,14 @@ namespace ShootingGallery
             resetButton.Enable();
             endlessButton.Enable();
             debugButton.Enable();
+            anyButtonListener = InputSystem.onAnyButtonPress.Call(OnAnyButton);
         }
 
         void OnDisable()
         {
             Application.onBeforeRender -= OnBeforeRender;
+            anyButtonListener?.Dispose();
+            anyButtonListener = null;
             rightTrigger.Disable();
             leftTrigger.Disable();
             resetButton.Disable();
@@ -249,7 +274,9 @@ namespace ShootingGallery
 
             if (dualWield && leftGun != null)
             {
-                leftGun.TriggerInput(!controllerView && leftTrigger.WasPressedThisFrame(), !controllerView && leftTrigger.IsPressed());
+                // VR は左手のトリガー、PC は右の銃と同じ左クリック / Space で、左右の銃をいっしょに撃つ
+                var leftInput = xr ? leftTrigger : rightTrigger;
+                leftGun.TriggerInput(!controllerView && leftInput.WasPressedThisFrame(), !controllerView && leftInput.IsPressed());
             }
 
             // 特殊武器の残り時間
@@ -394,15 +421,26 @@ namespace ShootingGallery
         // A ボタン (リセット) / B ボタン (エンドレスモード) の長押し
         void UpdateReset()
         {
-            if (UpdateHold(resetButton, ref resetHeld, ref resetFired, resetHoldTime, resetIndicator)) ResetRequested?.Invoke();
-            if (UpdateHold(endlessButton, ref endlessHeld, ref endlessFired, endlessHoldTime, endlessIndicator)) EndlessRequested?.Invoke();
-            if (UpdateHold(debugButton, ref debugHeld, ref debugFired, debugHoldTime, debugIndicator)) DebugRequested?.Invoke();
+            // 長押しのボタンは1つずつ: 最初に押し始めたボタンを離すまで、ほかのボタンはたまらない (同時に押すと全部のゲージがたまっていたので)。
+            // 同じフレームに押し始めた時は リセット → エンドレス → デバッグ の順に優先
+            if (holdOwner != null && !holdOwner.IsPressed()) holdOwner = null;
+            if (holdOwner == null)
+            {
+                if (resetButton.IsPressed()) holdOwner = resetButton;
+                else if (endlessButton.IsPressed()) holdOwner = endlessButton;
+                else if (debugButton.IsPressed()) holdOwner = debugButton;
+            }
+            if (UpdateHold(resetButton, holdOwner == resetButton, ref resetHeld, ref resetFired, resetHoldTime, resetIndicator)) ResetRequested?.Invoke();
+            if (UpdateHold(endlessButton, holdOwner == endlessButton, ref endlessHeld, ref endlessFired, endlessHoldTime, endlessIndicator)) EndlessRequested?.Invoke();
+            if (UpdateHold(debugButton, holdOwner == debugButton, ref debugHeld, ref debugFired, debugHoldTime, debugIndicator)) DebugRequested?.Invoke();
         }
 
-        // 押している間たまっていき、holdTime 秒で発動する (発動したフレームだけ true)。離すと最初から
-        static bool UpdateHold(InputAction button, ref float held, ref bool fired, float holdTime, ResetIndicator indicator)
+        InputAction holdOwner; // 今たまっている長押しのボタン (離すまで、ほかの長押しのボタンは無効)
+
+        // 押している間たまっていき、holdTime 秒で発動する (発動したフレームだけ true)。離すと最初から。active = false の間は押していないのと同じ
+        static bool UpdateHold(InputAction button, bool active, ref float held, ref bool fired, float holdTime, ResetIndicator indicator)
         {
-            bool holding = button.IsPressed();
+            bool holding = active && button.IsPressed();
             bool fire = false;
             if (!holding)
             {
@@ -452,6 +490,7 @@ namespace ShootingGallery
         void ApplyMode(bool xr)
         {
             xrModeApplied = xr;
+            UsingVRControls = xr; // VR に入ったらコントローラー、出たらマウスとキーボードから
             foreach (var tpd in GetComponentsInChildren<TrackedPoseDriver>(true))
                 tpd.enabled = xr;
 
@@ -568,7 +607,9 @@ namespace ShootingGallery
             Vector3 aimPoint = Physics.Raycast(ray, out var hit, 100f) ? hit.point : ray.GetPoint(30f);
 
             PlaceDesktopHand(rightHand, new Vector3(0.22f, -0.22f, 0.35f), aimPoint);
-            PlaceDesktopHand(leftHand, new Vector3(-0.22f, -0.22f, 0.35f), aimPoint);
+            // 左の銃はカーソルの少し左を狙う (2丁が同じ点に重ならないように。距離に比べて約 2°)
+            Vector3 leftAim = aimPoint - head.transform.right * (Vector3.Distance(head.transform.position, aimPoint) * desktopLeftAimOffset);
+            PlaceDesktopHand(leftHand, new Vector3(-0.22f, -0.22f, 0.35f), leftAim);
         }
 
         void PlaceDesktopHand(Transform hand, Vector3 localOffset, Vector3 aimPoint)

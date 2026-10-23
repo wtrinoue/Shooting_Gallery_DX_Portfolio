@@ -49,6 +49,7 @@ namespace ShootingGallery
             {
                 var t = tm.transform;
                 if ((panel != null && t.IsChildOf(panel.transform)) || (openButton != null && t.IsChildOf(openButton.transform))) continue;
+                if (tm.GetComponentInParent<Target>(true) != null) continue; // 看板のボタン (VR ⇔ PC の切り替えなど) の文字は、パネルの外にあるので隠さない
                 boardTexts.Add(tm.GetComponent<Renderer>());
             }
         }

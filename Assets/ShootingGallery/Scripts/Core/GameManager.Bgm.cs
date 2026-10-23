@@ -137,11 +137,15 @@ namespace ShootingGallery
         Transform controlsBoardFace; // 操作方法の看板 (TitleBoards の中の ControlsBoard)
         const float ControllerViewAngle = 35f; // 看板の方からこの角度 (度) 以内を向いていたら、見ていることにする
 
+        GameObject controlsVR, controlsPC; // 操作方法の看板の2通りの説明 (VR のコントローラー / マウスとキーボード)
+
         void UpdateControllerView()
         {
             if (player == null) return;
+            UpdateControlsBoardMode();
             bool on = false;
-            if (State == GameState.Title && controlsBoard != null && controlsBoard.activeInHierarchy && (goalSign == null || !goalSign.IsPlaying))
+            // (手元のコントローラーの模型は VR の時だけ。PC では銃のまま、CREDITS の的も銃で撃てる)
+            if (player.UsingVRControls && State == GameState.Title && controlsBoard != null && controlsBoard.activeInHierarchy && (goalSign == null || !goalSign.IsPlaying))
             {
                 if (controlsBoardFace == null) controlsBoardFace = controlsBoard.transform.Find("ControlsBoard");
                 if (controlsBoardFace != null && player.head != null)
@@ -154,6 +158,37 @@ namespace ShootingGallery
                 }
             }
             player.SetControllerView(on);
+        }
+
+        bool controlsShowVR;   // 操作方法の看板に、VR の説明を出しているか (false = マウス・キーボード)
+        bool controlsManual;   // 看板の「VR ⇔ PC」のボタンで一度でも切り替えたか (切り替えた後は、入力では変えない)
+
+        /// <summary>看板の「VR ⇔ PC」のボタンを撃った: 説明を入れ替える。以後は入力に合わせて自動では変えない</summary>
+        void ToggleControlsDisplay()
+        {
+            controlsManual = true;
+            controlsShowVR = !controlsShowVR;
+            Sfx.Play("click");
+            UpdateControlsBoardMode();
+        }
+
+        // 操作方法の看板: VR かマウス・キーボードの説明の片方だけを出す。
+        // ボタンで切り替えるまでは、今どちらの操作で遊んでいるか (PlayerRig.UsingVRControls) に合わせる (最初に見せる説明が、今の操作の方になるように)
+        void UpdateControlsBoardMode()
+        {
+            if (!controlsManual) controlsShowVR = player.UsingVRControls;
+            if (controlsBoard == null) return;
+            if (controlsVR == null || controlsPC == null)
+            {
+                var vr = controlsBoard.transform.Find("ControlsBoard/VRControls");
+                var pc = controlsBoard.transform.Find("ControlsBoard/PCControls");
+                if (vr == null || pc == null) return;
+                controlsVR = vr.gameObject;
+                controlsPC = pc.gameObject;
+            }
+            bool useVR = controlsShowVR;
+            if (controlsVR.activeSelf != useVR) controlsVR.SetActive(useVR);
+            if (controlsPC.activeSelf == useVR) controlsPC.SetActive(!useVR);
         }
 
         // 曲の大きさを目標へ近づける (止めると決めた曲は、消えきったら止める)

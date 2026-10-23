@@ -942,6 +942,7 @@ namespace ShootingGallery
             // クレジットの看板のページ送りの的 (タイトルの間でも撃てる。点数なし)
             if (target.kind == TargetKind.Credits)
             {
+                if (target.name == "ControlsToggle") { ToggleControlsDisplay(); return; } // 操作方法の説明を VR ⇔ PC で切り替えるボタン
                 var viewer = target.GetComponentInParent<CreditsViewer>(true);
                 if (viewer != null) viewer.OnButton(target);
                 return;
