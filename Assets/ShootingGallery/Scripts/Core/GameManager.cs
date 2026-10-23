@@ -327,6 +327,8 @@ namespace ShootingGallery
         float normalFogStart, normalFogEnd;
         Light sunLight;       // シーンの平行光源 (カジノの暗転で消す)
         float sunIntensity;   // 普段の明るさ
+        readonly List<Light> otherSuns = new List<Light>();          // ゲーム一式の外にある平行光源 (太陽と同じ割合で明るさを変える)
+        readonly List<float> otherSunIntensity = new List<float>();  // その普段の明るさ
         Coroutine sunRoutine;
         Color normalSkyColor; // 普段の空 (夜。カメラの背景色)
         Coroutine ambienceRoutine;
@@ -404,6 +406,15 @@ namespace ShootingGallery
             var lightsRoot = transform.parent != null ? transform.parent : transform; // ゲーム一式 (ShootingGallery) の中の平行光源
             foreach (var l in lightsRoot.GetComponentsInChildren<Light>())
                 if (l.type == LightType.Directional && l.enabled) { sunLight = l; sunIntensity = l.intensity; break; }
+            // シーンにもともとある平行光源 (SampleScene の Directional Light など、ゲーム一式の外) も、太陽といっしょに明るさを変える
+            // (前は外の光源が点いたままで、音楽モードのホールなど屋根の下でも、客席の片側だけを斜めに照らしていた)
+            foreach (var l in FindObjectsByType<Light>(FindObjectsSortMode.None))
+            {
+                if (l == sunLight || l.type != LightType.Directional || !l.enabled) continue;
+                if (sunLight == null) { sunLight = l; sunIntensity = l.intensity; continue; }
+                otherSuns.Add(l);
+                otherSunIntensity.Add(l.intensity);
+            }
             normalFeverStalls = feverStalls;
             gimmickFeverStalls = feverStalls;
             if (debugStalls != null)

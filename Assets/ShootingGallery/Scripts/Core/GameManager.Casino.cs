@@ -73,12 +73,20 @@ namespace ShootingGallery
         IEnumerator FadeSunRoutine(float to, float duration)
         {
             float from = sunLight.intensity;
+            // ゲーム一式の外の平行光源も、太陽の普段の明るさに対する同じ割合へ
+            float k = sunIntensity > 0.0001f ? to / sunIntensity : 0f;
+            var othersFrom = new float[otherSuns.Count];
+            for (int i = 0; i < otherSuns.Count; i++) othersFrom[i] = otherSuns[i] != null ? otherSuns[i].intensity : 0f;
             for (float t = 0f; t < 1f; t += Time.deltaTime / duration)
             {
                 sunLight.intensity = Mathf.Lerp(from, to, t);
+                for (int i = 0; i < otherSuns.Count; i++)
+                    if (otherSuns[i] != null) otherSuns[i].intensity = Mathf.Lerp(othersFrom[i], otherSunIntensity[i] * k, t);
                 yield return null;
             }
             sunLight.intensity = to;
+            for (int i = 0; i < otherSuns.Count; i++)
+                if (otherSuns[i] != null) otherSuns[i].intensity = otherSunIntensity[i] * k;
             sunRoutine = null;
         }
 
