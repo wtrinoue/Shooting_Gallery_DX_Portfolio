@@ -282,10 +282,16 @@ namespace ShootingGallery
             gm.worldGateTarget = worldGateTarget;
             gm.controlsBoard = controlsBoard;
             gm.goalSign = BuildGoalSign(GameManager.GoalScore); // ラウンドの始まりに降りてくる、プロペラの付いた看板
-            // 2 MIN の終わりのクラッカーと紙吹雪 (GalleryBuilder.Finale.cs)。普通のメイン屋台と、豪華屋台のメインに同じ配置で1組ずつ
+            // 2 MIN の終わりのクラッカーと紙吹雪 (GalleryBuilder.Finale.cs)。メイン・フィーバー・豪華屋台のすべてに同じ配置で1組ずつ
+            // (屋台の輪が広がって軒数が増えても、出ている屋台どれにも同じように出る)
             var woodDark = Mat("Wood_Dark", new Color(0.25f, 0.16f, 0.1f));
-            gm.finaleCrackers = BuildFinaleCrackers(mainShell, "FinaleConfetti", true, woodDark, woodDark);
-            gm.deluxeFinaleCrackers = BuildFinaleCrackers(deluxeMain.transform, "FinaleConfetti_Deluxe", false, DxBlack, DxGold);
+            var finaleSets = new System.Collections.Generic.List<FinaleCrackers>();
+            gm.mainFinaleCrackers = BuildFinaleCrackers(mainShell, "FinaleConfetti", woodDark, woodDark);
+            finaleSets.Add(gm.mainFinaleCrackers);
+            foreach (var s in feverStalls) finaleSets.Add(BuildFinaleCrackers(s.transform, $"FinaleConfetti_{s.name}", woodDark, woodDark));
+            finaleSets.Add(BuildFinaleCrackers(deluxeMain.transform, "FinaleConfetti_Deluxe", DxBlack, DxGold));
+            foreach (var s in deluxeFever) finaleSets.Add(BuildFinaleCrackers(s.transform, $"FinaleConfetti_{s.name}", DxBlack, DxGold));
+            gm.finaleCrackerSets = finaleSets.ToArray();
             gm.hudText = hudText;
             gm.messageText = msgText;
             gm.font = font;

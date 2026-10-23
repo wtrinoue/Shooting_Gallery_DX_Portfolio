@@ -510,7 +510,7 @@ namespace ShootingGallery
             SetPortal(Vector3.zero, dir, 0f, PortalAll);
             var cam = Camera.main;
             if (cam != null) cam.backgroundColor = cosmosSky; // (星空の球が全部おおっているので、見た目は変わらない)
-            Sfx.Play("twinkle", SfxVolume);
+            // (宇宙ステージのようなキラキラの音は鳴らさない。ユーザーの指定)
             holeRoutine = null;
         }
 
@@ -569,8 +569,7 @@ namespace ShootingGallery
 
             // 3. 灰色にする強さを少しずつ弱めて、元の色に戻していく (形・明るさは変えず、色だけが戻る)
             //    はじめと終わりはゆっくり、途中もほぼ同じ速さ (急に色づく所がないように、なめらかな曲線と直線の間をとる)
-            //    細いひびは、色が戻り始めると同時にすっと消える
-            Sfx.Play("twinkle", SfxVolume);
+            //    細いひびは、色が戻り始めると同時にすっと消える (キラキラの音は鳴らさない。ユーザーの指定)
             float started = Time.time;
             for (float t = 0f; t < 1f; t += Time.deltaTime / Mathf.Max(0.05f, colorTime))
             {

@@ -4,15 +4,16 @@ namespace ShootingGallery
 {
     /// <summary>
     /// GameManager のうち、2 MIN の終わりのフィナーレ。
-    /// 残り finalePrepareSeconds 秒でメイン屋台のカウンターにクラッカーが出て (FinaleCrackers.Prepare)、
-    /// 時間切れと同時に紙吹雪が飛び出し、拍手 (finaleApplause) が流れて、だんだん小さくなって止まる。
+    /// 残り finalePrepareSeconds 秒で、すべての屋台のカウンターにクラッカーが出て (FinaleCrackers.Prepare。見えるのは今出ている屋台の組)、
+    /// 時間切れと同時に、出ている屋台のクラッカーから紙吹雪が飛び出し、拍手 (finaleApplause) が流れて、だんだん小さくなって止まる。
     /// </summary>
     public partial class GameManager
     {
         [Header("Finale (2 MIN の終わり: 残り時間が少なくなるとクラッカーが出て、時間切れと同時に紙吹雪と拍手)")]
-        public FinaleCrackers finaleCrackers;
-        [Tooltip("豪華屋台のメインに置いた同じ配置のクラッカー (豪華タイム中に見える。紙吹雪は普通の屋台の組が出す)")]
-        public FinaleCrackers deluxeFinaleCrackers;
+        [Tooltip("普通のメイン屋台のクラッカー (屋台が1軒も出ていない時は、この組がメイン屋台の最初の位置から紙吹雪を出す)")]
+        public FinaleCrackers mainFinaleCrackers;
+        [Tooltip("すべての屋台 (メイン・フィーバー・豪華屋台) のクラッカー。mainFinaleCrackers も含む")]
+        public FinaleCrackers[] finaleCrackerSets;
         [Tooltip("時間切れと同時に流す拍手")]
         public AudioClip finaleApplause;
         [Range(0f, 1f)] public float finaleApplauseVolume = 0.8f;
@@ -29,10 +30,9 @@ namespace ShootingGallery
         void UpdateFinale()
         {
             // 2 MIN の残りが少なくなった: クラッカーを出して待つ (拍手の音も先に読んでおく)
-            if (State == GameState.Playing && TimeAttack && timeLeft <= finalePrepareSeconds && finaleCrackers != null && !finaleCrackers.Prepared)
+            if (State == GameState.Playing && TimeAttack && timeLeft <= finalePrepareSeconds && mainFinaleCrackers != null && !mainFinaleCrackers.Prepared)
             {
-                finaleCrackers.Prepare();
-                if (deluxeFinaleCrackers != null) deluxeFinaleCrackers.Prepare();
+                foreach (var f in FinaleSets()) f.Prepare(); // (このあと せり上がる屋台にも、出ている状態で付いてくる)
                 if (finaleApplause != null && finaleApplause.loadState == AudioDataLoadState.Unloaded) finaleApplause.LoadAudioData();
             }
 
@@ -48,11 +48,22 @@ namespace ShootingGallery
             applauseSource.volume = finaleApplauseVolume * k * k; // (耳で聞いてなめらかに小さくなるように 2乗で)
         }
 
-        /// <summary>時間切れ: 紙吹雪を飛び出させ、拍手を流す</summary>
+        /// <summary>
+        /// 時間切れ: 出ている屋台のクラッカーから紙吹雪を飛び出させ、拍手を流す。
+        /// 屋台の位置で決めるので、StopEverything (フィーバーの屋台が沈む・豪華屋台が戻る) より前に呼ぶこと
+        /// </summary>
         void PlayFinale()
         {
-            if (finaleCrackers != null) finaleCrackers.Burst(mainHomePos, mainHomeRot);
-            if (deluxeFinaleCrackers != null) deluxeFinaleCrackers.Burst(mainHomePos, mainHomeRot); // (金紙が飛んで反動で揺れるだけ。紙吹雪は出さない)
+            bool any = false;
+            foreach (var f in FinaleSets())
+            {
+                bool shown = FinaleStallShown(f);
+                f.Burst(shown); // (出ていない屋台の組も金紙だけ飛ばす。あとで出てきた時に、ふたが残っていないように)
+                any |= shown;
+            }
+            // 1軒も出ていない (別の世界のモードの途中など): メイン屋台が戻ってくる最初の位置から出す
+            if (!any && mainFinaleCrackers != null) mainFinaleCrackers.BurstAt(mainHomePos, mainHomeRot);
+
             if (finaleApplause == null) return;
             if (applauseSource == null)
             {
@@ -69,6 +80,20 @@ namespace ShootingGallery
             applauseStartTime = Time.time;
         }
 
+        // その組の屋台が、今プレイヤーのまわりに出ているか (メイン屋台か、フィーバー中に輪に並んでいる屋台で、見えている)
+        bool FinaleStallShown(FinaleCrackers f)
+        {
+            if (f.stall == null || !f.stall.gameObject.activeInHierarchy) return false;
+            var s = f.stall.GetComponent<Stall>();
+            return s != null && (s == mainStall || (IsFever && activeFeverStalls.Contains(s)));
+        }
+
+        System.Collections.Generic.IEnumerable<FinaleCrackers> FinaleSets()
+        {
+            if (finaleCrackerSets == null) yield break;
+            foreach (var f in finaleCrackerSets) if (f != null) yield return f;
+        }
+
         void StopApplause()
         {
             applauseStartTime = -1f;
@@ -79,15 +104,13 @@ namespace ShootingGallery
         void ClearFinale()
         {
             StopApplause();
-            if (finaleCrackers != null) finaleCrackers.ClearAll();
-            if (deluxeFinaleCrackers != null) deluxeFinaleCrackers.ClearAll();
+            foreach (var f in FinaleSets()) f.ClearAll();
         }
 
         /// <summary>フィナーレのクラッカーをしまう (タイトルに戻る時。拍手と落ちている紙吹雪はそのまま)</summary>
         void HideFinaleCrackers()
         {
-            if (finaleCrackers != null) finaleCrackers.Hide();
-            if (deluxeFinaleCrackers != null) deluxeFinaleCrackers.Hide();
+            foreach (var f in FinaleSets()) f.Hide();
         }
     }
 }

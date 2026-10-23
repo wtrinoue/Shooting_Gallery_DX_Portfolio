@@ -422,6 +422,8 @@ namespace ShootingGallery
                 yield return null;
             }
             SetLights(1f);
+            // 5. 明るくなりきってから、ソロの楽器が出始める (ユーザーの指定)
+            OpenSolos();
             anim = null;
         }
 
@@ -479,8 +481,18 @@ namespace ShootingGallery
             if (spotOwner != null) System.Array.Clear(spotOwner, 0, spotOwner.Length);
             soloUntil.Clear();
             passAt.Clear();
-            for (int i = 0; i < soloSlots; i++) PickSoloist();
+            solosOpen = false; // ソロは、ステージが明るくなりきってから (OpenSolos)
             SpawnStaff();
+        }
+
+        bool solosOpen; // ソロの楽器を出してよい (演奏が始まり、ステージが明るくなりきった後)
+
+        // ステージが明るくなりきった: ソロの楽器を出し始める
+        void OpenSolos()
+        {
+            if (!playing || solosOpen) return;
+            solosOpen = true;
+            for (int i = 0; i < soloSlots; i++) PickSoloist();
         }
 
         // BGM を流し始める (曲ができていれば)。演奏の途中から始める時は、今の拍の位置から鳴らして、楽器の揺れとずれないようにする
@@ -585,6 +597,7 @@ namespace ShootingGallery
         void StopPlaying(bool instant)
         {
             playing = false;
+            solosOpen = false;
             foreach (var s in soloists) if (s != null) s.SetSolo(false);
             soloists.Clear();
             if (spotOwner != null) System.Array.Clear(spotOwner, 0, spotOwner.Length); // スポットライトも全部消す
@@ -745,7 +758,7 @@ namespace ShootingGallery
             soloUntil.Remove(inst);
             passAt.Remove(inst);
             UpdateBlockers();
-            if (playing) PickSoloist();
+            if (playing && solosOpen) PickSoloist();
         }
 
         // ソロの楽器を撃ちやすいように、ソロでない楽器のうち、ソロの楽器のまわり (blockRadius 以内) にある物と、
@@ -995,7 +1008,7 @@ namespace ShootingGallery
                     var s = soloists[i];
                     if (soloUntil.TryGetValue(s, out var until) && Beat >= until && until < float.MaxValue) EndSolo(s);
                 }
-                while (soloists.Count < soloSlots && playing) { int before = soloists.Count; PickSoloist(); if (soloists.Count == before) break; }
+                while (soloists.Count < soloSlots && playing && solosOpen) { int before = soloists.Count; PickSoloist(); if (soloists.Count == before) break; }
             }
             // 五線譜を次々に出す (何本も出てきては途切れる)
             if (Time.time - lastStaffTime > staffEvery) SpawnStaff();

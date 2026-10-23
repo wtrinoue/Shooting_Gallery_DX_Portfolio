@@ -806,6 +806,7 @@ namespace ShootingGallery
         void EndRound()
         {
             State = GameState.Result;
+            if (TimeAttack) PlayFinale(); // フィナーレ: 出ている屋台のクラッカーから紙吹雪が飛び出し、拍手が流れる (屋台が沈む・戻る前に)
             StopEverything();
             StopRoundBgm(); // ラウンドの BGM をふわっと止める
 
@@ -819,7 +820,6 @@ namespace ShootingGallery
                     PlayerPrefs.Save();
                 }
                 lastRoundCleared = false;
-                PlayFinale(); // フィナーレ: クラッカーから紙吹雪が飛び出し、拍手が流れる
                 Sfx.Play("end");
                 ShowMessage(highRecord ? $"TIME UP!\nNEW RECORD {Points(Score)}" : $"TIME UP!\nSCORE {Points(Score)}", 4f, new Color(1f, 0.85f, 0.3f));
                 backToTitle = StartCoroutine(BackToTitle());

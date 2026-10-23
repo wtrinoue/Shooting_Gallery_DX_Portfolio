@@ -447,3 +447,9 @@ VS Code の診断で、新規ファイルの型が「見つからない」と出
   - 豪華屋台のメイン (Stall_Deluxe_Grand) にも同じ配置でもう1組 (GameManager.deluxeFinaleCrackers、棚は黒・台は金)。今出ている屋台の組だけが見える。紙吹雪は普通の屋台の組だけが出す (FinaleCrackers.spawnConfetti。同じ所から出るので2倍にならないように)。
   - 拍手は GalleryRuntimeAssets.finaleApplause にも入れ (実機用)、読み込み設定は StageBgmPaths に足した (ConcertBgmImport の版を 8 に)。再生時に組み立てる運用なので、そのまま反映される。拍手の音源のクレジットは未記入 (出典をユーザーに確認)。
 - **credit.txt** (リポジトリのいちばん上、README.md の隣) に、使っている曲・音のファイルの一覧を作った (2026-10-23)。コードの *Path 定数から拾ったもの。出典が「（未記入）」の物はユーザーに確認中。曲や音を足したら、ここにも足すこと。→ 同日、ユーザーが出典を記入し、各サイトの利用規約を確認して、ゲーム内のクレジット (Resources/THIRD_PARTY_NOTICES.txt の 4.〜9.: 魔王魂 / 音楽の卵 / OpenTracks / Pixabay / 小森平 / Google Gemini の AI 生成曲) を書き直した。クレジット必須は魔王魂だけ、小森平は「可能ならリンク表示」、Google は「AI 生成物を人が作ったと思わせない」。規約のまとめは credit.txt の末尾。曲を足したら両方に足すこと。
+
+### 2026-10-24 の変更
+- **フィナーレのクラッカーを全部の屋台に** (ユーザーの指定「数が増えたときもどの屋台にも同じように」): メイン・フィーバー 9軒・豪華屋台のメイン・豪華フィーバー 8軒の全部に1組ずつ (どの屋台もカウンターと柱の寸法は同じなので、同じ配置)。GameManager.mainFinaleCrackers (普通のメイン屋台の組) と finaleCrackerSets (全部の組)。残り10秒で全部の組を Prepare (見えるのは出ている屋台の組だけ)。時間切れ (EndRound) では **StopEverything より前に** PlayFinale を呼び、その瞬間に出ている屋台 (メイン + フィーバー中の輪) の組が、その場の口から紙吹雪を出す (FinaleCrackers.Burst(true))。1軒も出ていない時 (別の世界のモードの途中など) だけ、普通のメイン屋台の組が最初の位置から出す (BurstAt)。spawnConfetti は削除。紙吹雪の数は1本につき 80枚 + 10本のまま (8軒なら 16本ぶん)。
+- **Unknown ステージのキラキラの音を消した** (ユーザーの指定): ワープホールをくぐって背景が星空になった時と、帰りに色が戻り始める時の Sfx "twinkle" (UnknownStage.BigHoleEvent / Leave)。宇宙ステージのキラキラはそのまま。
+- **音楽モードのソロはステージが明るくなりきってから** (ユーザーの指定): 前は演奏開始 (StartPlaying) と同時に soloSlots 個のソロを出していた。今は lightRiseSeconds (4秒) で明るくなりきった時に ConcertHall.OpenSolos で出し始める (solosOpen が立つまで、Update の補充と EndSolo の次のソロも出さない)。
+- (確認中) 宇宙モードの帰りの音を消してほしいとの依頼: 帰りに鳴るのは twinkle ではなく SpaceStage.Outro の "warpout" (ヒュウゥン) と、GameManager.EndSpace の "complete" (ファンファーレ) / "end"。どれのことかユーザーに確認中。

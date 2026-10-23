@@ -4,21 +4,20 @@ namespace ShootingGallery
 {
     /// <summary>
     /// GalleryBuilder のうち、2 MIN の終わりのフィナーレ (FinaleCrackers)。
-    /// メイン屋台のカウンターの外 (柱のそばの小さな棚の上) の左右に、プレイヤーの頭の上へ口を向けたクラッカー (縞模様の円すいに金紙のふた。小さな台に挿してある) を、隠した状態で置く
+    /// 屋台のカウンターの外 (柱のそばの小さな棚の上) の左右に、プレイヤーの頭の上へ口を向けたクラッカー (縞模様の円すいに金紙のふた。小さな台に挿してある) を、隠した状態で置く
     /// </summary>
     public partial class GalleryBuilder
     {
         public const string FinaleApplausePath = "Assets/Source/normal/clap_in_hall.mp3"; // 2 MIN の終わりの拍手
 
         /// <summary>
-        /// メイン屋台 (mainShell) に1組のクラッカーを置く。spawnConfetti = 紙吹雪を出す組か (豪華屋台の組は false。同じ所から出るので)。
+        /// 屋台 (mainShell。どの屋台もカウンターと柱の寸法は同じ) に1組のクラッカーを置く。
         /// shelfMat / holderMat = 棚と台の材質 (豪華屋台は黒と金)
         /// </summary>
-        FinaleCrackers BuildFinaleCrackers(Transform mainShell, string name, bool spawnConfetti, Material shelfMat, Material holderMat)
+        FinaleCrackers BuildFinaleCrackers(Transform mainShell, string name, Material shelfMat, Material holderMat)
         {
             var root = Group(world, name); // 紙吹雪はこの下に出す (世界の原点。y = 0 が床)
             var finale = root.gameObject.AddComponent<FinaleCrackers>();
-            finale.spawnConfetti = spawnConfetti;
 
             var stripes = new[]
             {

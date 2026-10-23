@@ -4,16 +4,17 @@ using UnityEngine;
 namespace ShootingGallery
 {
     /// <summary>
-    /// 2 MIN の終わりのフィナーレ。残り時間が少なくなると、メイン屋台のカウンターの左右にクラッカーがぽんっと出て待ち (Prepare)、
+    /// 2 MIN の終わりのフィナーレ。残り時間が少なくなると、屋台のカウンターの左右にクラッカーがぽんっと出て待ち (Prepare)、
     /// 時間切れと同時に、クラッカーの口からプレイヤーの頭の上へ紙吹雪と紙テープが飛び出す (Burst。破裂音はなし)。
     /// 紙吹雪は、はじめの勢いがすぐ弱まり、ゆらゆら揺れながらゆっくり落ちて、床に着いたら消える (FxPool で使い回す)。
-    /// クラッカーはメイン屋台 (stall) の子なので、屋台が動いたり沈んだりするといっしょに動く。
-    /// 紙吹雪は、屋台がどこにいても「メイン屋台の最初の位置」のクラッカーの口から出す (時間切れの時は屋台が戻ってくる途中のことがあるので)。
-    /// 普通のメイン屋台と豪華屋台のメインに1組ずつある (見えるのは、今出ている屋台の組だけ。紙吹雪は普通の屋台の組だけが出す)
+    /// クラッカーは屋台 (stall) の子なので、屋台が動いたり沈んだりするといっしょに動く。
+    /// メイン・フィーバー・豪華屋台のすべてに1組ずつある (見えるのは、今出ている屋台の組だけ)。
+    /// 紙吹雪は、時間切れの瞬間に出ている屋台の組が、その場の口から出す (GameManager.PlayFinale)。
+    /// 1軒も出ていない時 (別の世界のモードの途中など) は、普通のメイン屋台の組が「メイン屋台の最初の位置」から出す (BurstAt)
     /// </summary>
     public class FinaleCrackers : MonoBehaviour
     {
-        [Tooltip("クラッカーを載せているメイン屋台 (普通のメイン屋台)")]
+        [Tooltip("クラッカーを載せている屋台")]
         public Transform stall;
         [Tooltip("クラッカー1本ずつの根元 (台ごと。ふくらんで出てくる)")]
         public Transform[] crackers;
@@ -21,8 +22,6 @@ namespace ShootingGallery
         public Transform[] mouths;
         [Tooltip("口をふさいでいる金紙 (飛び出す時に消える)")]
         public GameObject[] caps;
-        [Tooltip("紙吹雪を出す (豪華屋台の組は OFF。普通の屋台の組と同じ所から出るので、2倍にならないように)")]
-        public bool spawnConfetti = true;
         [Tooltip("紙吹雪・紙テープの色")]
         public Material[] confettiMaterials;
         public int confettiPerCracker = 80;
@@ -64,10 +63,39 @@ namespace ShootingGallery
         }
 
         /// <summary>
-        /// 紙吹雪を飛び出させる。homePos / homeRot = メイン屋台の最初の位置 (stall の親のローカル)。
+        /// 金紙を飛ばして反動で揺らす。confetti = 今の口の位置から紙吹雪も出す (屋台が出ている組だけ true にする)。
         /// クラッカーがまだ出ていなければ、その場ですぐ出してから飛び出させる
         /// </summary>
-        public void Burst(Vector3 homePos, Quaternion homeRot)
+        public void Burst(bool confetti)
+        {
+            Kick();
+            if (!confetti || !HasConfetti) return;
+            for (int i = 0; i < mouths.Length; i++)
+                Emit(transform.InverseTransformPoint(mouths[i].position), transform.InverseTransformDirection(mouths[i].forward).normalized);
+        }
+
+        /// <summary>
+        /// 屋台が出ていない時: 金紙を飛ばし、紙吹雪は「屋台の最初の位置」の口から出す。homePos / homeRot = 屋台の最初の位置 (stall の親のローカル)
+        /// </summary>
+        public void BurstAt(Vector3 homePos, Quaternion homeRot)
+        {
+            Kick();
+            if (!HasConfetti) return;
+            Transform space = stall.parent;
+            for (int i = 0; i < mouths.Length; i++)
+            {
+                // 屋台から見た口の位置と向きを、最初の位置の屋台に置き直す
+                Vector3 localPos = stall.InverseTransformPoint(mouths[i].position);
+                Vector3 localDir = stall.InverseTransformDirection(mouths[i].forward);
+                Vector3 from = transform.InverseTransformPoint(space.TransformPoint(homePos + homeRot * localPos));
+                Vector3 axis = transform.InverseTransformDirection(space.TransformDirection(homeRot * localDir)).normalized;
+                Emit(from, axis);
+            }
+        }
+
+        bool HasConfetti => confettiMaterials != null && confettiMaterials.Length > 0;
+
+        void Kick()
         {
             if (!Prepared)
             {
@@ -77,18 +105,13 @@ namespace ShootingGallery
             }
             kickClock = 0f;
             foreach (var c in caps) if (c != null) c.SetActive(false);
-            if (!spawnConfetti || confettiMaterials == null || confettiMaterials.Length == 0) return;
-            Transform space = stall.parent;
-            for (int i = 0; i < mouths.Length; i++)
-            {
-                // 屋台から見た口の位置と向きを、最初の位置の屋台に置き直す
-                Vector3 localPos = stall.InverseTransformPoint(mouths[i].position);
-                Vector3 localDir = stall.InverseTransformDirection(mouths[i].forward);
-                Vector3 from = transform.InverseTransformPoint(space.TransformPoint(homePos + homeRot * localPos));
-                Vector3 axis = transform.InverseTransformDirection(space.TransformDirection(homeRot * localDir)).normalized;
-                for (int n = 0; n < confettiPerCracker; n++) Launch(from, axis, false);
-                for (int n = 0; n < streamersPerCracker; n++) Launch(from, axis, true);
-            }
+        }
+
+        // 1本のクラッカーの口 (from) から、axis の向きへ紙吹雪と紙テープを出す
+        void Emit(Vector3 from, Vector3 axis)
+        {
+            for (int n = 0; n < confettiPerCracker; n++) Launch(from, axis, false);
+            for (int n = 0; n < streamersPerCracker; n++) Launch(from, axis, true);
         }
 
         /// <summary>クラッカーをしまう (タイトルに戻る時。落ちている紙吹雪はそのまま落ちきる)</summary>
