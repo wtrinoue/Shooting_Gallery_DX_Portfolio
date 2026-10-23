@@ -61,6 +61,7 @@ namespace ShootingGallery
             concert.curtain = curtain;
             concert.stageLights = lights.stage;
             concert.houseLight = lights.house;
+            concert.stageFrontZ = HallFront; // これより奥の部品だけを、ステージの明かりで照らす
             concert.followSpots = lights.follow;
             concert.followBeams = lights.beams;
             concert.showWhilePlaying = lights.showWhilePlaying;

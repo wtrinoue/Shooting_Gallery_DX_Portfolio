@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Rendering.Universal;
 
 namespace ShootingGallery
 {
@@ -46,6 +47,9 @@ namespace ShootingGallery
         [Tooltip("客席を照らす明かり (演奏中はビルダーで決めた明るさの houseDuringPlay 倍。1 より小さいと、演奏中は客席が暗くなってステージが目立つ)")]
         public Light houseLight;
         public float houseDuringPlay = 0.35f; // 名前を変えて、シーンに保存された前の値 (housePlay 1.6) を使わない
+        [Tooltip("ステージの手前の縁 (Hall のローカル z)。これより奥の部品だけを、ステージの明かりで照らす (客席は照らさない)")]
+        public float stageFrontZ = 4.6f;
+        const uint StageLightLayer = 1u << 1; // ステージの明かりだけが照らすレイヤー (Light Layer 1。ふだんの部品は Default = 1 << 0)
         [Tooltip("ソロの楽器を照らすスポットライトと、その光の筋 (光と同じ向きに伸ばす。長さ 1 の円すい)。ソロ1つに1台ずつ、その楽器の斜め上前に固定して照らす。ソロの数より少なければ、始める時に1台目を複製して足す")]
         public Light[] followSpots;
         public Transform[] followBeams;
@@ -314,6 +318,7 @@ namespace ShootingGallery
             int mergedParts = 0;
             foreach (var inst in instruments) if (inst != null) { inst.Init(this); mergedParts += inst.MergedParts; }
             Debug.Log($"[ConcertHall] 楽器の部品 {mergedParts} 個の見た目をまとめました (軽量化)");
+            SplitStageLighting(); // (楽器の見た目をまとめた後に。まとめてできた Renderer にも付ける)
             foreach (var s in staffs) if (s != null) s.Init();
             if (curtain != null) { curtain.Init(); curtain.HideInstant(); }
             SetTargets(false);
@@ -622,6 +627,32 @@ namespace ShootingGallery
                 inst.hitTarget.SetAvailable(on);
                 inst.SetSolo(false);
             }
+        }
+
+        // ステージの明かり (stageLights・ソロのスポットライト) が、客席を照らさないようにする (ライトレイヤー)。
+        // 影を落とさない明かりは壁を通り抜けるので、ステージの上の明かりでも客席の床・壁・バルコニーまで明るくしていた。
+        // ステージの手前の縁 (stageFrontZ) より奥にある部品だけに StageLightLayer を足し、ステージの明かりはそのレイヤーだけを照らす。
+        // (客席の明かり houseLight はそのまま全部を照らす)
+        void SplitStageLighting()
+        {
+            if (hall == null) return;
+            var hallT = hall.transform;
+            foreach (var r in hall.GetComponentsInChildren<Renderer>(true))
+            {
+                var mf = r.GetComponent<MeshFilter>();
+                Vector3 center = mf != null && mf.sharedMesh != null ? r.transform.TransformPoint(mf.sharedMesh.bounds.center) : r.transform.position;
+                if (hallT.InverseTransformPoint(center).z > stageFrontZ) r.renderingLayerMask |= StageLightLayer;
+            }
+            foreach (var l in stageLights) SetStageOnly(l);
+            if (followSpots != null) foreach (var l in followSpots) SetStageOnly(l); // (指揮台のスポットライトは、これを複製するので同じになる)
+        }
+
+        static void SetStageOnly(Light l)
+        {
+            if (l == null) return;
+            var data = l.GetUniversalAdditionalLightData();
+            if (data != null) data.renderingLayers = StageLightLayer;
+            else l.renderingLayerMask = (int)StageLightLayer;
         }
 
         // 照明の明るさ (0 = 演奏前の薄暗いステージ 〜 1 = 演奏中)

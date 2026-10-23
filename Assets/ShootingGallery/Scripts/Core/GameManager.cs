@@ -138,7 +138,7 @@ namespace ShootingGallery
         public Color concertSkyColor = new Color(0.01f, 0.008f, 0.01f);
         public Color concertFogColor = new Color(0.03f, 0.02f, 0.02f);
         public Color concertAmbientDim = new Color(0.1f, 0.08f, 0.09f);
-        public Color concertAmbientPlay = new Color(0.3f, 0.27f, 0.25f); // 演奏中のホールの環境光 (客席が暗く沈んで、照らされたステージが目立つように)。名前を変えて、シーンに保存された前の値 (concertAmbientBright 0.62, 0.56, 0.5) を使わない
+        public Color concertAmbientPlay = new Color(0.14f, 0.12f, 0.12f); // 演奏中のホールの環境光 (客席が暗く沈んで、照らされたステージが目立つように。環境光は客席にも効くので、演奏前より少しだけ明るく。前は 0.3, 0.27, 0.25)。名前を変えて、シーンに保存された前の値 (concertAmbientBright 0.62, 0.56, 0.5) を使わない
 
         [Header("Museum (美術館モード: 絵筆の的を撃つと、キャンバスに美術館が描かれ、白い閃光とともにその中へ。未完成の作品をイマジネーションで仕上げる)")]
         public ArtMuseum artMuseum;
