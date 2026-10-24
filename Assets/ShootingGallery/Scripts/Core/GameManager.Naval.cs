@@ -55,7 +55,7 @@ namespace ShootingGallery
         void EndNaval()
         {
             if (!NavalActive) return;
-            StopStageBgm(navalBgm, State != GameState.Playing); // (ラウンドの終わり・リセットの時はすぐ止める)
+            StopStageBgmAfterStalls(navalBgm, State != GameState.Playing); // 屋台が戻りきるまで曲は流し続ける (ラウンドの終わり・リセットの時はすぐ止める)
             int sunk = navalBattle.Sunk;
             navalBattle.End();
             ReleaseStageWeapon(WeaponType.Bazooka);

@@ -29,12 +29,10 @@ namespace ShootingGallery
                 var g = new GameObject("Shuriken");
                 var sh = g.AddComponent<Shuriken>();
                 sh.poolKey = "Shuriken";
-                // 見た目: 平たい棒を4本、45度ずつずらして重ねた8方手裏剣と、真ん中の輪 (飛ぶ向きに対して水平に寝かせる)
+                // 見た目: 紺色の丸から四方へ灰色の三角形の刃が伸びる4方手裏剣 (ShurikenShape。飛ぶ向きに対して水平に寝かせる)
                 sh.spin = new GameObject("Spin").transform;
                 sh.spin.SetParent(g.transform, false);
-                for (int i = 0; i < 4; i++)
-                    Part(PrimitiveType.Cube, sh.spin, Quaternion.Euler(0f, i * 45f, 0f), new Vector3(0.026f, 0.006f, 0.14f), mat);
-                Part(PrimitiveType.Cylinder, sh.spin, Quaternion.identity, new Vector3(0.045f, 0.005f, 0.045f), centerMat);
+                ShurikenShape.Create(sh.spin, "Shuriken", 0.075f, mat, centerMat, true);
                 return g;
             });
             Launch(go, origin, dir, speed, range, mask);

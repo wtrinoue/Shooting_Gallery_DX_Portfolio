@@ -64,7 +64,7 @@ namespace ShootingGallery
         void EndSpace()
         {
             if (!SpaceActive) return;
-            StopStageBgm(spaceBgm, State != GameState.Playing); // (ラウンドの終わり・リセットの時はすぐ止める)
+            StopStageBgmAfterStalls(spaceBgm, State != GameState.Playing); // 屋台が戻りきるまで曲は流し続ける (ラウンドの終わり・リセットの時はすぐ止める)
             int hits = spaceStage.Hits;
             spaceStage.End();
             ReleaseStageWeapon(WeaponType.Missile);

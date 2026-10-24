@@ -536,32 +536,7 @@ namespace ShootingGallery
         // 潜水艦の的 (普通の的が化ける)
         // ------------------------------------------------------------------
 
-        /// <summary>潜水艦の的: 深い青の板に、丸い窓の黄色い潜水艦と泡、「SUB」の文字</summary>
-        GameObject SubmarineLook(Transform look)
-        {
-            var c = new Vector3(0f, TargetDiscY, 0f);
-            Prim(PrimitiveType.Cube, "Plate", look, c, new Vector3(0.3f, 0.3f, 0.04f), Mat("Sub_Plate", new Color(0.08f, 0.3f, 0.55f), new Color(0.02f, 0.06f, 0.12f)));
-            var sub = Group(look, "MiniSub");
-            sub.localPosition = c + new Vector3(0f, 0.02f, -0.05f);
-            var bob = sub.gameObject.AddComponent<Oscillator>(); // ぷかぷか浮かぶ
-            bob.offset = new Vector3(0f, 0.012f, 0f);
-            bob.speed = 3f;
-            var hull = Mat("Sub_Hull", new Color(1f, 0.78f, 0.12f), new Color(0.12f, 0.08f, 0f), false, 0.65f);
-            Prim(PrimitiveType.Sphere, "Ball", sub, Vector3.zero, Vector3.one * 0.13f, hull, false);
-            Prim(PrimitiveType.Cylinder, "Window", sub, new Vector3(0f, 0f, -0.06f), new Vector3(0.07f, 0.008f, 0.07f), Mat("Sub_LookWindow", new Color(0.45f, 0.85f, 1f), new Color(0.2f, 0.5f, 0.7f)), false)
-                .transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-            Prim(PrimitiveType.Cylinder, "Hatch", sub, new Vector3(0f, 0.068f, 0f), new Vector3(0.04f, 0.01f, 0.04f), Mat("Sub_Steel", new Color(0.4f, 0.42f, 0.46f), null, false, 0.7f), false);
-            var prop = Group(sub, "Prop");
-            prop.localPosition = new Vector3(0.075f, 0f, 0f);
-            var spin = prop.gameObject.AddComponent<Rotator>();
-            spin.axis = Vector3.right;
-            spin.speed = 400f;
-            Prim(PrimitiveType.Cube, "Blade", prop, Vector3.zero, new Vector3(0.006f, 0.05f, 0.012f), Mat("Sub_Brass", new Color(0.85f, 0.65f, 0.28f), null, false, 0.8f), false);
-            var bubble = BubbleMat();
-            for (int k = 0; k < 3; k++)
-                Prim(PrimitiveType.Sphere, "Bubble", look, c + new Vector3(-0.07f - k * 0.02f, 0.06f + k * 0.035f, -0.04f), Vector3.one * (0.02f + k * 0.008f), bubble, false);
-            MakeText(look, "Label", "SUB", c + new Vector3(0f, -0.115f, -0.025f), 0.04f, new Color(1f, 0.85f, 0.3f));
-            return look.gameObject;
-        }
+        /// <summary>潜水艦の的: 海の底の宝箱と丸い黄色の潜水艦 (LookArt の絵のステッカー。はみ出して大胆に)</summary>
+        GameObject SubmarineLook(Transform look) => StickerLook(look, "Submarine", "SUB", new Color(0.25f, 0.12f, 0.02f));
     }
 }

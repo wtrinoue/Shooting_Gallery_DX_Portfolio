@@ -138,7 +138,7 @@ namespace ShootingGallery
                 Prim(PrimitiveType.Cube, "LiftPost", lift, new Vector3(Mathf.Sin(a) * 0.97f, 0.47f, Mathf.Cos(a) * 0.97f), new Vector3(0.06f, 0.95f, 0.06f), woodDark, false);
             }
             // 手すりの柱の上に上向きに生えた、かご付きのランプ (プレイヤーといっしょに上下し、足元と縦穴・やぐらのまわりを照らす)
-            CageLamp(lift, new Vector3(0.97f, 0.95f, 0f), 9f, 1.6f);
+            CageLamp(lift, new Vector3(0.97f, 0.95f, 0f), 13f, 1.6f);
 
             // ---- 3. 洞窟 ----
             var cave = Group(root, "Cave");
@@ -910,8 +910,8 @@ namespace ShootingGallery
                 lg.transform.localPosition = OnFloor(new Vector3(Mathf.Sin(a) * 22f, 0f, Mathf.Cos(a) * 22f)) + Vector3.up * 2f;
                 var l = lg.AddComponent<Light>();
                 l.type = LightType.Point;
-                l.range = 10f;
-                l.intensity = 2.2f; // 結晶のまわりの壁だけを、宝石の色にほんのり染める
+                l.range = 14f;
+                l.intensity = 2.2f; // 結晶のまわりの壁を、宝石の色にほんのり染める
                 l.color = glows[i];
                 l.shadows = LightShadows.None;
                 var c = Group(lights, "GlowCrystals");
@@ -929,7 +929,7 @@ namespace ShootingGallery
         /// <summary>
         /// 吊るしたハリケーンランタン (石油ランプ): 錆びた台座とふた、白く光るガラスの火屋、両脇の支柱、火屋を守る針金、上のつる。
         /// pos = つるの上 (吊るす所)、scale = 大きさ (1 で高さ約 0.5m)、chain = そこから上へ伸びる鎖の長さ。
-        /// flicker を渡すと、火屋のまわりの数メートルだけを照らす明かりを付けて、そこに足す (ゆらめかせる)
+        /// flicker を渡すと、火屋のまわりを照らす明かりを付けて、そこに足す (ゆらめかせる)
         /// </summary>
         void HurricaneLantern(Transform parent, Vector3 pos, float scale, float chain, List<Light> flicker)
         {
@@ -960,13 +960,13 @@ namespace ShootingGallery
             FlatRing(g, "GuardWire", 0.105f, -0.2f, 0.008f, 0.008f, 12, metal);
             FlatRing(g, "GuardWire", 0.105f, -0.31f, 0.008f, 0.008f, 12, metal);
             if (flicker == null) return;
-            // 火屋のまわりの数メートルだけを照らす、暖かい明かり
+            // 火屋のまわりを照らす、暖かい明かり
             var lg = new GameObject("LanternLight");
             lg.transform.SetParent(g, false);
             lg.transform.localPosition = new Vector3(0f, -0.26f, 0f);
             var l = lg.AddComponent<Light>();
             l.type = LightType.Point;
-            l.range = 10f;      // まわりの床や壁が、このランタンから照らされているのが分かる広さ
+            l.range = 16f;      // まわりの床や壁が、このランタンから照らされているのが分かる広さ
             l.intensity = 3f;
             l.color = new Color(1f, 0.75f, 0.45f);
             l.shadows = LightShadows.None;
@@ -1007,7 +1007,7 @@ namespace ShootingGallery
             lg.transform.localPosition = new Vector3(0f, H + 0.35f, 0f);
             var l = lg.AddComponent<Light>();
             l.type = LightType.Point;
-            l.range = 11f;
+            l.range = 17f;
             l.intensity = 3.2f;
             l.color = new Color(1f, 0.58f, 0.25f);
             l.shadows = LightShadows.None;
@@ -1381,26 +1381,7 @@ namespace ShootingGallery
             return mesh;
         }
 
-        /// <summary>つるはしの的: 土色の板に、斜めのつるはしと小さな宝石、「MINE」の文字</summary>
-        GameObject MineLook(Transform look)
-        {
-            var c = new Vector3(0f, TargetDiscY, 0f);
-            Prim(PrimitiveType.Cube, "Plate", look, c, new Vector3(0.3f, 0.3f, 0.04f), Mat("Mine_Plate", new Color(0.42f, 0.28f, 0.15f), new Color(0.06f, 0.03f, 0.01f)));
-            var pick = Group(look, "Pickaxe");
-            pick.localPosition = c + new Vector3(0f, 0.02f, -0.03f);
-            pick.localRotation = Quaternion.Euler(0f, 0f, 35f);
-            var rock = pick.gameObject.AddComponent<Pendulum>(); // カツン、カツンと振る
-            rock.amplitude = 14f;
-            rock.speed = 6f;
-            Prim(PrimitiveType.Cube, "Handle", pick, new Vector3(0f, -0.02f, 0f), new Vector3(0.018f, 0.2f, 0.012f), Mat("Mine_Wood", new Color(0.4f, 0.27f, 0.15f), null, false, 0.15f), false);
-            var head = Mat("Pickaxe_Head", new Color(0.55f, 0.56f, 0.6f), null, false, 0.7f);
-            foreach (float s in new[] { -1f, 1f })
-                Prim(PrimitiveType.Cube, "Head", pick, new Vector3(s * 0.055f, 0.075f - 0.008f, 0f), new Vector3(0.11f, 0.024f, 0.014f), head, false).transform.localRotation = Quaternion.Euler(0f, 0f, -s * 14f);
-            var gemKinds = GemMaterials();
-            for (int k = 0; k < 3; k++)
-                Prim(PrimitiveType.Cube, "Gem", look, c + new Vector3(-0.09f + k * 0.09f, -0.085f, -0.025f), Vector3.one * 0.03f, gemKinds[2 + k].glow, false).transform.localRotation = Quaternion.Euler(0f, 0f, 45f);
-            MakeText(look, "Label", "MINE", c + new Vector3(0f, -0.125f, -0.025f), 0.04f, new Color(1f, 0.8f, 0.4f));
-            return look.gameObject;
-        }
+        /// <summary>鉱山の的: つるはしと結晶の宝石を積んだトロッコ (LookArt の絵のステッカー。はみ出して大胆に)</summary>
+        GameObject MineLook(Transform look) => StickerLook(look, "Mine", "MINE", Color.white);
     }
 }

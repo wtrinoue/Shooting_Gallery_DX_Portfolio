@@ -222,13 +222,14 @@ namespace ShootingGallery
             Prim(PrimitiveType.Cylinder, "Stage", parent, new Vector3(0f, StageH / 2f, 0f), new Vector3(4.4f, StageH / 2f, 3.4f), black);
             FlatRing(parent, "StageTrim", 2.2f, StageH, 0.1f, 0.03f, 40, gold);
             Prim(PrimitiveType.Cylinder, "Step", parent, new Vector3(0f, 0.12f, -0.4f), new Vector3(5f, 0.12f, 3.8f), black, false);
-            return BuildSlotMachine(parent, new Vector3(0f, StageH, 0f), 1f);
+            return BuildSlotMachine(parent, new Vector3(0f, StageH, 0f), 1f, true);
         }
 
         /// <summary>
-        /// スロットマシン本体 (parent のローカルの pos が足元の真ん中、表 -Z。scale = 大きさの倍率。壁ぎわの小さなスロットにも使う)
+        /// スロットマシン本体 (parent のローカルの pos が足元の真ん中、表 -Z。scale = 大きさの倍率。壁ぎわの小さなスロットにも使う)。
+        /// grid = 3×3 のマスが見える台 (壇の上の主役。リールを大きく、窓を縦長にして、上・真ん中・下の3段が見える。当たりの線は5本)
         /// </summary>
-        SlotMachine BuildSlotMachine(Transform parent, Vector3 pos, float scale)
+        SlotMachine BuildSlotMachine(Transform parent, Vector3 pos, float scale, bool grid = false)
         {
             var gold = Mat("Gold", new Color(1f, 0.78f, 0.25f), new Color(0.3f, 0.2f, 0f));
             var red = Mat("Slot_Red", new Color(0.62f, 0.04f, 0.1f), new Color(0.12f, 0f, 0.02f), false, 0.75f);
@@ -239,8 +240,9 @@ namespace ShootingGallery
             var root = Group(parent, "SlotMachine");
             root.localPosition = pos;
             root.localScale = Vector3.one * scale;
-            const float W = 2.6f, H = 3.4f, D = 1.4f, ReelY = 1.85f, FrontZ = -D / 2f;
-            const float WinW = 0.62f, WinH = 0.62f;
+            const float W = 2.6f, H = 3.4f;
+            float D = grid ? 1.8f : 1.4f, ReelY = grid ? 2.05f : 1.85f, FrontZ = -D / 2f;
+            float WinW = 0.62f, WinH = grid ? 0.95f : 0.62f;
             float[] reelX = { -0.72f, 0f, 0.72f };
 
             // ---- 箱 (中は空洞。窓の所だけ前の板を抜いて、奥のリールが見えるようにする) ----
@@ -251,7 +253,7 @@ namespace ShootingGallery
                 Prim(PrimitiveType.Cylinder, "ChromeEdge", root, new Vector3(s * (W / 2f), H / 2f, FrontZ), new Vector3(0.07f, H / 2f, 0.07f), chrome, false); // 角の銀の縁
             }
             Prim(PrimitiveType.Cube, "Top", root, new Vector3(0f, H - 0.05f, 0f), new Vector3(W, 0.1f, D), red);
-            Prim(PrimitiveType.Cube, "Inside", root, new Vector3(0f, ReelY, D / 2f - 0.21f), new Vector3(W - 0.2f, 1f, 0.01f), black, false); // リールの後ろは暗く
+            Prim(PrimitiveType.Cube, "Inside", root, new Vector3(0f, ReelY, D / 2f - 0.21f), new Vector3(W - 0.2f, WinH + 0.4f, 0.01f), black, false); // リールの後ろは暗く
             // 窓のまわりの前の板 (下・上・窓の間の柱)
             Prim(PrimitiveType.Cube, "FrontLow", root, new Vector3(0f, (ReelY - WinH / 2f + 1.45f) / 2f, FrontZ + 0.05f), new Vector3(W, ReelY - WinH / 2f - 1.45f, 0.1f), gloss);
             Prim(PrimitiveType.Cube, "FrontHigh", root, new Vector3(0f, (ReelY + WinH / 2f + H) / 2f, FrontZ + 0.05f), new Vector3(W, H - ReelY - WinH / 2f, 0.1f), red);
@@ -281,15 +283,25 @@ namespace ShootingGallery
                 }
             }
             // 真ん中の当たりの線と、窓のガラス (うすい映り込みの筋)
-            Prim(PrimitiveType.Cube, "PayLine", root, new Vector3(0f, ReelY, FrontZ - 0.03f), new Vector3(bw - 0.1f, 0.015f, 0.01f), Mat("Slot_PayLine", new Color(1f, 0.2f, 0.2f), null, true), false);
+            var payLineMat = Mat("Slot_PayLine", new Color(1f, 0.2f, 0.2f), null, true);
+            if (!grid) Prim(PrimitiveType.Cube, "PayLine", root, new Vector3(0f, ReelY, FrontZ - 0.03f), new Vector3(bw - 0.1f, 0.015f, 0.01f), payLineMat, false);
             Prim(PrimitiveType.Quad, "Glass", root, new Vector3(0f, ReelY, FrontZ - 0.045f), new Vector3(bw, bh, 1f), TransparentMat("Slot_Glass", new Color(0.85f, 0.92f, 1f, 0.06f)), false);
             var glare = Prim(PrimitiveType.Quad, "GlassGlare", root, new Vector3(-0.3f, ReelY + 0.05f, FrontZ - 0.047f), new Vector3(0.18f, bh * 1.1f, 1f), TransparentMat("Slot_Glare", new Color(1f, 1f, 1f, 0.12f)), false);
             glare.transform.localRotation = Quaternion.Euler(0f, 0f, -25f);
 
-            // ---- リール (窓の奥で回るドラム。絵柄の板を8枚ぐるりと貼る) ----
-            string[] symbols = { "7", "BAR", "STAR", "BELL", "CHERRY", "BAR", "STAR", "CHERRY" };
+            // ---- リール (窓の奥で回るドラム。絵柄の板を8枚ぐるりと貼る。3×3 の台は12枚で、リールごとに並びを変える) ----
+            string[][] strips = grid
+                ? new[]
+                {
+                    // (7 の上下の絵柄がリールごとにちがうので、7 をそろえた時にほかの線が勝手にそろわない)
+                    new[] { "7", "BELL", "STAR", "BAR", "CHERRY", "BAR", "BELL", "CHERRY", "STAR", "CHERRY", "STAR", "CHERRY" },
+                    new[] { "7", "CHERRY", "BAR", "CHERRY", "BAR", "STAR", "CHERRY", "BELL", "STAR", "CHERRY", "STAR", "BELL" },
+                    new[] { "7", "BELL", "BAR", "CHERRY", "BELL", "STAR", "CHERRY", "BAR", "CHERRY", "STAR", "CHERRY", "STAR" },
+                }
+                : new[] { new[] { "7", "BAR", "STAR", "BELL", "CHERRY", "BAR", "STAR", "CHERRY" } };
+            string[] symbols = strips[0];
             var reelFace = Mat("Slot_ReelFace", new Color(0.97f, 0.95f, 0.88f), new Color(0.3f, 0.29f, 0.26f));
-            const float ReelR = 0.45f;
+            float ReelR = grid ? 0.62f : 0.45f;
             float step = 360f / symbols.Length;
             float faceH = 2f * ReelR * Mathf.Tan(step / 2f * Mathf.Deg2Rad) + 0.01f;
             var reels = new Transform[reelX.Length];
@@ -297,24 +309,46 @@ namespace ShootingGallery
             {
                 var reel = Group(root, $"Reel_{r}");
                 reel.localPosition = new Vector3(reelX[r], ReelY, FrontZ + ReelR + 0.11f); // 絵柄の板が前の板のすぐ奥に来る
-                for (int s = 0; s < symbols.Length; s++)
+                var strip = strips[r % strips.Length];
+                for (int s = 0; s < strip.Length; s++)
                 {
-                    var face = Group(reel, $"Face_{symbols[s]}");
+                    var face = Group(reel, $"Face_{strip[s]}");
                     face.localRotation = Quaternion.Euler(s * step, 0f, 0f);
                     Prim(PrimitiveType.Cube, "Plate", face, new Vector3(0f, 0f, -ReelR), new Vector3(WinW - 0.04f, faceH, 0.02f), reelFace, false);
-                    SlotSymbol(face, symbols[s], -ReelR - 0.012f);
+                    SlotSymbol(face, strip[s], -ReelR - 0.012f);
                 }
                 reels[r] = reel;
             }
 
+            // ---- 3×3 の台の当たりの線 (横3本と斜め2本。ふだんは隠れていて、当たった線だけ点滅する) ----
+            Renderer[] lineMarks = null;
+            if (grid)
+            {
+                float rowY = ReelR * Mathf.Sin(step * Mathf.Deg2Rad); // 上と下の段の絵柄の高さ
+                float lineZ = FrontZ - 0.03f, span = reelX[2] - reelX[0];
+                lineMarks = new Renderer[5];
+                for (int l = 0; l < 3; l++)
+                {
+                    float y = l == 0 ? 0f : l == 1 ? rowY : -rowY; // (SlotMachine の Lines の順: 真ん中・上・下)
+                    lineMarks[l] = Prim(PrimitiveType.Cube, $"PayLine_{l}", root, new Vector3(0f, ReelY + y, lineZ), new Vector3(bw - 0.1f, 0.03f, 0.01f), payLineMat, false).GetComponent<Renderer>();
+                }
+                float diagLen = Mathf.Sqrt(span * span + 4f * rowY * rowY) + 0.5f, diagAngle = Mathf.Atan2(2f * rowY, span) * Mathf.Rad2Deg;
+                for (int l = 3; l < 5; l++)
+                {
+                    var diag = Prim(PrimitiveType.Cube, $"PayLine_{l}", root, new Vector3(0f, ReelY, lineZ), new Vector3(diagLen, 0.03f, 0.01f), payLineMat, false);
+                    diag.transform.localRotation = Quaternion.Euler(0f, 0f, l == 3 ? -diagAngle : diagAngle); // 左上から右下 / 左下から右上
+                    lineMarks[l] = diag.GetComponent<Renderer>();
+                }
+            }
+
             // ---- 窓の上の配当の画面 (光る文字) ----
             var screen = Group(root, "PayScreen");
-            screen.localPosition = new Vector3(0f, ReelY + 0.78f, FrontZ - 0.01f);
+            screen.localPosition = new Vector3(0f, ReelY + WinH / 2f + (grid ? 0.45f : 0.47f), FrontZ - 0.01f);
             Prim(PrimitiveType.Cube, "ScreenFrame", screen, Vector3.zero, new Vector3(2.2f, 0.62f, 0.03f), chrome, false);
             Prim(PrimitiveType.Cube, "Screen", screen, new Vector3(0f, 0f, -0.02f), new Vector3(2.1f, 0.54f, 0.01f), Mat("Slot_Screen", new Color(0.03f, 0.015f, 0.015f), new Color(0.04f, 0.01f, 0.01f)), false);
             MakeText(screen, "Pay1", "7 7 7 = 3000   BAR = 1500   BELL = 1000", new Vector3(0f, 0.14f, -0.03f), 0.085f, new Color(1f, 0.85f, 0.3f));
             MakeText(screen, "Pay2", "CHERRY = 500   STAR = 300", new Vector3(0f, -0.02f, -0.03f), 0.085f, new Color(1f, 0.92f, 0.75f));
-            MakeText(screen, "Pay3", "PAIR = 50   MISS = 10", new Vector3(0f, -0.17f, -0.03f), 0.08f, new Color(0.9f, 0.75f, 0.6f));
+            MakeText(screen, "Pay3", grid ? "PAIR = 50   MISS = 10   5 LINES" : "PAIR = 50   MISS = 10", new Vector3(0f, -0.17f, -0.03f), 0.08f, new Color(0.9f, 0.75f, 0.6f));
 
             // ---- 傾いたボタン台 (光る小さなボタンと、大きな SPIN ボタン) ----
             var deck = Group(root, "ButtonDeck");
@@ -359,7 +393,8 @@ namespace ShootingGallery
 
             // ---- レバー (右横の前寄り。箱の横から外へ突き出た軸に付いていて、撃つと先の赤い玉ごとプレイヤーの方へお辞儀する) ----
             // 軸は箱の横の取り付け板から X 方向へまっすぐ外へ伸び、根元に金の軸受け、先に金の留め具。レバーはその軸のまわりに回る
-            const float LeverY = ReelY - 0.35f, LeverZ = FrontZ + 0.4f, LeverLen = 1.05f, BallD = 0.46f;
+            float LeverY = ReelY - 0.35f, LeverZ = FrontZ + 0.4f;
+            const float LeverLen = 1.05f, BallD = 0.46f;
             const float AxleOut = 0.48f;                   // 箱の横から、軸の先までの長さ
             const float LeverX = W / 2f + AxleOut - 0.1f;  // レバーの付く所 (軸の先の留め具のすぐ内側)
             Prim(PrimitiveType.Cube, "LeverPlate", root, new Vector3(W / 2f + 0.03f, LeverY, LeverZ), new Vector3(0.06f, 0.55f, 0.45f), chrome, false); // 箱の横の取り付け板
@@ -423,6 +458,13 @@ namespace ShootingGallery
             slot.leverHint = leverHint;
             slot.reels = reels;
             slot.symbols = symbols;
+            if (grid)
+            {
+                slot.rows = 3;
+                slot.strips = System.Array.ConvertAll(strips, st => new SlotMachine.ReelStrip { symbols = st });
+                slot.visibleAngle = step * 1.6f; // 上・真ん中・下の3段の文字を見せる
+                slot.lineMarks = lineMarks;
+            }
             slot.lamps = lamps.ToArray();
             slot.lampOn = lampOn;
             slot.lampOff = lampOff;

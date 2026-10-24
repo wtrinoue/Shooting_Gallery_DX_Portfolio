@@ -46,7 +46,7 @@ namespace ShootingGallery
         void EndWestern()
         {
             if (!WesternActive) return;
-            StopStageBgm(westernBgm, State != GameState.Playing); // (ラウンドの終わり・リセットの時はすぐ止める)
+            StopStageBgmAfterStalls(westernBgm, State != GameState.Playing); // 屋台が戻りきるまで曲は流し続ける (ラウンドの終わり・リセットの時はすぐ止める)
             int downed = westernTrain.Downed;
             westernTrain.End();
             ReleaseStageWeapon(WeaponType.Revolver);

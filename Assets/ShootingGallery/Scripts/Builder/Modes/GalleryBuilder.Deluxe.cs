@@ -1074,18 +1074,7 @@ namespace ShootingGallery
             Prim(PrimitiveType.Cube, "Frame_R", look, c + new Vector3(0.145f, 0f, -0.022f), new Vector3(0.015f, 0.3f, 0.006f), DxGold, false);
             ShapeObj(Shape.Star, look, "Star", c + new Vector3(0f, 0.025f, -0.026f), 0.17f, DxGold, false);
             MakeText(look, "Label", "DELUXE", c + new Vector3(0f, -0.1f, -0.026f), 0.045f, new Color(1f, 0.85f, 0.4f));
-
-            var sparkle = Group(look, "Sparkle");
-            sparkle.localPosition = c + Vector3.back * 0.03f;
-            var spin = sparkle.gameObject.AddComponent<Rotator>();
-            spin.axis = Vector3.forward;
-            spin.speed = 120f;
-            for (int i = 0; i < 8; i++)
-            {
-                float a = i * Mathf.PI * 2f / 8;
-                Prim(PrimitiveType.Sphere, "Spark", sparkle, new Vector3(Mathf.Cos(a), Mathf.Sin(a), 0f) * 0.2f, Vector3.one * (i % 2 == 0 ? 0.03f : 0.02f),
-                     i % 2 == 0 ? DxBulbOn : DxGlow(2), false);
-            }
+            // (まわりを回る光の玉の輪は、ユーザーの指定でなくした)
             return look.gameObject;
         }
 

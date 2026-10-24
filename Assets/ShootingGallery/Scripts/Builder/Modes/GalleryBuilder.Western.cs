@@ -817,26 +817,7 @@ namespace ShootingGallery
             Prim(PrimitiveType.Cylinder, "HatCrown", r, new Vector3(0f, 0.97f, 0f), new Vector3(0.24f, 0.09f, 0.24f), hat, false);
         }
 
-        /// <summary>保安官バッジの的: こげ茶の板に金の星のバッジ、「WILD WEST」の文字</summary>
-        GameObject WesternLook(Transform look)
-        {
-            var c = new Vector3(0f, TargetDiscY, 0f);
-            Prim(PrimitiveType.Cube, "Plate", look, c, new Vector3(0.3f, 0.3f, 0.04f), Mat("Western_Plate", new Color(0.4f, 0.24f, 0.12f), new Color(0.1f, 0.05f, 0.02f)));
-            var spin = Group(look, "Badge");
-            spin.localPosition = c + new Vector3(0f, 0.02f, -0.028f);
-            var rot = spin.gameObject.AddComponent<Rotator>();
-            rot.axis = Vector3.forward; // 板と平行なまま、くるくる回る
-            rot.speed = 120f;
-            var gold = Mat("Gold", new Color(1f, 0.78f, 0.25f), new Color(0.3f, 0.2f, 0f));
-            var star = new GameObject("Star");
-            star.transform.SetParent(spin, false);
-            star.transform.localScale = Vector3.one * 0.17f;
-            star.transform.localPosition = Vector3.back * 0.006f;
-            star.AddComponent<MeshFilter>().sharedMesh = ShapeMesh(Shape.Star);
-            star.AddComponent<MeshRenderer>().sharedMaterial = gold;
-            Prim(PrimitiveType.Cylinder, "BadgeRing", spin, Vector3.forward * 0.004f, new Vector3(0.2f, 0.004f, 0.2f), Mat("Revolver_Brass", new Color(0.9f, 0.7f, 0.3f), null, false, 0.7f), false).transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-            MakeText(look, "Label", "WILD WEST", c + new Vector3(0f, -0.115f, -0.025f), 0.035f, new Color(1f, 0.85f, 0.4f));
-            return look.gameObject;
-        }
+        /// <summary>西部劇の的: 蒸気機関車とカウボーイ (LookArt の絵のステッカー。はみ出して大胆に)</summary>
+        GameObject WesternLook(Transform look) => StickerLook(look, "Western", "WILD WEST", new Color(1f, 0.9f, 0.6f));
     }
 }

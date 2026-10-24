@@ -1303,23 +1303,7 @@ namespace ShootingGallery
         // 四分音符の的 (普通の的が化ける)
         // ------------------------------------------------------------------
 
-        GameObject MusicLook(Transform look)
-        {
-            var c = new Vector3(0f, TargetDiscY, 0f);
-            Prim(PrimitiveType.Cube, "Plate", look, c, new Vector3(0.3f, 0.3f, 0.04f), Mat("Music_Plate", new Color(0.35f, 0.06f, 0.12f), new Color(0.08f, 0.01f, 0.03f)));
-            var note = Group(look, "QuarterNote");
-            note.localPosition = c + new Vector3(-0.02f, -0.02f, -0.04f);
-            var bob = note.gameObject.AddComponent<Oscillator>(); // 拍に乗るように、ぴょこぴょこ跳ねる
-            bob.offset = new Vector3(0f, 0.015f, 0f);
-            bob.speed = 7f;
-            var gold = Mat("Note_Gold", new Color(1f, 0.82f, 0.25f), new Color(1.8f, 1.3f, 0.3f));
-            var head = Prim(PrimitiveType.Sphere, "Head", note, new Vector3(0f, -0.05f, 0f), new Vector3(0.1f, 0.07f, 0.04f), gold, false);
-            head.transform.localRotation = Quaternion.Euler(0f, 0f, 22f);
-            Prim(PrimitiveType.Cube, "Stem", note, new Vector3(0.045f, 0.035f, 0f), new Vector3(0.013f, 0.17f, 0.013f), gold, false);
-            for (int k = 0; k < 2; k++)
-                Prim(PrimitiveType.Sphere, "Sparkle", look, c + new Vector3(0.09f - k * 0.17f, 0.09f - k * 0.03f, -0.04f), Vector3.one * 0.025f, Mat("Clef_Orb", new Color(1f, 0.85f, 0.4f), new Color(1.6f, 1.2f, 0.4f), true), false);
-            MakeText(look, "Label", "MUSIC", c + new Vector3(0f, -0.115f, -0.025f), 0.04f, new Color(1f, 0.85f, 0.3f));
-            return look.gameObject;
-        }
+        /// <summary>音楽の的: 大きな八分音符とコントラバスとトランペット (LookArt の絵のステッカー。はみ出して大胆に)</summary>
+        GameObject MusicLook(Transform look) => StickerLook(look, "Music", "MUSIC", new Color(1f, 0.88f, 0.4f));
     }
 }

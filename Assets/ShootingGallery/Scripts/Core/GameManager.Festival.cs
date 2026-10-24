@@ -64,7 +64,7 @@ namespace ShootingGallery
         void EndFestival()
         {
             if (!FestivalActive) return;
-            StopStageBgm(festivalBgm, State != GameState.Playing); // (ラウンドの終わり・リセットの時はすぐ止める)
+            StopStageBgmAfterStalls(festivalBgm, State != GameState.Playing); // 屋台が戻りきるまで曲は流し続ける (ラウンドの終わり・リセットの時はすぐ止める)
             int hits = festivalStage.Hits;
             bool immediate = State != GameState.Playing;
             festivalStage.End(immediate);

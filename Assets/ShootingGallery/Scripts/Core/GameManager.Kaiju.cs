@@ -66,7 +66,7 @@ namespace ShootingGallery
         void EndKaiju()
         {
             if (!KaijuActive) return;
-            StopStageBgm(kaijuBgm, State != GameState.Playing); // (ラウンドの終わり・リセットの時はすぐ止める)
+            StopStageBgmAfterStalls(kaijuBgm, State != GameState.Playing); // 屋台が戻りきるまで曲は流し続ける (ラウンドの終わり・リセットの時はすぐ止める)
             int broken = kaijuCity.Destroyed;
             kaijuCity.End();
             ReleaseStageWeapon(WeaponType.FireBall);

@@ -47,6 +47,30 @@ namespace ShootingGallery
             stageBgm.volume = 0f;
             stageBgm.Play();
             stageBgmTarget = stageBgmVolume;
+            stageBgmStopAfterStalls = null; // (前のモードの「屋台が戻ったら止める」は取り消す)
+        }
+
+        AudioClip stageBgmStopAfterStalls; // 屋台が戻りきったら止める曲 (StopStageBgmAfterStalls)
+
+        /// <summary>
+        /// モードが終わった: 曲は屋台が戻ってくるまで流し続け、戻りきったら (stallsReturnUntil) ふわっと止める (ユーザーの指定)。
+        /// immediate (ラウンドの終わり・リセット) ならすぐ止める
+        /// </summary>
+        void StopStageBgmAfterStalls(AudioClip clip, bool immediate)
+        {
+            if (immediate) { StopStageBgm(clip, true); return; }
+            if (stageBgm == null || stageBgmClip != clip) return;
+            stageBgmStopAfterStalls = clip;
+        }
+
+        // 屋台が戻りきって、次のモードも始まっていなければ、流し続けていた曲を止める (毎フレーム)
+        void UpdateStageBgmStopAfterStalls()
+        {
+            if (stageBgmStopAfterStalls == null) return;
+            if (State != GameState.Playing) { StopStageBgm(stageBgmStopAfterStalls, true); stageBgmStopAfterStalls = null; return; }
+            if (AnyWorldMode || Time.time < stallsReturnUntil) return;
+            StopStageBgm(stageBgmStopAfterStalls);
+            stageBgmStopAfterStalls = null;
         }
 
         /// <summary>モードの BGM を止める (clip を渡した時は、その曲が流れている時だけ)。immediate ならすぐ止める</summary>
@@ -107,9 +131,9 @@ namespace ShootingGallery
         }
 
         // 別の世界のモード (とその BGM) の間は、ラウンドの BGM を小さくして一時停止し、戻ったら続きから流す
-        bool WorldModeActive => NavalActive || SkyActive || NinjaActive || KaijuActive || CasinoActive || WesternActive || SpaceActive || GhostActive
-                                || MineActive || FestivalActive || SubmarineActive || MusicActive || MuseumActive || UnknownActive
-                                || (stageBgm != null && stageBgm.isPlaying);
+        bool AnyWorldMode => NavalActive || SkyActive || NinjaActive || KaijuActive || CasinoActive || WesternActive || SpaceActive || GhostActive
+                             || MineActive || FestivalActive || SubmarineActive || MusicActive || MuseumActive || UnknownActive;
+        bool WorldModeActive => AnyWorldMode || (stageBgm != null && stageBgm.isPlaying);
 
         void UpdateRoundBgm()
         {
@@ -194,6 +218,7 @@ namespace ShootingGallery
         // 曲の大きさを目標へ近づける (止めると決めた曲は、消えきったら止める)
         void UpdateStageBgm()
         {
+            UpdateStageBgmStopAfterStalls();
             UpdateRoundBgm();
             if (stageBgm == null || !stageBgm.isPlaying) return;
             float fade = stageBgmTarget > stageBgm.volume ? stageBgmFadeIn : stageBgmFadeOut;

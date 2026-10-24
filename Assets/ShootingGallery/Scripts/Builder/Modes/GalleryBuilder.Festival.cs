@@ -1260,31 +1260,8 @@ namespace ShootingGallery
         // 提灯の的 / 輪の形
         // ------------------------------------------------------------------
 
-        /// <summary>提灯の的: 紺の夜空の板に赤い提灯と小さな花火、「MATSURI」の文字</summary>
-        GameObject FestivalLook(Transform look)
-        {
-            var c = new Vector3(0f, TargetDiscY, 0f);
-            Prim(PrimitiveType.Cube, "Plate", look, c, new Vector3(0.3f, 0.3f, 0.04f), Mat("Festival_Plate", new Color(0.05f, 0.05f, 0.18f), new Color(0.02f, 0.02f, 0.08f)));
-            // 小さな花火 (光の粒の輪) を左上と右上に
-            var sparkA = Mat("Hanabi_Pink", new Color(2.6f, 0.8f, 2f), null, true);
-            var sparkB = Mat("Hanabi_Gold", new Color(2.6f, 1.8f, 0.6f), null, true);
-            foreach (var (center, mat) in new[] { (new Vector3(-0.08f, 0.08f, -0.022f), sparkA), (new Vector3(0.085f, 0.09f, -0.022f), sparkB) })
-                for (int i = 0; i < 8; i++)
-                {
-                    float a = i * Mathf.PI / 4f;
-                    Prim(PrimitiveType.Sphere, "Spark", look, c + center + new Vector3(Mathf.Cos(a), Mathf.Sin(a), 0f) * 0.035f, Vector3.one * 0.012f, mat, false);
-                }
-            // ゆらゆら揺れる提灯
-            var lantern = Group(look, "Lantern");
-            lantern.localPosition = c + new Vector3(0f, -0.01f, -0.035f);
-            var sway = lantern.gameObject.AddComponent<Oscillator>();
-            sway.offset = new Vector3(0.01f, 0f, 0f);
-            sway.speed = 2.5f;
-            Chochin(lantern, Vector3.zero, 0.1f, true);
-            Prim(PrimitiveType.Cube, "LanternBand", lantern, new Vector3(0f, 0f, -0.05f), new Vector3(0.06f, 0.012f, 0.002f), Mat("Chochin_Cap", new Color(0.08f, 0.06f, 0.05f)), false);
-            MakeText(look, "Label", "MATSURI", c + new Vector3(0f, -0.115f, -0.025f), 0.04f, new Color(1f, 0.6f, 0.35f));
-            return look.gameObject;
-        }
+        /// <summary>夏祭りの的: 花火と提灯と射的のコルク銃 (LookArt の絵のステッカー。はみ出して大胆に)</summary>
+        GameObject FestivalLook(Transform look) => StickerLook(look, "Festival", "MATSURI", Color.white);
 
         /// <summary>輪投げの輪 (ドーナツ形)。外の直径がだいたい 1.16 (太さ 0.16)。水平 (XZ 面) に寝ている</summary>
         Mesh TorusMesh()

@@ -415,33 +415,7 @@ namespace ShootingGallery
             return v;
         }
 
-        /// <summary>怪獣の的: 緑の板に怪獣の足あとと、「KAIJU」の文字。まわりを炎の玉が回る</summary>
-        GameObject KaijuLook(Transform look)
-        {
-            var c = new Vector3(0f, TargetDiscY, 0f);
-            Prim(PrimitiveType.Cube, "Plate", look, c, new Vector3(0.3f, 0.3f, 0.04f), Mat("Kaiju_Plate", new Color(0.15f, 0.45f, 0.18f), new Color(0.05f, 0.15f, 0.05f)));
-            var dark = Mat("Kaiju_Dark", new Color(0.1f, 0.3f, 0.12f));
-            // 足あと: 大きな丸と3本の爪
-            var pad = Prim(PrimitiveType.Cylinder, "Footprint", look, c + new Vector3(0f, -0.005f, -0.022f), new Vector3(0.11f, 0.004f, 0.12f), dark, false);
-            pad.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-            for (int i = -1; i <= 1; i++)
-            {
-                var toe = Prim(PrimitiveType.Cube, "Toe", look, c + new Vector3(i * 0.04f, 0.075f - Mathf.Abs(i) * 0.012f, -0.022f), new Vector3(0.022f, 0.05f, 0.006f), dark, false);
-                toe.transform.localRotation = Quaternion.Euler(0f, 0f, -i * 18f);
-            }
-            MakeText(look, "Label", "KAIJU", c + new Vector3(0f, -0.115f, -0.025f), 0.04f, new Color(1f, 0.9f, 0.3f));
-            var ring = Group(look, "Flames");
-            ring.localPosition = c + Vector3.back * 0.03f;
-            var spin = ring.gameObject.AddComponent<Rotator>();
-            spin.axis = Vector3.forward;
-            spin.speed = 120f;
-            var flame = Mat("Fireball", new Color(1f, 0.55f, 0.1f), new Color(3f, 1.2f, 0.2f));
-            for (int i = 0; i < 6; i++)
-            {
-                float a = i * Mathf.PI * 2f / 6;
-                Prim(PrimitiveType.Sphere, "Flame", ring, new Vector3(Mathf.Cos(a), Mathf.Sin(a), 0f) * 0.2f, Vector3.one * 0.035f, flame, false);
-            }
-            return look.gameObject;
-        }
+        /// <summary>怪獣の的: 町のビルの間からそびえる恐竜の顔と胴体 (LookArt の絵のステッカー。はみ出して大胆に)</summary>
+        GameObject KaijuLook(Transform look) => StickerLook(look, "Kaiju", "KAIJU", new Color(1f, 0.92f, 0.4f));
     }
 }

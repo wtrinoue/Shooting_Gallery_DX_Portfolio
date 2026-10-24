@@ -468,40 +468,7 @@ namespace ShootingGallery
         // プロペラの的の見た目
         // ------------------------------------------------------------------
 
-        /// <summary>プロペラの的: 空色の板に赤い飛行機と回るプロペラ、「SKY BATTLE」の文字。まわりを白い雲の輪が回る</summary>
-        GameObject SkyLook(Transform look)
-        {
-            var c = new Vector3(0f, TargetDiscY, 0f);
-            var red = Mat("Plane_Red", new Color(0.78f, 0.13f, 0.1f), null, false, 0.55f);
-            var cloud = Mat("Cloud", new Color(0.96f, 0.97f, 1f), new Color(0.32f, 0.34f, 0.38f));
-            Prim(PrimitiveType.Cube, "Plate", look, c, new Vector3(0.3f, 0.3f, 0.04f), Mat("Sky_Plate", new Color(0.3f, 0.62f, 0.98f), new Color(0.08f, 0.2f, 0.4f)));
-            // 小さな雲
-            Prim(PrimitiveType.Sphere, "Cloud", look, c + new Vector3(-0.08f, -0.07f, -0.022f), new Vector3(0.09f, 0.04f, 0.01f), cloud, false);
-            Prim(PrimitiveType.Sphere, "Cloud", look, c + new Vector3(0.09f, 0.08f, -0.022f), new Vector3(0.07f, 0.03f, 0.01f), cloud, false);
-            // 正面から見た赤い飛行機: 胴体の丸・翼・尾翼・回るプロペラ
-            var body = Prim(PrimitiveType.Cylinder, "Body", look, c + new Vector3(0f, 0.02f, -0.026f), new Vector3(0.05f, 0.004f, 0.05f), red, false);
-            body.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-            Prim(PrimitiveType.Cube, "Wing", look, c + new Vector3(0f, 0.01f, -0.025f), new Vector3(0.22f, 0.02f, 0.006f), red, false);
-            Prim(PrimitiveType.Cube, "Fin", look, c + new Vector3(0f, 0.06f, -0.024f), new Vector3(0.008f, 0.05f, 0.006f), red, false);
-            var prop = Group(look, "Prop");
-            prop.localPosition = c + new Vector3(0f, 0.02f, -0.032f);
-            var spin = prop.gameObject.AddComponent<Rotator>();
-            spin.axis = Vector3.forward;
-            spin.speed = 720f;
-            Prim(PrimitiveType.Cube, "Blade", prop, Vector3.zero, new Vector3(0.012f, 0.1f, 0.004f), Mat("Plane_Dark", new Color(0.12f, 0.12f, 0.13f)), false);
-            MakeText(look, "Label", "SKY BATTLE", c + new Vector3(0f, -0.115f, -0.025f), 0.035f, Color.white);
-
-            var ring = Group(look, "Clouds");
-            ring.localPosition = c + Vector3.back * 0.03f;
-            var turn = ring.gameObject.AddComponent<Rotator>();
-            turn.axis = Vector3.forward;
-            turn.speed = 70f;
-            for (int i = 0; i < 6; i++)
-            {
-                float a = i * Mathf.PI * 2f / 6;
-                Prim(PrimitiveType.Sphere, "Puff", ring, new Vector3(Mathf.Cos(a), Mathf.Sin(a), 0f) * 0.2f, new Vector3(0.06f, 0.035f, 0.03f), cloud, false);
-            }
-            return look.gameObject;
-        }
+        /// <summary>空中の的: 斜め上へ飛びながら撃つ赤い複葉機と雲 (LookArt の絵のステッカー。はみ出して大胆に)</summary>
+        GameObject SkyLook(Transform look) => StickerLook(look, "Sky", "SKY BATTLE", Color.white);
     }
 }

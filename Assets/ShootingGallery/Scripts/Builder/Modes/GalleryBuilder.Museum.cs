@@ -662,37 +662,8 @@ namespace ShootingGallery
         // 絵筆の的の見た目
         // ------------------------------------------------------------------
 
-        /// <summary>絵筆の的: クリーム色の板に、絵の具の乗ったパレットと筆、「ART MUSEUM」の文字。まわりを絵の具の粒が回る</summary>
-        GameObject MuseumLook(Transform look)
-        {
-            var c = new Vector3(0f, TargetDiscY, 0f);
-            Prim(PrimitiveType.Cube, "Plate", look, c, new Vector3(0.3f, 0.3f, 0.04f), Mat("Museum_LookPlate", new Color(0.5f, 0.11f, 0.11f), new Color(0.1f, 0.02f, 0.02f)));
-            // パレット (楕円) と絵の具
-            var palette = ShapeObj(Shape.Circle, look, "Palette", c + new Vector3(-0.01f, 0.02f, -0.024f), 0.2f, Mat("Easel_Wood", new Color(0.55f, 0.36f, 0.2f), null, false, 0.3f), false, 0.008f);
-            palette.transform.localScale = new Vector3(0.2f, 0.004f, 0.15f);
-            var paints = new[] { new Color(0.9f, 0.15f, 0.15f), new Color(1f, 0.8f, 0.15f), new Color(0.2f, 0.6f, 0.3f), new Color(0.2f, 0.4f, 0.85f), new Color(0.95f, 0.95f, 0.95f) };
-            for (int i = 0; i < paints.Length; i++)
-            {
-                float a = (i / (float)paints.Length) * Mathf.PI * 1.4f + 0.3f;
-                ShapeObj(Shape.Circle, look, "Paint", c + new Vector3(Mathf.Cos(a) * 0.065f - 0.01f, Mathf.Sin(a) * 0.045f + 0.02f, -0.03f), 0.03f, PaintMat($"Look_{i}", paints[i]), false, 0.006f);
-            }
-            var b = BuildBrush(look, "LookBrush", 0.9f);
-            b.localPosition = c + new Vector3(0.05f, -0.06f, -0.035f);
-            b.localRotation = Quaternion.Euler(0f, 0f, 35f);
-            MakeText(look, "Label", "ART MUSEUM", c + new Vector3(0f, -0.115f, -0.025f), 0.032f, new Color(1f, 0.88f, 0.55f));
-
-            var ring = Group(look, "PaintDrops");
-            ring.localPosition = c + Vector3.back * 0.03f;
-            var spin = ring.gameObject.AddComponent<Rotator>();
-            spin.axis = Vector3.forward;
-            spin.speed = -80f;
-            for (int i = 0; i < 8; i++)
-            {
-                float a = i * Mathf.PI * 2f / 8;
-                Prim(PrimitiveType.Sphere, "Drop", ring, new Vector3(Mathf.Cos(a), Mathf.Sin(a), 0f) * 0.2f, Vector3.one * (i % 2 == 0 ? 0.03f : 0.022f), PaintMat($"Look_{i % paints.Length}", paints[i % paints.Length]), false);
-            }
-            return look.gameObject;
-        }
+        /// <summary>美術館の的: パレットと額縁入りの絵と大きな筆 (LookArt の絵のステッカー。はみ出して大胆に)</summary>
+        GameObject MuseumLook(Transform look) => StickerLook(look, "Museum", "ART MUSEUM", new Color(1f, 0.9f, 0.6f));
 
         /// <summary>頂点の色が効く半透明の材質 (光の筋など。虹色の筋を TrailRenderer の色で付ける)</summary>
         Material VertexColorMat(string name, Color color)

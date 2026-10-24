@@ -432,8 +432,8 @@ namespace ShootingGallery
             Prim(PrimitiveType.Cube, "Tsuba", katana, new Vector3(0f, -0.01f, 0f), new Vector3(0.09f, 0.025f, 0.012f), black, false);
             var held = Group(armL, "HeldShuriken");
             held.localPosition = new Vector3(0f, -0.44f, -0.012f);
-            for (int i = 0; i < 4; i++)
-                Prim(PrimitiveType.Cube, "Blade", held, Vector3.zero, new Vector3(0.025f, 0.13f, 0.006f), steel, false).transform.localRotation = Quaternion.Euler(0f, 0f, i * 45f);
+            ShurikenShape.Create(held, "Shuriken", 0.07f, Mat("Shuriken_Blade", ShurikenShape.BladeColor, null, false, 0.8f),
+                                 Mat("Shuriken_Center", ShurikenShape.CenterColor, null, false, 0.5f), false); // (紺色の丸から四方へ灰色の三角形)
             // 胸の点数 (大きな白い丸に、太い図形の数字)
             var disc = Prim(PrimitiveType.Cylinder, "PointDisc", figure, new Vector3(0f, 0.86f, -0.018f), new Vector3(0.36f, 0.003f, 0.36f), Mat("Target_White", Color.white), false);
             disc.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
@@ -502,26 +502,7 @@ namespace ShootingGallery
             return t.gameObject;
         }
 
-        /// <summary>手裏剣の的: 紫の板に白い手裏剣が回り、「NINJA」の文字</summary>
-        GameObject NinjaLook(Transform look)
-        {
-            var c = new Vector3(0f, TargetDiscY, 0f);
-            Prim(PrimitiveType.Cube, "Plate", look, c, new Vector3(0.3f, 0.3f, 0.04f), Mat("Ninja_Plate", new Color(0.3f, 0.1f, 0.4f), new Color(0.1f, 0.03f, 0.15f)));
-            var spin = Group(look, "Shuriken");
-            spin.localPosition = c + new Vector3(0f, 0.02f, -0.03f);
-            var rot = spin.gameObject.AddComponent<Rotator>();
-            rot.axis = Vector3.forward;
-            rot.speed = 300f;
-            var steel = Mat("Shuriken_Steel", new Color(0.75f, 0.77f, 0.8f), null, false, 0.85f);
-            for (int i = 0; i < 4; i++)
-            {
-                var blade = Prim(PrimitiveType.Cube, "Blade", spin, Vector3.zero, new Vector3(0.03f, 0.18f, 0.006f), steel, false);
-                blade.transform.localRotation = Quaternion.Euler(0f, 0f, i * 45f);
-            }
-            var hub = Prim(PrimitiveType.Cylinder, "Hub", spin, new Vector3(0f, 0f, -0.004f), new Vector3(0.05f, 0.004f, 0.05f), Mat("Ninja_Eye", new Color(0.02f, 0.02f, 0.02f)), false);
-            hub.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-            MakeText(look, "Label", "NINJA", c + new Vector3(0f, -0.115f, -0.025f), 0.04f, Color.white);
-            return look.gameObject;
-        }
+        /// <summary>忍者の的: 満月と松の前で跳ぶ忍者と大きな手裏剣 (LookArt の絵のステッカー。はみ出して大胆に)</summary>
+        GameObject NinjaLook(Transform look) => StickerLook(look, "Ninja", "NINJA", Color.white);
     }
 }

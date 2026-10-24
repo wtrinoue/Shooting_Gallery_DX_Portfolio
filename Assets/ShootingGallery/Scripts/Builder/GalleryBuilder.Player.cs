@@ -141,17 +141,12 @@ namespace ShootingGallery
 
             // 6: 手裏剣 (忍者モード専用。手のひらの先に1枚持っている。投げると消えて、少しして次の1枚が出る)
             var sk = Group(gunGo.transform, "Model_Shuriken");
-            var steel = Mat("Shuriken_Steel", new Color(0.75f, 0.77f, 0.8f), null, false, 0.85f);
-            var skHub = Mat("Ninja_Eye", new Color(0.02f, 0.02f, 0.02f));
+            // 形は ShurikenShape (紺色の丸から四方へ灰色の三角形の刃)。投げる手裏剣 (Shuriken.Spawn) も同じ材質
+            var steel = Mat("Shuriken_Blade", ShurikenShape.BladeColor, null, false, 0.8f);
+            var skHub = Mat("Shuriken_Center", ShurikenShape.CenterColor, null, false, 0.5f);
             var skSpin = Group(sk, "Spin");
             skSpin.localPosition = new Vector3(0f, 0.01f, 0.07f);
-            for (int i = 0; i < 4; i++)
-            {
-                var blade = Prim(PrimitiveType.Cube, "Blade", skSpin, Vector3.zero, new Vector3(0.022f, 0.005f, 0.12f), steel, false);
-                blade.transform.localRotation = Quaternion.Euler(0f, i * 45f, 0f);
-                blade.GetComponent<Renderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            }
-            Prim(PrimitiveType.Cylinder, "Hub", skSpin, Vector3.zero, new Vector3(0.035f, 0.004f, 0.035f), skHub, false);
+            ShurikenShape.Create(skSpin, "Shuriken", 0.065f, steel, skHub, true);
             var skTurn = skSpin.gameObject.AddComponent<Rotator>(); // 持っている間もゆっくり回る
             skTurn.speed = 90f;
             var skMuzzle = Group(sk, "Muzzle"); // マズルフラッシュは無し (子を持たない)

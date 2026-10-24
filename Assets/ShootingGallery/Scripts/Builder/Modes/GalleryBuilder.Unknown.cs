@@ -1268,22 +1268,7 @@ namespace ShootingGallery
         // 屋台に出る的の見た目
         // ------------------------------------------------------------------
 
-        /// <summary>Unknown ステージの的: 紺の板に、光る輪の小さなワープゲート。輪の中には星空と惑星が奥に見える</summary>
-        GameObject UnknownLook(Transform look)
-        {
-            var c = new Vector3(0f, TargetDiscY, 0f);
-            Prim(PrimitiveType.Cube, "Plate", look, c, new Vector3(0.3f, 0.3f, 0.04f), Mat("Unknown_LookPlate", new Color(0.12f, 0.12f, 0.28f), new Color(0.03f, 0.03f, 0.08f)));
-            var gate = Group(look, "MiniGate");
-            gate.localPosition = c + new Vector3(0f, 0.015f, -0.03f);
-            RingSegments(gate, "MiniGateRing", 0.09f, 24, 0.022f, Mat("Gate_Glow_Space", new Color(0.55f, 0.5f, 1f), new Color(0.55f, 0.5f, 1f) * 1.8f, true), Mat("Gate_Glow_City", new Color(1f, 0.45f, 0.75f), new Color(1f, 0.45f, 0.75f) * 1.8f, true));
-            Prim(PrimitiveType.Cylinder, "MiniGateSky", gate, new Vector3(0f, 0f, 0.008f), new Vector3(0.17f, 0.002f, 0.17f), Mat("SpaceWorld_Dark", new Color(0.02f, 0.02f, 0.06f), null, true), false)
-                .transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-            Prim(PrimitiveType.Sphere, "MiniPlanet", gate, new Vector3(0.025f, 0.02f, 0.004f), Vector3.one * 0.04f, Mat("SpaceWorld_Planet", new Color(1f, 0.6f, 0.3f), new Color(0.35f, 0.15f, 0.05f), false, 0.3f), false);
-            var star = Mat("SpaceWorld_Star", new Color(1f, 1f, 0.9f), null, true);
-            foreach (var p in new[] { new Vector2(-0.04f, 0.03f), new Vector2(-0.02f, -0.05f), new Vector2(0.05f, -0.03f), new Vector2(-0.055f, -0.01f) })
-                Prim(PrimitiveType.Sphere, "MiniStar", gate, new Vector3(p.x, p.y, 0.004f), Vector3.one * 0.008f, star, false);
-            MakeText(look, "Label", "UNKNOWN", c + new Vector3(0f, -0.115f, -0.025f), 0.035f, new Color(0.75f, 0.85f, 1f));
-            return look.gameObject;
-        }
+        /// <summary>Unknown の的: 渦を巻くワープホールと飛び出す時計 (LookArt の絵のステッカー。はみ出して大胆に)</summary>
+        GameObject UnknownLook(Transform look) => StickerLook(look, "Unknown", "UNKNOWN", Color.white);
     }
 }

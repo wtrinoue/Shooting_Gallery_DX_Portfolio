@@ -68,9 +68,8 @@ namespace ShootingGallery
         [Header("土に変わる床と、組み上がる舞台")]
         [Tooltip("足元から外へ広がる土の円盤 (ローカル X・Z の大きさを広げる)")]
         public Transform soil;
-        [Tooltip("土が広がりきるまで / 足元へ縮みきるまでの秒数")]
+        [Tooltip("土が広がりきるまでの秒数 (終わりは組み上げを逆にたどるので、同じ秒数で縮む)")]
         public float soilInTime = 1.8f;
-        public float soilOutTime = 1.4f;
         [Tooltip("組み上げる物のまとまり (土のでこぼこ・木・お墓・井戸・お化け屋敷・空・鬼火)。中の見える部品が1つずつぽんと出てくる")]
         public Transform[] assembleRoots;
         [Tooltip("まとまりごとの、組み上げ始める時刻 (秒。土が広がり始めてから)")]
@@ -79,10 +78,8 @@ namespace ShootingGallery
         public float[] assembleSpreads;
         [Tooltip("まとまりごとに、高さの順ではなく、真ん中からの距離の順に出す (土のでこぼこ用)")]
         public bool[] assembleRadial;
-        [Tooltip("1つの部品がぽんと出る秒数")]
+        [Tooltip("1つの部品がぽんと出る秒数 (終わりはこの逆で、ふくらんでからしぼんで消える)")]
         public float popTime = 0.35f;
-        [Tooltip("終わりに崩れて消えるのにかける秒数")]
-        public float disassembleTime = 2.2f;
 
         [Header("Timing")]
         public float duration = 26f;
@@ -93,8 +90,8 @@ namespace ShootingGallery
         public float TimeLeft => IsActive ? Mathf.Max(0f, duration - (Time.time - startTime)) : 0f;
         /// <summary>今回倒した数</summary>
         public int Hits { get; private set; }
-        /// <summary>片付け (崩れて消え、土が縮んで平らな床に戻る) にかかる秒数</summary>
-        public float CloseTime => disassembleTime + soilOutTime + 0.1f;
+        /// <summary>片付け (組み上げを逆にたどってしまわれ、土が縮んで平らな床に戻る) にかかる秒数 = 組み上げと同じ</summary>
+        public float CloseTime => BuildTime + 0.1f;
         /// <summary>組み上げにかかる秒数 (土が広がり始めてから、最後の部品が出るまで)</summary>
         public float BuildTime { get; private set; }
         /// <summary>
@@ -314,25 +311,26 @@ namespace ShootingGallery
             anim = null;
         }
 
-        // 終わり: 上の部品から順に崩れて消え、土が足元へ縮んで、平らな床に戻る
+        // 終わり: 組み上げ (Enter) をそのまま逆にたどってしまわれていく (ユーザーの指定)。同じ速さで、時刻を BuildTime から 0 へ戻す:
+        // 鬼火 → 月と雲 → お化け屋敷 (上の部品から下へ)・木・お墓・井戸 → 土のでこぼこ (外から真ん中へ) → 土の円盤が足元へ縮む。
+        // 空は最後に消えきるように、終わりの skyFadeTime 秒前から消し始める
         IEnumerator Leave()
         {
             Left?.Invoke();
-            skyTarget = 0f; // 空はすっと消えていく (Update)
             Sfx.Play("ghost");
             float total = Mathf.Max(0.1f, BuildTime);
-            for (float t = 0f; t < disassembleTime; t += Time.deltaTime)
+            bool groundShown = false, skyFading = false;
+            for (float t = total; t > 0f; t -= Time.deltaTime)
             {
-                SetAssembly(total * (1f - t / disassembleTime));
+                SetAssembly(t);
+                SetSoil(Mathf.Clamp01(t / soilInTime));
+                if (!groundShown && t < soilInTime) { groundShown = true; HideGround(false); } // 土の下に、お祭りの地面を戻しておく (組み上げの時に隠した時刻)
+                if (!skyFading && t <= skyFadeTime) { skyFading = true; skyTarget = 0f; } // 空はすっと消えていく (Update)
                 yield return null;
             }
             SetAssembly(0f);
-            HideGround(false); // 土の下に、お祭りの地面を戻しておく
-            for (float t = 0f; t < soilOutTime; t += Time.deltaTime)
-            {
-                SetSoil(1f - t / soilOutTime);
-                yield return null;
-            }
+            SetSoil(0f);
+            if (!groundShown) HideGround(false);
             SetInWorld(false);
             Closed?.Invoke();
             anim = null;

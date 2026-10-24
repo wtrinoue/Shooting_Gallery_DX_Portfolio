@@ -28,8 +28,31 @@ namespace ShootingGallery
             go.SetActive(true);
         }
 
-        /// <summary>武器の的の見た目。的の根元を原点に、円盤と同じ高さに箱が来るように作る。</summary>
+        // 別の世界へ飛ぶモードの的 (と WORLD GATE の BACK の的)。見た目に動きを付けない (ユーザーの指定)
+        static readonly TargetKind[] StillLookKinds =
+        {
+            TargetKind.Naval, TargetKind.Sky, TargetKind.Ninja, TargetKind.Kaiju, TargetKind.Casino, TargetKind.Western, TargetKind.Space, TargetKind.Ghost,
+            TargetKind.Mine, TargetKind.Festival, TargetKind.Submarine, TargetKind.Music, TargetKind.Museum, TargetKind.Unknown, TargetKind.GateBack
+        };
+
+        /// <summary>
+        /// 特別な的の見た目。別の世界へ飛ぶモードの的は、作った後に動き (回る・揺れる・跳ねる部品) を全部外して、止まった絵にする
+        /// (プロペラ・提灯・つるはしなどは、作った時の形のまま止まる)
+        /// </summary>
         GameObject WeaponLook(Transform parent, TargetKind kind)
+        {
+            var go = BuildWeaponLook(parent, kind);
+            if (System.Array.IndexOf(StillLookKinds, kind) >= 0)
+            {
+                foreach (var m in go.GetComponentsInChildren<Rotator>(true)) DestroyImmediate(m);
+                foreach (var m in go.GetComponentsInChildren<Oscillator>(true)) DestroyImmediate(m);
+                foreach (var m in go.GetComponentsInChildren<Pendulum>(true)) DestroyImmediate(m);
+            }
+            return go;
+        }
+
+        /// <summary>武器の的の見た目。的の根元を原点に、円盤と同じ高さに箱が来るように作る。</summary>
+        GameObject BuildWeaponLook(Transform parent, TargetKind kind)
         {
             var look = Group(parent, $"Look_{kind}");
             if (kind == TargetKind.Deluxe) return DeluxeLook(look);

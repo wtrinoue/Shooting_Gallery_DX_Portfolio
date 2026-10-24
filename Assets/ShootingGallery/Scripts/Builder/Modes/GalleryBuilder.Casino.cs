@@ -395,27 +395,7 @@ namespace ShootingGallery
             return mesh;
         }
 
-        /// <summary>カジノの的: 桃色の板に赤いチップ (白い切れ込み) と、「CASINO」の文字</summary>
-        GameObject CasinoLook(Transform look)
-        {
-            var c = new Vector3(0f, TargetDiscY, 0f);
-            Prim(PrimitiveType.Cube, "Plate", look, c, new Vector3(0.3f, 0.3f, 0.04f), Mat("Casino_Plate", new Color(0.6f, 0.08f, 0.35f), new Color(0.2f, 0.02f, 0.1f)));
-            var spin = Group(look, "Chip");
-            spin.localPosition = c + new Vector3(0f, 0.02f, -0.03f);
-            var rot = spin.gameObject.AddComponent<Rotator>();
-            rot.axis = Vector3.forward;
-            rot.speed = 150f;
-            var chip = Prim(PrimitiveType.Cylinder, "ChipDisc", spin, Vector3.zero, new Vector3(0.16f, 0.006f, 0.16f), Mat("Chip_Red", new Color(0.85f, 0.1f, 0.1f)), false);
-            chip.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-            for (int i = 0; i < 6; i++)
-            {
-                float a = i * Mathf.PI * 2f / 6;
-                var notch = Prim(PrimitiveType.Cube, "Notch", spin, new Vector3(Mathf.Sin(a), Mathf.Cos(a), 0f) * 0.065f + Vector3.back * 0.004f, new Vector3(0.025f, 0.03f, 0.004f), Mat("Target_White", Color.white), false);
-                notch.transform.localRotation = Quaternion.Euler(0f, 0f, -i * 60f);
-            }
-            MakeText(spin, "Seven", "7", new Vector3(0f, 0f, -0.006f), 0.08f, Color.white);
-            MakeText(look, "Label", "CASINO", c + new Vector3(0f, -0.115f, -0.025f), 0.04f, new Color(1f, 0.85f, 0.3f));
-            return look.gameObject;
-        }
+        /// <summary>カジノの的: 大きなラッキーセブンとスロットとコイン (LookArt の絵のステッカー。はみ出して大胆に)</summary>
+        GameObject CasinoLook(Transform look) => StickerLook(look, "Casino", "CASINO", new Color(1f, 0.88f, 0.35f));
     }
 }
