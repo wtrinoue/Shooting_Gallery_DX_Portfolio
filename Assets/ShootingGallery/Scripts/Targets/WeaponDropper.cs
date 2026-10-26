@@ -185,8 +185,28 @@ namespace ShootingGallery
         float nextAllowedTime;
         float nextExplosiveTime;
 
-        void OnEnable() => Target.Rising += OnTargetRising;
-        void OnDisable() => Target.Rising -= OnTargetRising;
+        void OnEnable()
+        {
+            Target.Rising += OnTargetRising;
+            GameManager.SpecialTargetsCancelled += RestoreAll;
+        }
+
+        void OnDisable()
+        {
+            Target.Rising -= OnTargetRising;
+            GameManager.SpecialTargetsCancelled -= RestoreAll;
+        }
+
+        // フィーバーが始まった: 出ている特別な的を、全部点数の的に戻す (撃っても不発。予約も取り消す)
+        void RestoreAll()
+        {
+            toRestore.Clear();
+            toRestore.AddRange(active.Keys);
+            foreach (var t in toRestore) Restore(t);
+            toRestore.Clear();
+            ClearChallengeReservation();
+            foreach (var s in stagePlan) s.target = null;
+        }
 
         void Start()
         {
@@ -299,7 +319,7 @@ namespace ShootingGallery
             wasFever = fever;
             challengeWasBusy = busy;
 
-            if (!playing || busy)
+            if (!playing || busy || gm.FeverAssembling)
             {
                 ClearChallengeReservation();
                 return;
@@ -453,7 +473,7 @@ namespace ShootingGallery
             foreach (var s in stagePlan)
                 if (s.target != null && Time.time - s.reservedAt > 2f) s.target = null; // 起き上がらなかった: 選び直す
 
-            bool paused = gm.ChallengeActive || gm.DeluxeActive || (gm.bonusStage != null && gm.bonusStage.IsBusy) || Time.time < stageResumeAt;
+            bool paused = gm.ChallengeActive || gm.DeluxeActive || (gm.bonusStage != null && gm.bonusStage.IsBusy) || Time.time < stageResumeAt || gm.FeverAssembling;
             if (paused) return;
 
             int outCount = 0;
@@ -560,6 +580,7 @@ namespace ShootingGallery
             var gm = GameManager.I;
             if (gm == null || gm.State != GameState.Playing) return;
             if (target.kind != TargetKind.Normal || target.face == null || active.ContainsKey(target)) return;
+            if (gm.FeverAssembling) return; // フィーバーの屋台がそろうまでは、特別な的を出さない
 
             // デバッグモード: 輪の屋台ごとに決まった種類の特殊な的を、まだ出ていない種類から順に化けさせる (どの種類も1つずつ出たまま)
             if (gm.DebugMode)

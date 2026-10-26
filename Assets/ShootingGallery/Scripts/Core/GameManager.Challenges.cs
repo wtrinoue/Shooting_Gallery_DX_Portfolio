@@ -65,7 +65,7 @@ namespace ShootingGallery
             if (sniper == null || ChallengeActive || stall == null) return;
 
             sniperStall = stall;
-            stall.Sink(stallMoveDuration);
+            if (!LeaveFeverEntry(stall, stallMoveDuration)) stall.Sink(stallMoveDuration); // (フィーバーの屋台が出てくる途中なら、列から外して自分の場所の地下へ)
             Vector3 eye = player.head != null ? player.head.transform.position : player.transform.position + Vector3.up * 1.6f;
             sniper.Show(stall.transform.position - player.transform.position, eye);
 
@@ -111,7 +111,7 @@ namespace ShootingGallery
 
             // 屋台を戻す: 引っ込めた場所に今並んでいる版 (豪華版 / 普通版) を出す (チャレンジ中にフィーバーが終わったフィーバー屋台の場所は戻さない)
             var cur = CurrentStallAt(stall);
-            if (cur != null) cur.Rise(stallMoveDuration, State == GameState.Playing);
+            if (cur != null) RiseAfterChallenge(cur);
 
             if (player.Weapon == WeaponType.Sniper) player.ResetWeapon(); // 外した1発で別の武器の的を取った時はそのまま
             player.SetDualWield(IsFever);
@@ -147,7 +147,8 @@ namespace ShootingGallery
             float clear = 0f;
             foreach (var s in machineGunStalls)
             {
-                s.Sink(MachineGunChallenge.SinkTime);
+                // フィーバーの屋台が出てくる途中 (まだ出ていない / 列で回っている) なら、列から外して自分の場所の地下に控えさせる (チャレンジ中は出さない)
+                if (!LeaveFeverEntry(s, MachineGunChallenge.SinkTime)) s.Sink(MachineGunChallenge.SinkTime);
                 clear = Mathf.Max(clear, s.HatchClearIn);
             }
 
@@ -226,7 +227,7 @@ namespace ShootingGallery
                 if (cur == null || done.Contains(cur) || IsChallengeSpot(cur)) continue; // 念のため: もう次のチャレンジで引っ込めている場所
                 done.Add(cur);
                 if (bring != null) bring(cur, done.Count - 1);
-                else cur.Rise(stallMoveDuration, State == GameState.Playing);
+                else RiseAfterChallenge(cur);
             }
         }
 

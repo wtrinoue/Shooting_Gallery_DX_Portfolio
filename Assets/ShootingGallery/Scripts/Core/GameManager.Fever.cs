@@ -14,7 +14,9 @@ namespace ShootingGallery
             IsFever = true;
             BonusUsedThisFever = false;
             activeFeverStalls.Clear();
-            ArrangeFeverStalls();
+            // フィーバーの的を撃った時だけ、ラウンドの種類ごとの出し方にする (WORLD GATE・デバッグの輪は一度に出す)
+            ArrangeFeverStalls(from.HasValue ? FeverEntryForRound : FeverEntry.AllAtOnce);
+            if (from.HasValue && !DebugMode) BeginFeverAssembling(); // 屋台がそろうまで特別な的は出さない。出ていた特別な的は点数の的に戻す
             player.SetDualWield(true, from);
             Sfx.Play("fever");
             ShowMessage("FEVER TIME!!\nLOOK AROUND!", 3f, new Color(1f, 0.3f, 0.3f));
@@ -221,8 +223,9 @@ namespace ShootingGallery
         /// フィーバー屋台は全ギミックからランダムに選んでランダムな順で並べる。
         /// すでに出ている屋台は地上のまま新しい位置へ滑り、足りない分が新しくせり上がる。
         /// </summary>
-        void ArrangeFeverStalls()
+        void ArrangeFeverStalls(FeverEntry entry = FeverEntry.AllAtOnce)
         {
+            StopFeverEntry(true); // 出し方の途中 (順番待ち・列で回っている) の屋台は、すぐ出して並べ直しに加える
             int n = StallCountForStage();
             float radius = RingRadius(n);
 
@@ -244,6 +247,8 @@ namespace ShootingGallery
             var mainRot = Quaternion.Euler(0f, baseYaw, 0f);
             mainStall.Slide(mainRot * new Vector3(0f, 0f, radius) + Vector3.up * mainHomePos.y, mainHomeRot, stallMoveDuration);
             n = activeFeverStalls.Count + 1;
+            var entering = new List<Stall>();
+            var slots = new List<int>();
             for (int i = 0; i < activeFeverStalls.Count; i++)
             {
                 // メイン屋台と合わせて 360 度に等間隔
@@ -255,15 +260,18 @@ namespace ShootingGallery
                 else
                 {   // 新しく出す屋台は地下からせり上がる (前のフィーバーで沈む途中でも下から出し直す)
                     stall.PlaceAt(pos, rot);
-                    stall.Rise(stallMoveDuration);
+                    if (entry == FeverEntry.AllAtOnce) stall.Rise(stallMoveDuration);
+                    else { entering.Add(stall); slots.Add(i + 1); } // 順番に出す / 列で回って並ぶ
                 }
             }
+            if (entering.Count > 0) BeginFeverEntry(entry, entering, slots, n, baseYaw, radius);
             if (added.Count > 0) ShowSideArrows(); // 屋台が増えた: 左右を見るように、メイン屋台の前に左右の矢印を出す
         }
 
         void EndFever()
         {
             IsFever = false;
+            StopFeverEntry(false); // 出し方の途中なら止める (屋台は下でまとめて沈める)
             if (bonusStage != null) bonusStage.Close();
             ShowReturnArrows(); // (時間切れ・点数を取りきったラウンドの終わりでも) 周りの屋台がしまわれたら、それぞれの屋台があった所からメイン屋台の方を指す矢印を出す
             foreach (var s in feverStalls) s.Sink(stallMoveDuration);

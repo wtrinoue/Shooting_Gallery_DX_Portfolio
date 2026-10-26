@@ -82,11 +82,25 @@ namespace ShootingGallery
         {
             if (from == null || to == null) return;
             to.PlaceAt(from.RestPosition, from.RestRotation);
-            // 沈めずに、その場でカードを裏返すように入れ替える: 古い屋台が横に縮んで細い線になり、
-            // 金色の光と花火がはじけた瞬間に、新しい屋台が線から横へ広がって現れる
+            // フィーバーの屋台が出てくる途中 (列で回っている・順番待ち) なら、変身した屋台がその続きを引き継ぐ。順番待ちなら、順番が来てからせり上がる
+            if (PassFeverEntry(from, to)) return;
             bool shown = from.gameObject.activeInHierarchy;
-            if (shown) from.SwapOut(swapOutTime);
-            StartCoroutine(SwapInAfter(to, shown ? swapOutTime : 0f));
+            if (!shown)
+            {
+                StartCoroutine(SwapInAfter(to, 0f));
+                return;
+            }
+            // 屋台そのものが変身する (沈めず、動いている途中なら動きながら): 古い屋台が横に縮んで細い線になり、
+            // 金色の光と花火がはじけた瞬間に、新しい屋台が線から横へ広がって現れる。新しい屋台は、古い屋台の場所と動き (せり上がる・滑る・列で回る) を引き継ぐ
+            to.SwapIn(swapInTime, State == GameState.Playing, from, swapOutTime);
+            from.SwapOut(swapOutTime);
+            StartCoroutine(SparkleAfter(to, swapOutTime));
+        }
+
+        IEnumerator SparkleAfter(Stall stall, float delay)
+        {
+            yield return new WaitForSeconds(delay);
+            if (stall.gameObject.activeInHierarchy) SwapSparkle(stall.transform);
         }
 
         const float swapOutTime = 0.35f; // 古い屋台が縮みきるまで

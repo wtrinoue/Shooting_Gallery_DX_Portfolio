@@ -16,7 +16,7 @@ namespace ShootingGallery
         bool enableTargetsOnArrive; // せり上がり途中に Slide されても、着いたら的を出す
 
         /// <summary>表示中で、せり上がり / 沈み込みの途中でない</summary>
-        public bool IsSettled => gameObject.activeInHierarchy && moveRoutine == null && !worldScaling;
+        public bool IsSettled => gameObject.activeInHierarchy && moveRoutine == null && squashRoutine == null && !worldScaling && !driven;
         /// <summary>止まる場所 (地上に出ている時の位置と向き。親のローカル座標)。動いている途中でも行き先を返す</summary>
         public Vector3 RestPosition { get { CaptureRestPos(); return restPos; } }
         public Quaternion RestRotation { get { CaptureRestPos(); return restRot; } }
@@ -63,7 +63,7 @@ namespace ShootingGallery
         {
             CaptureRestPos();
             CaptureScale();
-            if (moveRoutine != null) StopCoroutine(moveRoutine);
+            StopMove();
             HideChute();
             HideHatch(true);
             moveRoutine = null;
@@ -80,6 +80,7 @@ namespace ShootingGallery
         /// <summary>地面の下へ瞬時に隠す (起動時用 / 発掘モードで、プレイヤーから見えなくなった屋台を隠す時)</summary>
         public void HideImmediate()
         {
+            driven = false;
             CaptureRestPos();
             CaptureScale();
             SetTargetsAvailable(false);
@@ -93,7 +94,7 @@ namespace ShootingGallery
         /// <summary>隠れている屋台の置き場所を変える (フィーバーのたびにランダムな場所へ並べ替える用)</summary>
         public void PlaceAt(Vector3 localPos, Quaternion localRot)
         {
-            if (moveRoutine != null) StopCoroutine(moveRoutine);
+            StopMove();
             HideChute();
             HideHatch(true);
             moveRoutine = null;
@@ -174,6 +175,88 @@ namespace ShootingGallery
             Move(restPos, transform.localRotation, duration - wait, () => ReadyHatch(), wait);
         }
 
+        // ---- 外から1コマずつ動かす (100,000 POINTS のフィーバーで、列になって輪を回る時。GameManager.FeverEntry) ----
+        bool driven; // 外から動かしている途中 (ほかの動きを始めると取り消される)
+
+        void StopMove()
+        {
+            if (moveRoutine != null) StopCoroutine(moveRoutine);
+            driven = false;
+            if (squashRoutine != null) { StopCoroutine(squashRoutine); squashRoutine = null; } // (入れ替えの途中でほかの動きを始めた)
+        }
+
+        /// <summary>
+        /// 外から動かし始める: 地下の (localPos, localRot) の所に出す。ハッチは出さない (地面から生えてくる)。的はしまう。
+        /// 動かす間は DriveTo で毎フレーム置き場所を渡し、着いたら Release で止める
+        /// </summary>
+        public void BeginDrive(Vector3 localPos, Quaternion localRot)
+        {
+            StopMove();
+            moveRoutine = null;
+            HideChute();
+            HideHatch(true);
+            CaptureScale();
+            worldScaling = false;
+            enableTargetsOnArrive = false;
+            SetTargetsAvailable(false);
+            transform.localScale = restScale;
+            gameObject.SetActive(true);
+            driven = true;
+            DriveTo(localPos + Vector3.down * hiddenDepth, localRot);
+        }
+
+        /// <summary>外から動かしている途中なら、その場所へ置いて true。ほかの動き (沈む・入れ替えなど) に取り消されていたら false</summary>
+        public bool DriveTo(Vector3 localPos, Quaternion localRot)
+        {
+            if (!driven || !gameObject.activeInHierarchy) return false;
+            restPos = localPos;
+            restRot = localRot;
+            restPosCaptured = true;
+            transform.localPosition = localPos;
+            transform.localRotation = localRot;
+            return true;
+        }
+
+        /// <summary>外から動かすのを終える: 今の場所を止まる場所にする。enableTargets なら的を出す</summary>
+        public void Release(bool enableTargets)
+        {
+            if (!driven) return;
+            driven = false;
+            if (enableTargets) SetTargetsAvailable(true);
+        }
+
+        /// <summary>
+        /// 外から動かしている途中 (列で回っている・まだ出ていない) の屋台を、その場でまっすぐ沈め (ハッチなし)、
+        /// 止まる場所を (localPos, localRot) に変えてその地下に置いておく。次に Rise するとそこからせり上がる
+        /// </summary>
+        public void SinkAway(float duration, Vector3 localPos, Quaternion localRot)
+        {
+            if (!gameObject.activeInHierarchy)
+            {
+                PlaceAt(localPos, localRot);
+                return;
+            }
+            enableTargetsOnArrive = false;
+            SetTargetsAvailable(false);
+            HideHatch();
+            var down = transform.localPosition + Vector3.down * hiddenDepth;
+            restPos = localPos; // (チャレンジの間も、自分の輪の場所として扱われるように先に変える)
+            restRot = localRot;
+            restPosCaptured = true;
+            Move(down, transform.localRotation, duration, () =>
+            {
+                gameObject.SetActive(false);
+                transform.localRotation = restRot;
+                transform.localPosition = restPos + Vector3.down * hiddenDepth;
+            });
+        }
+
+        /// <summary>足元のハッチを出す (Release した後、全部の屋台が並び終わってから)</summary>
+        public void ShowHatch()
+        {
+            if (!driven && moveRoutine == null) ReadyHatch();
+        }
+
         const float BuryDepth = 6f; // 砂に埋もれる時に、傾いた向きにそって沈む深さ
 
         /// <summary>
@@ -187,7 +270,7 @@ namespace ShootingGallery
             CaptureScale();
             enableTargetsOnArrive = false;
             SetTargetsAvailable(false);
-            if (moveRoutine != null) StopCoroutine(moveRoutine);
+            StopMove();
             HideChute();
             HideHatch();
             worldScaling = false;
@@ -201,7 +284,7 @@ namespace ShootingGallery
         {
             CaptureRestPos();
             CaptureScale();
-            if (moveRoutine != null) StopCoroutine(moveRoutine);
+            StopMove();
             HideChute();
             HideHatch();
             worldScaling = false;
@@ -279,7 +362,7 @@ namespace ShootingGallery
             CaptureScale();
             enableTargetsOnArrive = false;
             SetTargetsAvailable(false);
-            if (moveRoutine != null) StopCoroutine(moveRoutine);
+            StopMove();
             HideChute();
             HideHatch();
             worldScaling = false;
@@ -383,7 +466,7 @@ namespace ShootingGallery
             CaptureScale();
             enableTargetsOnArrive = false;
             SetTargetsAvailable(false);
-            if (moveRoutine != null) StopCoroutine(moveRoutine);
+            StopMove();
             HideChute();
             HideHatch();
             worldScaling = false;
@@ -474,7 +557,7 @@ namespace ShootingGallery
         {
             CaptureRestPos();
             CaptureScale();
-            if (moveRoutine != null) StopCoroutine(moveRoutine);
+            StopMove();
             HideChute();
             HideHatch();
             worldScaling = false;
@@ -565,8 +648,18 @@ namespace ShootingGallery
             Move(restPos, localRot, duration, () => ReadyHatch()); // 着いた所でまた足元にハッチを用意する
         }
 
+        // ---- 豪華屋台への入れ替え (変身) ----
+        // 縮む・広がる (横幅) は、動き (せり上がる・滑る・列で回る) とは別に進める。動いている途中の屋台は、動きながら変身し、
+        // 新しい屋台が同じ動きの続きを引き継ぐ (位置の移動には関係なく、屋台そのものが変わる)
+        Coroutine squashRoutine;
+        Vector3 moveTarget;          // 今の動き (Move) の行き先
+        Quaternion moveTargetRot;
+        float moveEndsAt;            // 今の動きが終わる時刻
+        System.Action moveDone;      // 今の動きが終わった時にすること
+
         /// <summary>
         /// 豪華屋台への入れ替え用: その場でカードを裏返すように横へ縮んで消える (沈まない)。的はすぐしまう。
+        /// 動いている途中なら、動きは止めずに縮む (外から動かしている途中も、そのまま動かしてもらう)。
         /// 消えた後は地下の置き場所に戻しておく (次に Rise / SwapIn で出せるように)。
         /// </summary>
         public void SwapOut(float duration)
@@ -576,36 +669,86 @@ namespace ShootingGallery
             CaptureScale();
             enableTargetsOnArrive = false;
             SetTargetsAvailable(false);
-            if (moveRoutine != null) StopCoroutine(moveRoutine);
             HideChute();
             HideHatch();
-            moveRoutine = StartCoroutine(Squash(1f, 0f, duration, () =>
+            if (squashRoutine != null) StopCoroutine(squashRoutine);
+            squashRoutine = StartCoroutine(Squash(1f, 0f, duration, 0f, () =>
             {
+                StopMove();
+                moveRoutine = null;
                 transform.localScale = restScale;
                 transform.localPosition = restPos + Vector3.down * hiddenDepth;
                 gameObject.SetActive(false);
             }));
         }
 
-        /// <summary>豪華屋台への入れ替え用: 止まる場所で、細い線から横へぱっと広がって現れる (少し行き過ぎて戻る)。着いたら的を出す</summary>
-        public void SwapIn(float duration, bool enableTargets = true)
+        /// <summary>
+        /// 豪華屋台への入れ替え用: 細い線から横へぱっと広がって現れる (少し行き過ぎて戻る)。delay 秒は細い線のまま待つ。
+        /// takeOver (入れ替わる前の屋台) を渡すと、その屋台の今の場所と動きを引き継ぐ: せり上がり・滑る途中ならその続きを動き、
+        /// 外から動かしている途中 (列で回る) なら、そのまま外から動かしてもらう。止まっていればその場所で現れる。
+        /// 的は、止まる場所に着いてから出す (外から動かしている時は Release で)
+        /// </summary>
+        public void SwapIn(float duration, bool enableTargets = true, Stall takeOver = null, float delay = 0f)
         {
             CaptureRestPos();
             CaptureScale();
-            if (moveRoutine != null) StopCoroutine(moveRoutine);
+            StopMove();
+            moveRoutine = null;
             HideChute();
             HideHatch();
-            moveRoutine = null;
+            worldScaling = false;
+            if (takeOver == null)
+            {
+                transform.localPosition = restPos;
+                transform.localRotation = restRot;
+            }
+            else if (!TakeOverMotion(takeOver)) return; // 沈む途中の屋台は引き継がない (隠したまま)
             gameObject.SetActive(true);
-            transform.localPosition = restPos;
-            transform.localRotation = restRot;
-            enableTargetsOnArrive = enableTargets;
-            moveRoutine = StartCoroutine(Squash(0f, 1f, duration, null));
+            SetTargetsAvailable(false);
+            enableTargetsOnArrive = enableTargets && !driven;
+            transform.localScale = new Vector3(restScale.x * 0.001f, restScale.y, restScale.z);
+            squashRoutine = StartCoroutine(Squash(0f, 1f, duration, delay, null));
+        }
+
+        // 入れ替わる前の屋台 old の、今の場所と動きを引き継ぐ。old が沈む途中なら false (引き継がずに地下へ置く)
+        bool TakeOverMotion(Stall old)
+        {
+            old.CaptureRestPos();
+            restPos = old.restPos;
+            restRot = old.restRot;
+            restPosCaptured = true;
+            bool moving = old.moveRoutine != null && old.moveTarget.y >= old.restPos.y - 0.05f; // せり上がる・滑る途中 (沈む途中は除く)
+            if (old.moveRoutine != null && !moving)
+            {
+                PlaceAt(restPos, restRot);
+                return false;
+            }
+            transform.localPosition = old.transform.localPosition;
+            transform.localRotation = old.transform.localRotation;
+            if (old.driven)
+            {
+                driven = true; // 列で回っている途中: 外から動かすのを引き継ぐ
+                return true;
+            }
+            if (moving)
+            {
+                bool rising = old.transform.localPosition.y < old.restPos.y - 0.05f;
+                gameObject.SetActive(true); // (動かすコルーチンを始めるため)
+                Move(old.moveTarget, old.moveTargetRot, Mathf.Max(0.05f, old.moveEndsAt - Time.time), old.moveDone != null ? () => ReadyHatch() : (System.Action)null);
+                if (rising && Hatch != null)
+                {   // せり上がる途中: 開いたハッチも、その場で引き継ぐ (前の屋台のハッチはすぐ消す)
+                    old.HideHatch(true);
+                    hatch.Place(restPos, restRot);
+                    hatch.ShowOpen(true);
+                }
+            }
+            return true;
         }
 
         // 横幅を from → to に変える (縮む時はだんだん速く、広がる時は少し行き過ぎて戻る)。途中で少しだけ縦に伸びる
-        IEnumerator Squash(float from, float to, float duration, System.Action onDone)
+        IEnumerator Squash(float from, float to, float duration, float delay, System.Action onDone)
         {
+            if (delay > 0f) yield return new WaitForSeconds(delay);
             bool grow = to > from;
             for (float t = 0f; t < 1f; t += Time.deltaTime / duration)
             {
@@ -615,9 +758,10 @@ namespace ShootingGallery
                 yield return null;
             }
             transform.localScale = grow ? restScale : new Vector3(restScale.x * 0.001f, restScale.y, restScale.z);
-            moveRoutine = null;
-            if (grow) ReadyHatch();
-            if (enableTargetsOnArrive)
+            squashRoutine = null;
+            bool stopped = moveRoutine == null && !driven; // 動きの途中なら、ハッチと的は着いてから (MoveTo / Release)
+            if (grow && stopped) ReadyHatch();
+            if (enableTargetsOnArrive && stopped)
             {
                 enableTargetsOnArrive = false;
                 SetTargetsAvailable(true);
@@ -634,7 +778,7 @@ namespace ShootingGallery
             if (!growing && !gameObject.activeInHierarchy) return false;
             CaptureRestPos();
             CaptureScale();
-            if (moveRoutine != null) StopCoroutine(moveRoutine);
+            StopMove();
             HideChute();
             HideHatch();
             moveRoutine = null;
@@ -689,11 +833,15 @@ namespace ShootingGallery
 
         void Move(Vector3 toPos, Quaternion toRot, float duration, System.Action onDone, float delay = 0f)
         {
-            if (moveRoutine != null) StopCoroutine(moveRoutine);
+            StopMove();
             HideChute();
             CaptureScale();
             transform.localScale = restScale; // 入れ替えの途中で止められても元の大きさに戻す
             worldScaling = false;
+            moveTarget = toPos; // (豪華版に入れ替わった時、新しい屋台がこの動きの続きを引き継ぐ)
+            moveTargetRot = toRot;
+            moveEndsAt = Time.time + delay + duration;
+            moveDone = onDone;
             moveRoutine = StartCoroutine(MoveTo(toPos, toRot, duration, onDone, delay));
         }
 

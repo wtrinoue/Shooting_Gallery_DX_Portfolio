@@ -37,13 +37,33 @@ namespace ShootingGallery
         {
             ProcessFeatureHits();
             ForgetFinishedFeature();
+            UpdateFeverAssembling();
         }
 
         // このフレームに倒れた機能付きの的を、倒れた順に調べる。同じ種類の働き (武器を持つ・フィーバー・ボーナス・モード) は1つだけ
         void ProcessFeatureHits()
         {
             if (featureHits.Count == 0) return;
-            bool weaponDone = false, feverDone = false, bonusDone = false;
+
+            // 1. フィーバーが始まるかを先に調べる。スナイパー・マシンガンのチャレンジが先に始まっている (始まるのを待っている) か、
+            //    このフレームで先に倒れていたら、フィーバーの的は取り消す
+            bool challengeFirst = IsChallengeKind(ActiveFeature);
+            FeatureHit? fever = null;
+            foreach (var h in featureHits)
+            {
+                if (h.kind == TargetKind.Fever) { if (!challengeFirst) fever = h; break; }
+                if (IsChallengeKind(h.kind) && AcceptMode(h.kind)) challengeFirst = true;
+            }
+            if (fever != null && State == GameState.Playing)
+            {
+                // フィーバーが始まる: 一緒に倒れたほかの特別な的は、全部不発 (点数だけ)。屋台がそろうまで、特別な的は出ない (FeverAssembling)
+                featureHits.Clear();
+                StartFever(fever.Value.point); // 左手の銃が、撃った的から飛んでくる
+                return;
+            }
+
+            // 2. いつも通り、倒れた順に
+            bool weaponDone = false, bonusDone = false;
             FeatureHit? mode = null; // 始めるモードの的 (別の世界の的は、チャレンジ・DELUXE の的より優先する)
             foreach (var h in featureHits)
             {
@@ -59,9 +79,7 @@ namespace ShootingGallery
                         GiveWeaponFrom(h.kind, h.point);
                         break;
                     case TargetKind.Fever:
-                        if (feverDone) break;
-                        feverDone = true;
-                        StartFever(h.point); // 左手の銃が、撃った的から飛んでくる
+                        Sfx.Play("hit"); // (ここまで来たのは) チャレンジが先: フィーバーは始めない (延長もしない。点数だけ)
                         break;
                     case TargetKind.BlueOrb:
                         if (bonusDone || bonusStage == null || bonusStage.IsBusy) break;
@@ -80,6 +98,9 @@ namespace ShootingGallery
             featureHits.Clear();
             if (mode != null && State == GameState.Playing) RequestMode(mode.Value.mode); // 始めたモードは ActiveFeature に記録される
         }
+
+        /// <summary>スナイパー・マシンガンのチャレンジの的か</summary>
+        static bool IsChallengeKind(TargetKind kind) => kind == TargetKind.Sniper || kind == TargetKind.MachineGunChallenge;
 
         /// <summary>別の世界へ行くモードの的か (チャレンジ・DELUXE より優先する)</summary>
         static bool IsWorldKind(TargetKind kind) =>
