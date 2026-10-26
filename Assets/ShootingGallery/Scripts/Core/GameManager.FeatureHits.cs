@@ -56,7 +56,15 @@ namespace ShootingGallery
             }
             if (fever != null && State == GameState.Playing)
             {
-                // フィーバーが始まる: 一緒に倒れたほかの特別な的は、全部不発 (点数だけ)。屋台がそろうまで、特別な的は出ない (FeverAssembling)
+                // フィーバーが始まる: 一緒に倒れたほかの特別な的は、全部不発 (点数だけ)。屋台がそろうまで、特別な的は出ない (FeverAssembling)。
+                // ただし武器の的はフィーバーと関係ない: いつも通り、先に倒れた1つの武器を持つ
+                foreach (var h in featureHits)
+                {
+                    if (h.kind != TargetKind.Bomb && h.kind != TargetKind.MachineGun && h.kind != TargetKind.Shotgun) continue;
+                    if (MachineGunChallengeActive) Sfx.Play("hit"); // マシンガンチャレンジ中は持ち替えない (点数だけ)
+                    else GiveWeaponFrom(h.kind, h.point);
+                    break;
+                }
                 featureHits.Clear();
                 StartFever(fever.Value.point); // 左手の銃が、撃った的から飛んでくる
                 return;

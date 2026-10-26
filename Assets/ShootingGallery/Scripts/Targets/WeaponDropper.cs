@@ -197,15 +197,97 @@ namespace ShootingGallery
             GameManager.SpecialTargetsCancelled -= RestoreAll;
         }
 
-        // フィーバーが始まった: 出ている特別な的を、全部点数の的に戻す (撃っても不発。予約も取り消す)
+        // ---- フィーバーが始まった時の、特別な的の退避と再分配 ----
+        readonly Dictionary<Target, Disguise> reverting = new Dictionary<Target, Disguise>(); // 点数の的に戻る途中 (倒れて、起き上がる時に元の顔に戻す)
+        readonly List<TargetKind> stashed = new List<TargetKind>();  // 退避した特別な的の種類 (屋台がそろったら、ランダムな的に化けさせ直す)
+        readonly Dictionary<Target, TargetKind> redistribute = new Dictionary<Target, TargetKind>(); // 化けさせ直す的 (起き上がる時に化ける)
+        float redistributeAt;
+        bool wasAssembling;
+
+        // フィーバーが始まった: 出ている特別な的を、全部点数の的に戻す (すぐ不発になる。見た目は一度倒れてから元の顔で起き上がる)。
+        // 種類は退避しておき、屋台がそろったら再分配する (Redistribute)。予約も取り消す
         void RestoreAll()
         {
             toRestore.Clear();
             toRestore.AddRange(active.Keys);
-            foreach (var t in toRestore) Restore(t);
+            foreach (var t in toRestore)
+            {
+                var d = active[t];
+                if (IsWeaponKind(d.kind)) continue; // 武器の的はフィーバーと関係ない: そのまま
+                active.Remove(t);
+                stashed.Add(d.kind);
+                t.kind = TargetKind.Normal;
+                t.points = d.originalPoints;
+                if (t.IsUp && t.Reappear(0.4f)) reverting[t] = d; // 一度倒れる (起き上がる時に OnTargetRising で顔を戻す)
+                else ShowFace(t, d);
+            }
             toRestore.Clear();
+            redistribute.Clear();
             ClearChallengeReservation();
             foreach (var s in stagePlan) s.target = null;
+        }
+
+        // 屋台がそろった: 退避した種類を、出ている屋台の立っている普通の的からランダムに選んで化けさせ直す (一度倒れて、起き上がる時に化ける)
+        void Redistribute(GameManager gm)
+        {
+            if (stashed.Count == 0) return;
+            var candidates = new List<Target>();
+            foreach (var stall in gm.ShownStalls(stallBuffer))
+                foreach (var t in stall.targets)
+                    if (t != null && t.kind == TargetKind.Normal && t.face != null && t.IsUp && !t.manualControl && !active.ContainsKey(t) && !reverting.ContainsKey(t))
+                        candidates.Add(t);
+            foreach (var kind in stashed)
+            {
+                if (candidates.Count == 0) break;
+                int i = Random.Range(0, candidates.Count);
+                var t = candidates[i];
+                candidates.RemoveAt(i);
+                if (t.Reappear(0.4f)) redistribute[t] = kind;
+            }
+            stashed.Clear();
+            redistributeAt = Time.time;
+        }
+
+        static bool IsWeaponKind(TargetKind kind) => kind == TargetKind.Bomb || kind == TargetKind.MachineGun || kind == TargetKind.Shotgun;
+
+        // 化けさせ直してよいか (退避している間に、同じ種類が出た・チャレンジが始まったなど)
+        bool CanReoffer(TargetKind kind, Target target)
+        {
+            var gm = GameManager.I;
+            switch (kind)
+            {
+                case TargetKind.Sniper:
+                case TargetKind.MachineGunChallenge:
+                    return Count(TargetKind.Sniper) == 0 && Count(TargetKind.MachineGunChallenge) == 0 && !gm.ChallengeActive && CanOfferChallenge(kind, target, LifetimeOf(kind));
+                case TargetKind.Deluxe:
+                    return Count(kind) == 0 && gm.CanOfferDeluxe(target, deluxeLifetime);
+                case TargetKind.BlueOrb:
+                    return Count(kind) == 0 && gm.IsFever && !gm.BonusUsedThisFever && (gm.bonusStage == null || !gm.bonusStage.IsBusy);
+                case TargetKind.Explosive:
+                    return Count(kind) < maxExplosives;
+                case TargetKind.Bomb:
+                case TargetKind.MachineGun:
+                case TargetKind.Shotgun:
+                    return !gm.MachineGunChallengeActive;
+                default:
+                    return Count(kind) == 0 && CanOfferStage(kind, target, LifetimeOf(kind));
+            }
+        }
+
+        // 退避・再分配を進める (Update から)
+        void UpdateStash(GameManager gm)
+        {
+            foreach (var pair in reverting)
+                if (!pair.Key.IsVisible) toRestore.Add(pair.Key);
+            foreach (var t in toRestore) { ShowFace(t, reverting[t]); reverting.Remove(t); }
+            toRestore.Clear();
+
+            bool playing = gm != null && gm.State == GameState.Playing;
+            if (!playing || !gm.IsFever) { stashed.Clear(); redistribute.Clear(); } // フィーバーが終わった (屋台がそろう前に): 退避した的は捨てる
+            bool assembling = playing && gm.FeverAssembling;
+            if (wasAssembling && !assembling && playing && gm.IsFever) Redistribute(gm);
+            wasAssembling = assembling;
+            if (redistribute.Count > 0 && Time.time - redistributeAt > 3f) redistribute.Clear(); // 起き上がらなかった
         }
 
         void Start()
@@ -224,9 +306,11 @@ namespace ShootingGallery
                     pair.Key.Lower(); // デバッグモードでは撃たれるまで出しっぱなし
             }
             foreach (var t in toRestore) Restore(t);
+            toRestore.Clear();
 
             // 豪華タイムが終わった所から次の DELUXE の的までの間隔を数える
             var gm = GameManager.I;
+            UpdateStash(gm);
             bool deluxe = gm != null && gm.DeluxeActive;
             if (wasDeluxe && !deluxe) nextDeluxeTime = Time.time + Random.Range(deluxeGap.x, deluxeGap.y);
             wasDeluxe = deluxe;
@@ -577,10 +661,23 @@ namespace ShootingGallery
 
         void OnTargetRising(Target target)
         {
+            // 点数の的に戻る途中だった: 倒れきったので、元の顔で起き上がる
+            if (reverting.TryGetValue(target, out var back))
+            {
+                reverting.Remove(target);
+                ShowFace(target, back);
+            }
             var gm = GameManager.I;
             if (gm == null || gm.State != GameState.Playing) return;
             if (target.kind != TargetKind.Normal || target.face == null || active.ContainsKey(target)) return;
-            if (gm.FeverAssembling) return; // フィーバーの屋台がそろうまでは、特別な的を出さない
+            if (gm.FeverAssembling) { TryOfferWeapon(gm, target); return; } // フィーバーの屋台がそろうまでは、特別な的は出さない (武器の的だけは関係なく出る)
+
+            // 屋台がそろった後の再分配: 退避していた種類に化ける
+            if (redistribute.TryGetValue(target, out var again))
+            {
+                redistribute.Remove(target);
+                if (CanReoffer(again, target) && ApplyDisguise(target, again, PointsOf(again))) return;
+            }
 
             // デバッグモード: 輪の屋台ごとに決まった種類の特殊な的を、まだ出ていない種類から順に化けさせる (どの種類も1つずつ出たまま)
             if (gm.DebugMode)
@@ -638,7 +735,12 @@ namespace ShootingGallery
                 return;
             }
 
-            // 武器の的 (マシンガンチャレンジ中は持ち替えないので出さない)
+            TryOfferWeapon(gm, target);
+        }
+
+        // 武器の的 (マシンガンチャレンジ中は持ち替えないので出さない)。フィーバーとは関係なく出る (屋台がそろうのを待たない)
+        void TryOfferWeapon(GameManager gm, Target target)
+        {
             if (gm.MachineGunChallengeActive) return;
             if (Time.time < nextAllowedTime || active.Count - Count(TargetKind.Explosive) >= maxActive) return;
             if (Random.value > chance) return;
@@ -750,6 +852,12 @@ namespace ShootingGallery
             active.Remove(target);
             target.kind = TargetKind.Normal;
             target.points = d.originalPoints;
+            ShowFace(target, d);
+        }
+
+        // 化けていた見た目をしまい、元の顔に戻す
+        void ShowFace(Target target, Disguise d)
+        {
             if (target.face != null) target.face.SetActive(true);
             d.look.SetActive(false);
             d.look.transform.SetParent(transform, false);
