@@ -263,6 +263,7 @@ namespace ShootingGallery
             // (手元がコントローラーの模型の間は、どちらの手からも撃たない)
             bool rPressed = !controllerView && rightTrigger.WasPressedThisFrame();
             bool rHeld = !controllerView && rightTrigger.IsPressed();
+            if (RightGunArriving) rPressed = rHeld = false; // (的から右手へ飛んでくる間は、まだ撃てない)
             rightGun.TriggerInput(rPressed, rHeld);
 
             // コントローラーの間は弾を撃たない代わりに、コントローラーの先から白い玉が出る (看板のボタン (CREDITS・ページ送り) だけを押せる。PointerBall)
@@ -272,7 +273,7 @@ namespace ShootingGallery
                 if (leftTrigger.WasPressedThisFrame()) ShootPointerBall(leftHand);
             }
 
-            if (dualWield && leftGun != null)
+            if (dualWield && leftGun != null && !LeftGunArriving) // (的から左手へ飛んでくる間は、まだ撃てない)
             {
                 // VR は左手のトリガー、PC は右の銃と同じ左クリック / Space で、左右の銃をいっしょに撃つ
                 var leftInput = xr ? leftTrigger : rightTrigger;
@@ -341,9 +342,9 @@ namespace ShootingGallery
         };
 
         /// <summary>モード専用の武器を持たせる (時間が来ても自動ではハンドガンに戻らない。戻すのは GameManager.ReleaseStageWeapon)</summary>
-        public void GiveStageWeapon(WeaponType type, float duration)
+        public void GiveStageWeapon(WeaponType type, float duration, Vector3? from = null)
         {
-            GiveWeapon(type, duration);
+            GiveWeapon(type, duration, from);
             stageWeapon = true;
             stageGaugeFresh = true;
         }
@@ -354,7 +355,13 @@ namespace ShootingGallery
         public void SwitchStageWeapon(WeaponType type)
         {
             float left = weaponTimeLeft, full = weaponDuration;
-            GiveWeapon(type, left);
+            bool changed = type != weapon;
+            GiveWeapon(type, left, null, false); // (夏祭り・カジノの、見ている所での持ち替え: たぐり寄せず、手が少し震えるだけ)
+            if (changed)
+            {
+                XRBridge.Haptic(UnityEngine.XR.XRNode.RightHand, 0.3f, 0.06f);
+                if (dualWield) XRBridge.Haptic(UnityEngine.XR.XRNode.LeftHand, 0.3f, 0.06f);
+            }
             weaponDuration = full;
             stageWeapon = true;
         }
@@ -372,18 +379,27 @@ namespace ShootingGallery
             weaponTimeLeft = timeLeft;
         }
 
-        public void GiveWeapon(WeaponType type, float duration)
+        /// <summary>
+        /// 武器を持ち替える。銃が入れ替わる時は、手元へたぐり寄せる (PullGunsFrom): from = 持ち替えのもとになった的の場所。
+        /// 渡さない時は、目の前の少し先から (DefaultPullFrom)。いつもの銃 (ハンドガン) に戻る時は、たぐり寄せない
+        /// </summary>
+        public void GiveWeapon(WeaponType type, float duration, Vector3? from = null, bool pull = true)
         {
+            bool changed = type != weapon; // (銃が入れ替わる時だけ、たぐり寄せる)
             stageWeapon = false;
             weapon = type;
             weaponTimeLeft = duration;
             weaponDuration = duration;
             rightGun.SetWeapon(type);
             if (leftGun != null) leftGun.SetWeapon(type);
+            if (pull && changed && type != WeaponType.Handgun) PullGunsFrom(from ?? DefaultPullFrom());
         }
 
         public void ResetWeapon()
         {
+            // (いつもの銃に戻る時は、たぐり寄せない。飛んでくる途中だったら、その場で手の中に戻す)
+            StopFlight(rightGun, rightFlight);
+            StopFlight(leftGun, leftFlight);
             weapon = WeaponType.Handgun;
             weaponTimeLeft = 0f;
             stageWeapon = false;
@@ -412,10 +428,105 @@ namespace ShootingGallery
             if (leftGun != null) leftGun.SetModelHidden(on);
         }
 
-        public void SetDualWield(bool value)
+        /// <summary>
+        /// 二丁拳銃にする / やめる。flyFrom を渡すと、左手の銃がその場所 (撃ったフィーバーの的) から手元へ飛んでくる (PullGun)
+        /// </summary>
+        public void SetDualWield(bool value, Vector3? flyFrom = null)
         {
+            bool added = value && !dualWield; // (銃が増える時だけ、たぐり寄せる)
             dualWield = value;
+            StopFlight(leftGun, leftFlight);
             if (leftGun != null) leftGun.gameObject.SetActive(value);
+            if (added) PullGun(leftGun, leftFlight, flyFrom ?? DefaultPullFrom(), UnityEngine.XR.XRNode.LeftHand, 0f);
+        }
+
+        /// <summary>
+        /// 武器を持ち替えさせた的の場所 (from) から、手元の銃をたぐり寄せる (武器の的・フィーバーの的・スナイパーなど、銃が増える / 変わる時の共通の演出)。
+        /// 右手の銃と、二丁拳銃の時は左手の銃も (少し遅れて) 飛んでくる。手元に着くまで、その手では撃てない
+        /// </summary>
+        public void PullGunsFrom(Vector3 from)
+        {
+            PullGun(rightGun, rightFlight, from, UnityEngine.XR.XRNode.RightHand, 0f);
+            if (dualWield && leftGun != null && leftGun.gameObject.activeInHierarchy)
+                PullGun(leftGun, leftFlight, from, UnityEngine.XR.XRNode.LeftHand, 0.08f);
+        }
+
+        // 飛んでくる途中の銃の状態 (手ごとに1つ)
+        class GunFlight
+        {
+            public Coroutine routine;
+            public bool arriving;   // 飛んでくる途中 (その手ではまだ撃てない)
+            public bool captured;   // 手の中での位置・向きを覚えたか
+            public Vector3 homePos;
+            public Quaternion homeRot;
+        }
+        readonly GunFlight rightFlight = new GunFlight(), leftFlight = new GunFlight();
+
+        // たぐり寄せる場所を渡されなかった時: 目の前の少し先 (見ている方の 2.5m 先、目より少し下) から
+        Vector3 DefaultPullFrom()
+        {
+            if (head == null) return transform.position + transform.forward * 2.5f + Vector3.up;
+            var fwd = head.transform.forward;
+            fwd.y = 0f;
+            if (fwd.sqrMagnitude < 0.001f) fwd = transform.forward;
+            return head.transform.position + fwd.normalized * 2.5f + Vector3.down * 0.3f;
+        }
+        const float GunFlyTime = 0.45f; // (飛んでくる秒数)
+
+        bool RightGunArriving => rightFlight.arriving;
+        bool LeftGunArriving => leftFlight.arriving;
+
+        void PullGun(GunController gun, GunFlight f, Vector3 from, UnityEngine.XR.XRNode node, float delay)
+        {
+            if (gun == null || !isActiveAndEnabled || !gun.gameObject.activeInHierarchy) return;
+            StopFlight(gun, f);
+            f.routine = StartCoroutine(Fly(gun, f, from, node, delay));
+        }
+
+        // 飛んでいる途中ならやめて、手の中の元の位置・向きに戻す
+        void StopFlight(GunController gun, GunFlight f)
+        {
+            if (f.routine != null) StopCoroutine(f.routine);
+            f.routine = null;
+            f.arriving = false;
+            if (gun != null) gun.LaserSuppressed = false;
+            if (gun != null && f.captured)
+            {
+                gun.transform.localPosition = f.homePos;
+                gun.transform.localRotation = f.homeRot;
+            }
+        }
+
+        // 的の場所から手元へ: 少し山なりに飛びながら、くるくる回って (だんだんゆっくり) 手の中に収まる
+        System.Collections.IEnumerator Fly(GunController gun, GunFlight f, Vector3 from, UnityEngine.XR.XRNode node, float delay)
+        {
+            var t = gun.transform;
+            if (!f.captured)
+            {
+                f.homePos = t.localPosition;
+                f.homeRot = t.localRotation;
+                f.captured = true;
+            }
+            f.arriving = true;
+            gun.LaserSuppressed = true; // (レーザーは手元に着いてから)
+            for (float k = -delay / GunFlyTime; k < 1f; k += Time.deltaTime / GunFlyTime)
+            {
+                float u = Mathf.Clamp01(k);
+                float e = 1f - (1f - u) * (1f - u) * (1f - u); // (速く飛び出して、手元でゆっくり)
+                var parent = t.parent;
+                Vector3 to = parent != null ? parent.TransformPoint(f.homePos) : f.homePos;
+                Quaternion toRot = parent != null ? parent.rotation * f.homeRot : f.homeRot;
+                t.position = Vector3.Lerp(from, to, e) + Vector3.up * (Mathf.Sin(u * Mathf.PI) * 0.35f);
+                t.rotation = toRot * Quaternion.AngleAxis((1f - e) * 720f, Vector3.up) * Quaternion.AngleAxis((1f - e) * 180f, Vector3.forward);
+                yield return null;
+            }
+            t.localPosition = f.homePos;
+            t.localRotation = f.homeRot;
+            f.arriving = false;
+            gun.LaserSuppressed = false; // 手元に着いた: レーザーを出す
+            f.routine = null;
+            Sfx.Play("click"); // 手元に着いた: これで撃てる
+            XRBridge.Haptic(node, 0.5f, 0.08f);
         }
 
         // A ボタン (リセット) / B ボタン (エンドレスモード) の長押し

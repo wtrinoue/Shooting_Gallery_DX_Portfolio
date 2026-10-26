@@ -1057,27 +1057,27 @@ namespace ShootingGallery
                 case TargetKind.Bomb:
                     popupColor = new Color(1f, 0.55f, 0.15f);
                     if (MachineGunChallengeActive) { Sfx.Play("hit"); break; }
-                    player.GiveWeapon(WeaponType.Bomb, specialWeaponDuration);
+                    player.GiveWeapon(WeaponType.Bomb, specialWeaponDuration, point); // (撃った的から、銃が手元へ飛んでくる)
                     Sfx.Play("pickup");
                     ShowMessage("BOMB!", 1.5f, popupColor);
                     break;
                 case TargetKind.MachineGun:
                     popupColor = new Color(0.4f, 0.7f, 1f);
                     if (MachineGunChallengeActive) { Sfx.Play("hit"); break; }
-                    player.GiveWeapon(WeaponType.MachineGun, specialWeaponDuration);
+                    player.GiveWeapon(WeaponType.MachineGun, specialWeaponDuration, point);
                     Sfx.Play("pickup");
                     ShowMessage("MACHINE GUN!", 1.5f, popupColor);
                     break;
                 case TargetKind.Shotgun:
                     popupColor = new Color(0.4f, 1f, 0.5f);
                     if (MachineGunChallengeActive) { Sfx.Play("hit"); break; }
-                    player.GiveWeapon(WeaponType.Shotgun, specialWeaponDuration);
+                    player.GiveWeapon(WeaponType.Shotgun, specialWeaponDuration, point);
                     Sfx.Play("pickup");
                     ShowMessage("SHOTGUN!", 1.5f, popupColor);
                     break;
                 case TargetKind.Fever:
                     popupColor = new Color(1f, 0.3f, 0.3f);
-                    StartFever();
+                    StartFever(point); // 左手の銃が、撃った的から飛んでくる
                     break;
                 case TargetKind.Sniper:
                     popupColor = new Color(1f, 0.25f, 0.3f);

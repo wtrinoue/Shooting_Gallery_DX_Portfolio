@@ -71,7 +71,7 @@ namespace ShootingGallery
             sniper.Show(stall.transform.position - player.transform.position, eye);
 
             player.SetDualWield(false); // ライフルは右手の1丁だけ
-            player.GiveWeapon(WeaponType.Sniper, sniper.timeLimit);
+            player.GiveWeapon(WeaponType.Sniper, sniper.timeLimit, stall.transform.position + Vector3.up * 1.4f); // (スナイパーの的があった屋台から、ライフルが手元へ飛んでくる)
             SniperShotsLeft = Mathf.Max(1, sniper.shots);
             Sfx.Play("sniperready");
             ShowMessage($"SNIPER CHALLENGE!  {SniperShotsLeft} SHOTS\n{sniper.Tier.name} {sniper.Tier.distance:0}m  CENTER {sniper.MaxPoints} PTS", 3f, new Color(1f, 0.3f, 0.35f));
@@ -161,7 +161,9 @@ namespace ShootingGallery
         void GiveChallengeMachineGun()
         {
             machineGunGiven = true;
-            player.GiveWeapon(WeaponType.MachineGun, machineGunChallenge.ShootDuration);
+            // マシンガンを持っていなければ、せり上がった横長の屋台から手元へ飛んでくる (もう持っていれば、そのまま)
+            Vector3? from = player.Weapon != WeaponType.MachineGun ? (machineGunChallenge.stall != null ? machineGunChallenge.stall.transform.position : machineGunChallenge.transform.position) + Vector3.up * 1.3f : (Vector3?)null;
+            player.GiveWeapon(WeaponType.MachineGun, machineGunChallenge.ShootDuration, from);
             Sfx.Play("pickup");
             ShowMessage($"SHOOT ALL {machineGunChallenge.Total} CUPS!\nBOMBS INSIDE!", 2f, new Color(1f, 0.85f, 0.2f));
         }

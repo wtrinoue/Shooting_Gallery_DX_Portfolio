@@ -7,7 +7,7 @@ namespace ShootingGallery
     /// <summary>GameManager のうち、フィーバー (360度に屋台が並ぶ) と、時間で屋台の輪が広がるステージ。</summary>
     public partial class GameManager
     {
-        void StartFever()
+        void StartFever(Vector3? from = null) // from = 撃ったフィーバーの的の場所 (左手の銃がそこから飛んでくる)
         {
             feverLeft = DebugMode ? EndlessTime : feverDuration; // デバッグモードはフィーバーを終わらせない
             if (IsFever) return; // フィーバー中に再度当てたら延長だけ
@@ -15,7 +15,7 @@ namespace ShootingGallery
             BonusUsedThisFever = false;
             activeFeverStalls.Clear();
             ArrangeFeverStalls();
-            player.SetDualWield(true);
+            player.SetDualWield(true, from);
             Sfx.Play("fever");
             ShowMessage("FEVER TIME!!\nLOOK AROUND!", 3f, new Color(1f, 0.3f, 0.3f));
         }

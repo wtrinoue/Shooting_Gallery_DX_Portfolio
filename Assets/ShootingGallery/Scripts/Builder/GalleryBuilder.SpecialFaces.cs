@@ -6,7 +6,7 @@ namespace ShootingGallery
 {
     /// <summary>
     /// GalleryBuilder のうち、フィーバーの的と床下のハッチが開く的 (青い玉) の顔。美術館の絵と同じ Painter で、筆で塗ったような絵にする。
-    ///   フィーバー: 赤と白の縞 (同心円) の的に、太い文字で「Fever!」
+    ///   フィーバー: 赤と白の縞 (同心円) の的に、二丁拳銃と、太い文字で「Fever!」
     ///   ハッチ (青): 青と白の縞 (同心円) の的に、太い文字で「Under」
     /// 絵は丸く切り抜いた透明な PNG (Assets/ShootingGallery/Generated/Paintings) にして、Unlit の切り抜きの材質で円盤の前に貼る
     /// </summary>
@@ -16,12 +16,63 @@ namespace ShootingGallery
 
         static readonly Color FaceWhite = C(0.97f, 0.95f, 0.9f);
 
-        /// <summary>フィーバーの的の顔の材質 (赤と白の縞に、立体に見える太い文字で「Fever!」。濃い赤の厚みとふち取り)</summary>
+        /// <summary>フィーバーの的の顔の材質 (赤と白の縞に、上に二丁拳銃、その下に立体に見える太い文字で「Fever!」)</summary>
         Material FeverFaceMat() => TargetFaceMat("Face_Fever", 11, p =>
         {
             DrawStripedRings(p, C(0.88f, 0.12f, 0.12f), FaceWhite);
-            DrawWord3D(p, (q, c, s, w) => DrawFever(q, c, s, w), C(0.55f, 0.04f, 0.05f), C(0.3f, 0.01f, 0.02f), 12);
+            // 上の方に二丁拳銃 (握りが真ん中で背中合わせ、銃口は外側の少し上)。文字はその下へ少し下げる
+            var guns = new Painter(FaceSize, FaceSize, 12, true);
+            DrawCartoonPistol(guns, new Vector2(FaceSize / 2f + 26f, FaceSize / 2f + 60f), 0.78f, 10f, false); // 右の銃 (右を向く)
+            DrawCartoonPistol(guns, new Vector2(FaceSize / 2f - 26f, FaceSize / 2f + 60f), 0.78f, -10f, true); // 左の銃 (左を向く)
+            guns.Outline(5f, C(0.04f, 0.04f, 0.05f));
+            Composite(p, guns);
+            DrawWord3D(p, (q, c, s, w) => DrawFever(q, c, s + new Vector2(0f, -62f), w * 0.9f), C(0.55f, 0.04f, 0.05f), C(0.3f, 0.01f, 0.02f), 12);
         });
+
+        /// <summary>
+        /// まんが風のいつものハンドガン (四角い灰色の銃身と、茶色の握り)。遠近法で銃口がこちらへ向いて見える (後ろほど細く、銃口ほど太い)。
+        /// origin = 銃身の後ろの下の角 (握りの付け根)、angle = 銃口の向き (度。0 = 右)、mirror = 左右反転 (銃口が左)
+        /// </summary>
+        static void DrawCartoonPistol(Painter p, Vector2 origin, float scale, float angle, bool mirror)
+        {
+            var rot = Quaternion.Euler(0f, 0f, angle);
+            List<Vector2> T(params float[] xy)
+            {
+                var list = new List<Vector2>();
+                for (int i = 0; i + 1 < xy.Length; i += 2)
+                {
+                    float x = xy[i], y = xy[i + 1];
+                    float near = Mathf.Lerp(0.7f, 1.35f, Mathf.Clamp01(x / 200f)); // (後ろの端 0.7 倍 → 銃口 1.35 倍)
+                    var v = new Vector3(x * 0.62f, 28f + (y - 28f) * near, 0f);       // (長さを縮め、銃身の真ん中の高さ 28 を基準に上下へ広げる)
+                    if (mirror) v.x = -v.x;
+                    list.Add(origin + (Vector2)(rot * (v * scale)));
+                }
+                return list;
+            }
+            var gray = C(0.66f, 0.68f, 0.74f);
+            var grayDark = C(0.36f, 0.37f, 0.42f);
+            var shine = C(0.92f, 0.93f, 0.97f);
+            var brown = C(0.62f, 0.38f, 0.15f);
+            var brownLight = C(0.78f, 0.53f, 0.25f);
+            // 茶色の握り (少し後ろへ傾く) と、木目の明るい筋
+            p.Poly(T(-4, 4, 48, 4, 34, -120, -20, -112), brown);
+            for (int k = 0; k < 3; k++) p.Path(T(4 + k * 13, -14, -6 + k * 13, -100), 5f * scale, brownLight, 0.9f);
+            // 引き金の囲いと引き金
+            p.Path(T(52, -2, 54, -44, 96, -46, 108, -4), 9f * scale, grayDark);
+            p.Path(T(70, -6, 74, -32), 7f * scale, grayDark);
+            // 銃身の下の枠
+            p.Poly(T(40, -16, 160, -16, 160, 4, 40, 4), grayDark);
+            // 四角い灰色の銃身 (下に影、上につや)
+            p.Poly(T(-4, 0, 200, 0, 200, 56, -4, 56), gray);
+            p.Poly(T(-4, 0, 200, 0, 200, 10, -4, 10), grayDark, 0.7f);
+            p.Path(T(8, 44, 192, 44), 7f * scale, shine, 0.95f);
+            for (int k = 0; k < 4; k++) p.Path(T(10 + k * 8, 14, 10 + k * 8, 36), 3f * scale, grayDark, 0.9f); // 後ろのみぞ
+            p.Path(T(186, 56, 194, 66), 6f * scale, grayDark); // 照星
+            // 銃口 (こちらを向いているので、大きくて丸に近い)
+            var m = T(203, 28)[0];
+            p.Ellipse(m.x, m.y, 26f * scale, 38f * scale, grayDark, 1f, angle);
+            p.Ellipse(m.x, m.y, 15f * scale, 22f * scale, C(0.03f, 0.03f, 0.04f), 1f, angle);
+        }
 
         /// <summary>
         /// 立体に見える文字 (飛び出した看板の文字のように):

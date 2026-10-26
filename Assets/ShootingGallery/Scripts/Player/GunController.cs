@@ -248,8 +248,12 @@ namespace ShootingGallery
         readonly System.Collections.Generic.Dictionary<WeaponType, float> readyAt = new System.Collections.Generic.Dictionary<WeaponType, float>(); // 武器ごとの、弾込めが終わる時刻
         static readonly Vector3[] arcPoints = new Vector3[200]; // 放物線の点 (使い回し。0.02秒ごと、4秒分まで)
 
+        /// <summary>銃が的から手元へ飛んでくる間はレーザーを出さない (PlayerRig が手元に着くまで true にする)</summary>
+        public bool LaserSuppressed { get; set; }
+
         void ShowLaser(bool show)
         {
+            if (LaserSuppressed) show = false;
             if (laser != null && laser.gameObject.activeSelf != show) laser.gameObject.SetActive(show);
             if (laserDot != null && laserDot.gameObject.activeSelf != show) laserDot.gameObject.SetActive(show);
         }
@@ -258,8 +262,8 @@ namespace ShootingGallery
         void UpdateLaser()
         {
             if (laser == null || !HasLaser(current)) return;
-            ShowLaser(!IsReloading); // 次の1発までの間はレーザーを消す
-            if (IsReloading) return;
+            ShowLaser(!IsReloading); // 次の1発までの間はレーザーを消す (飛んでくる途中も消す: LaserSuppressed)
+            if (IsReloading || LaserSuppressed) return;
             var muzzle = MuzzleOf(current);
             Vector3 from = muzzle.position, dir = muzzle.forward;
             if (IsArc(current))
