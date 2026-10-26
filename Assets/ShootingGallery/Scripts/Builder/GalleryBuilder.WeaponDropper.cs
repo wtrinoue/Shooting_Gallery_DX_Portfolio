@@ -74,17 +74,8 @@ namespace ShootingGallery
 
             if (kind == TargetKind.BlueOrb)
             {
-                // 青い玉: フィーバーの赤い玉の青い版。輪が回っている
-                Prim(PrimitiveType.Sphere, "BlueOrb", look, new Vector3(0f, TargetDiscY, 0f), Vector3.one * 0.24f,
-                     Mat("Target_BlueOrb", new Color(0.15f, 0.45f, 1f), new Color(0.2f, 0.6f, 1.8f)));
-                var spin = Group(look, "Spinner");
-                spin.localPosition = new Vector3(0f, TargetDiscY, 0f);
-                var rotator = spin.gameObject.AddComponent<Rotator>();
-                rotator.axis = Vector3.up;
-                rotator.speed = 150f;
-                var ring = Prim(PrimitiveType.Cylinder, "Ring", spin, Vector3.zero, new Vector3(0.36f, 0.008f, 0.36f),
-                                Mat("Target_BlueRing", new Color(0.7f, 0.9f, 1f), new Color(0.3f, 0.5f, 0.9f)), false);
-                ring.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+                // 床下のハッチが開く的: 青と白の縞の的に、太い文字で「Under」 (美術館の絵と同じ Painter で描いた顔。GalleryBuilder.SpecialFaces)
+                PaintedTargetDisc(look, TargetDiscY, 0.34f, UnderFaceMat());
                 return look.gameObject;
             }
 

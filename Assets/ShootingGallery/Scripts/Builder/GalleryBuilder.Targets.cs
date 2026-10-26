@@ -68,14 +68,9 @@ namespace ShootingGallery
             var pivot = Group(root, "Pivot");
             target.visual = pivot;
 
+            // 赤と白の縞の的に、ハンドガン2丁の絵 (美術館の絵と同じ Painter で描いた顔。GalleryBuilder.SpecialFaces)
             Prim(PrimitiveType.Cube, "Stand", pivot, new Vector3(0f, 0.08f, 0f), new Vector3(0.04f, 0.16f, 0.04f), Mat("Target_Stand", new Color(0.3f, 0.3f, 0.32f)));
-            Prim(PrimitiveType.Sphere, "RedOrb", pivot, new Vector3(0f, 0.32f, 0f), Vector3.one * 0.26f, Mat("Target_Fever", new Color(1f, 0.1f, 0.1f), new Color(1.5f, 0.05f, 0.05f)));
-            var spinner = Group(pivot, "Spinner");
-            spinner.localPosition = new Vector3(0f, 0.32f, 0f);
-            var ring = Prim(PrimitiveType.Cylinder, "Ring", spinner, Vector3.zero, new Vector3(0.38f, 0.008f, 0.38f), Mat("Target_FeverRing", new Color(1f, 0.8f, 0.2f), new Color(0.6f, 0.4f, 0f)), false);
-            ring.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-            target.spinner = spinner;
-            target.spinSpeed = 150f;
+            PaintedTargetDisc(pivot, 0.32f, 0.36f, FeverFaceMat());
             return target;
         }
 
