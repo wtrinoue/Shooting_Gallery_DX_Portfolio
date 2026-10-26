@@ -249,6 +249,35 @@ namespace ShootingGallery
             ResetWeapon();
         }
 
+        // ---- 視点のずれの見張り (原因を調べるためのログ) ----
+        // プレイヤー (この物)・CameraOffset が、コードで動かされたらログに出す (どのモードの何で動いたか、スタックで分かる)。
+        // 1フレームが長くかかった (VR では画面が引きずられて、視点がずれたように見える) 時もログに出す
+        [Tooltip("視点が動いた時・フレームが重かった時に Console へログを出す (調べ終わったら切る)")]
+        public bool logViewChanges = true;
+        Vector3 watchPos, watchScale, watchOffset;
+        Quaternion watchRot;
+        bool watchReady;
+
+        void LateUpdate()
+        {
+            if (!logViewChanges) return;
+            var off = cameraOffset != null ? cameraOffset.localPosition : Vector3.zero;
+            if (watchReady)
+            {
+                if ((transform.localPosition - watchPos).sqrMagnitude > 1e-6f || (transform.localScale - watchScale).sqrMagnitude > 1e-6f
+                    || Quaternion.Angle(transform.localRotation, watchRot) > 0.05f || (off - watchOffset).sqrMagnitude > 1e-6f)
+                    Debug.Log($"[ViewWatch] 視点が動きました: 位置 {watchPos} → {transform.localPosition}, 向き {watchRot.eulerAngles} → {transform.localRotation.eulerAngles}, " +
+                              $"大きさ {watchScale} → {transform.localScale}, CameraOffset {watchOffset} → {off}");
+                if (Time.unscaledDeltaTime > 0.05f)
+                    Debug.Log($"[ViewWatch] フレームが重くなりました: {Time.unscaledDeltaTime * 1000f:0} ms (VR では画面が引きずられて、視点がずれたように見えます)");
+            }
+            watchPos = transform.localPosition;
+            watchScale = transform.localScale;
+            watchRot = transform.localRotation;
+            watchOffset = off;
+            watchReady = true;
+        }
+
         void Update()
         {
             bool xr = XRBridge.IsActive;

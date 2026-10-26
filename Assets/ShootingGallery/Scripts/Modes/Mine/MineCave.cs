@@ -547,7 +547,10 @@ namespace ShootingGallery
                 sparkles[i].localRotation = Quaternion.Euler(0f, 0f, time * 25f + sparklePhase[i] * 10f);
             }
             for (int i = 0; i < flickerLights.Length; i++)
-                flickerLights[i].intensity = lightBase[i] * (0.82f + 0.18f * Mathf.PerlinNoise(time * 3.2f, i * 7.3f) + 0.05f * Mathf.Sin(time * 17f + i));
+                // 火の明かりのゆらぎ: ゆっくりした明暗のうねり + 速いちらつき + ときどきふっと暗くなる
+                flickerLights[i].intensity = lightBase[i] * (0.72f + 0.26f * Mathf.PerlinNoise(time * 2.6f, i * 7.3f)
+                                                             + 0.1f * (Mathf.PerlinNoise(time * 11f, i * 3.1f + 50f) - 0.5f)
+                                                             - 0.12f * Mathf.Pow(Mathf.PerlinNoise(time * 0.9f, i * 1.7f + 20f), 6f));
             if (flames != null)
                 for (int i = 0; i < flames.Length; i++)
                 {
