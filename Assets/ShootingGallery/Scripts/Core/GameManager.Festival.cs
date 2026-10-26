@@ -45,7 +45,7 @@ namespace ShootingGallery
             ShowMessage("SUMMER FESTIVAL!!\nWIN GAMES = EARN MONEY\nSPEND IT AT THE FOOD STALL!", 3.5f, new Color(1f, 0.55f, 0.35f));
         }
 
-        // 見ている屋台が変わったら、その屋台の武器に持ち替える
+        // 銃の向きの先の屋台が変わったら、その手の銃だけ、その屋台の武器に持ち替える (二丁拳銃の時は左右別々)
         void UpdateFestival()
         {
             if (!FestivalActive) return;
@@ -54,10 +54,24 @@ namespace ShootingGallery
                 EndFestival();
                 return;
             }
-            var w = festivalStage.WeaponFor(player.head.transform.forward, player.Weapon);
-            if (w == player.Weapon) return;
-            player.SwitchStageWeapon(w); // (ゲージは続きから)
-            Sfx.Play("click");
+            if (player.rightGun != null)
+            {
+                var w = festivalStage.WeaponFor(player.rightGun.transform.forward, player.Weapon);
+                if (w != player.Weapon)
+                {
+                    player.SwitchStageWeapon(w); // (ゲージは続きから)
+                    Sfx.Play("click");
+                }
+            }
+            if (player.DualWield && player.leftGun != null)
+            {
+                var w = festivalStage.WeaponFor(player.leftGun.transform.forward, player.LeftWeapon);
+                if (w != player.LeftWeapon)
+                {
+                    player.SwitchStageWeapon(w, true);
+                    Sfx.Play("click");
+                }
+            }
         }
 
         /// <summary>夏祭りモードの時間切れ: 提灯が消えて夏祭りの屋台が沈み、いつもの屋台がせり上がる (ラウンドの終わり・リセットの時はすぐ隠す)</summary>

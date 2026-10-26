@@ -12,8 +12,10 @@ namespace ShootingGallery
     /// </summary>
     public class BonusStage : MonoBehaviour
     {
-        [Tooltip("絞り羽根。穴のふちにある回転の軸 (閉じた向きで置いておく)。開く時はこの Y 軸まわりに回って床の下へ隠れる")]
+        [Tooltip("羽根。穴のふちにある回転の軸 (閉じた向きで置いておく)。開く時は irisAxis のまわりに回る")]
         public Transform[] irisBlades;
+        [Tooltip("開く時に羽根が回る軸 (羽根のローカル)。Y = 床の上で回って、周りの床の下へ隠れる")]
+        public Vector3 irisAxis = Vector3.up;
         [Tooltip("開く時に羽根が回る角度 (度)")]
         public float irisOpenAngle = 160f;
         public float slideTime = 1.4f;
@@ -24,6 +26,16 @@ namespace ShootingGallery
         public GameObject[] lampsOn;
         [Tooltip("床が開いている間は隠す物 (足元の目印など)")]
         public GameObject[] hideWhileOpen;
+        [Tooltip("開く時に、屋台ごとに目の前の床から出る「下を見て」の矢印の見本 (屋台の数だけ複製する)")]
+        public BonusArrow arrow;
+        [Tooltip("矢印のハッチを置ける、穴の真ん中からいちばん近い距離 (穴のふちにかからない)")]
+        public float arrowRadius = 2.4f;
+        [Tooltip("矢印を出しておく秒数 (たったら、しまう)")]
+        public float arrowDuration = 6f;
+        [Tooltip("開ききってから、この秒数たったら閉じる")]
+        public float openDuration = 10f;
+        const float ArrowHideTime = 0.8f; // 矢印がしまわれきるまでの秒数 (台が下がる + 扉が閉じる + 小さくなる)
+        float closeWait = 0.3f;
 
         [Tooltip("的の点数を書く文字 (targets と同じ順)")]
         public TextMesh[] pointLabels;
@@ -65,9 +77,10 @@ namespace ShootingGallery
             foreach (var t in targets) t.SetAvailable(false);
             SetIris(0f);
             SetLamps(0);
+            HideArrows(true);
         }
 
-        /// <summary>絞りを開けてボーナスステージを始める</summary>
+        /// <summary>絞りを開けてボーナスステージを始める。しばらくの間、出ている屋台の目の前に「下を見て」の矢印が出る (UpdateArrows)</summary>
         public void Open()
         {
             if (IsBusy) return;
@@ -76,6 +89,7 @@ namespace ShootingGallery
             AssignPoints();
             foreach (var go in hideWhileOpen) if (go != null) go.SetActive(false);
             phase = Phase.Opening;
+            arrowTimeLeft = 0f; // (「下を見て」の矢印は、絞りが開ききってから出す)
             timer = 0f;
             Sfx.Play("door");
         }
@@ -101,6 +115,85 @@ namespace ShootingGallery
             return points;
         }
 
+        // ---- 「下を見て」の矢印 (屋台ごとに1つ。arrow を見本に複製して使い回す) ----
+        float arrowTimeLeft;
+        readonly System.Collections.Generic.Dictionary<Stall, BonusArrow> arrows = new System.Collections.Generic.Dictionary<Stall, BonusArrow>();
+        readonly System.Collections.Generic.List<BonusArrow> spareArrows = new System.Collections.Generic.List<BonusArrow>();
+        readonly System.Collections.Generic.List<Stall> goneStalls = new System.Collections.Generic.List<Stall>();
+
+        /// <summary>矢印を出している間か (GameManager はこの間だけ UpdateArrows を呼ぶ)</summary>
+        public bool ArrowsActive => arrowTimeLeft > 0f || arrows.Count > 0;
+
+        /// <summary>
+        /// 出ている屋台 (stalls。せり上がる・滑る途中も含む) の目の前に、矢印を出す / 屋台といっしょに滑らせる。毎フレーム呼ぶ。
+        /// 屋台の位置は親 (穴の真ん中が原点) のローカル座標。front = 屋台の中心から、足元のハッチの枠の手前の端まで。
+        /// 新しく出てきた屋台には新しい矢印が出て、いなくなった屋台の矢印はしまう。決まった秒数がたったら全部しまう
+        /// </summary>
+        public void UpdateArrows(System.Collections.Generic.List<Stall> stalls, float front)
+        {
+            if (arrow == null) return;
+            arrowTimeLeft -= Time.deltaTime;
+            if (arrowTimeLeft <= 0f) { HideArrows(); return; }
+            goneStalls.Clear();
+            foreach (var kv in arrows)
+                if (!stalls.Contains(kv.Key)) goneStalls.Add(kv.Key);
+            foreach (var s in goneStalls) ReleaseArrow(s);
+            foreach (var s in stalls)
+            {
+                if (s == null || !s.gameObject.activeInHierarchy) continue;
+                if (!arrows.TryGetValue(s, out var a))
+                {
+                    a = TakeArrow();
+                    arrows[s] = a;
+                }
+                // 屋台の足元のハッチのすぐ手前 (穴のふちにはかからない)。屋台が滑ると、いっしょに滑る
+                var p = s.transform.localPosition;
+                var dir = new Vector3(p.x, 0f, p.z);
+                float dist = dir.magnitude;
+                if (dist < 0.01f) continue;
+                float r = Mathf.Max(arrowRadius, dist - front - a.width / 2f - 0.06f);
+                a.Place(dir / dist * r);
+                a.Show();
+            }
+        }
+
+        BonusArrow TakeArrow()
+        {
+            for (int i = spareArrows.Count - 1; i >= 0; i--)
+            {
+                var a = spareArrows[i];
+                spareArrows.RemoveAt(i);
+                if (a != null) return a;
+            }
+            var copy = Instantiate(arrow, arrow.transform.parent);
+            copy.name = arrow.name;
+            copy.HideImmediate();
+            return copy;
+        }
+
+        void ReleaseArrow(Stall s)
+        {
+            if (!arrows.TryGetValue(s, out var a)) return;
+            arrows.Remove(s);
+            if (a == null) return;
+            a.Hide();
+            spareArrows.Add(a);
+        }
+
+        /// <summary>矢印を全部しまう。instant ならその場で消す</summary>
+        void HideArrows(bool instant = false)
+        {
+            arrowTimeLeft = 0f;
+            foreach (var a in arrows.Values)
+            {
+                if (a == null) continue;
+                if (instant) a.HideImmediate(); else a.Hide();
+                spareArrows.Add(a);
+            }
+            arrows.Clear();
+            if (instant && arrow != null) arrow.HideImmediate();
+        }
+
         /// <summary>途中で終わる (フィーバー終了など)</summary>
         public void Close()
         {
@@ -110,6 +203,9 @@ namespace ShootingGallery
         void BeginClose()
         {
             foreach (var t in targets) t.Lower();
+            // 地下室が閉じ始めた: 矢印も残っていればしまう (しまいきってから絞りを回す)
+            closeWait = arrows.Count > 0 ? ArrowHideTime : 0.3f;
+            HideArrows();
             phase = Phase.Closing;
             timer = 0f;
             Sfx.Play("door");
@@ -128,6 +224,8 @@ namespace ShootingGallery
                     {
                         foreach (var t in targets) t.SetAvailable(true); // manualControl なので隠れたまま、下で1つずつ出す
                         raised = 0;
+                        // 「下を見て」の矢印は、絞りが開ききってから出す (回っている羽根が、矢印のハッチの穴から見えないように)
+                        arrowTimeLeft = arrowDuration;
                         phase = Phase.Active;
                         timer = 0f;
                     }
@@ -137,6 +235,7 @@ namespace ShootingGallery
                     // 的を1つずつポンポンと出す
                     while (raised < targets.Length && timer >= raised * raiseInterval)
                         targets[raised++].Raise(9999f);
+                    if (timer >= openDuration) BeginClose(); // 開いてから決まった秒数で閉じる
                     break;
 
                 case Phase.Finishing:
@@ -144,9 +243,9 @@ namespace ShootingGallery
                     break;
 
                 case Phase.Closing:
-                    // 的が縮んで消えるのを少し待ってから絞りを閉じる
-                    SetIris(1f - Ease((timer - 0.3f) / slideTime));
-                    if (timer >= slideTime + 0.3f)
+                    // 的が縮んで消える (と、矢印がしまわれる) のを少し待ってから絞りを閉じる
+                    SetIris(1f - Ease((timer - closeWait) / slideTime));
+                    if (timer >= slideTime + closeWait)
                     {
                         foreach (var t in targets) t.SetAvailable(false);
                         SetLamps(0);
@@ -183,11 +282,15 @@ namespace ShootingGallery
             return t * t * (3f - 2f * t); // ゆっくり動き出して、ゆっくり止まる
         }
 
-        // 絞り羽根を回す (0 = 閉じている, 1 = 開いている)。全部の羽根が同じ向きに回るので、渦を巻くように開く
+        // 絞り羽根を回す (0 = 閉じている, 1 = 開いている)。全部の羽根が同じ向きに回るので、渦を巻くように開く。
+        // 開ききった羽根は周りの床の下にあって、屋台や矢印のハッチの穴から見えてしまうので、SetActive(false) で消しておく
         void SetIris(float open)
         {
+            bool hide = open >= 0.999f;
             for (int i = 0; i < irisBlades.Length; i++)
-                irisBlades[i].localRotation = closedRotations[i] * Quaternion.Euler(0f, irisOpenAngle * open, 0f);
+                if (irisBlades[i].gameObject.activeSelf == hide) irisBlades[i].gameObject.SetActive(!hide);
+            for (int i = 0; i < irisBlades.Length; i++)
+                irisBlades[i].localRotation = closedRotations[i] * Quaternion.AngleAxis(irisOpenAngle * open, irisAxis);
         }
 
         void SetLamps(int litCount)

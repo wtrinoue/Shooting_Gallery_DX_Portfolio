@@ -44,7 +44,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9674896361c41f342bea727836d6de94, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ShootingGallery.GalleryBuilder
-  stallRadius: 3.5
+  stallRadius: 4.4
   roundDuration: 120
   feverDuration: 20
   weaponSeconds: 3

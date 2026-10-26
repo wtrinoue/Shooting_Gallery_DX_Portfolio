@@ -65,6 +65,7 @@ namespace ShootingGallery
             CaptureScale();
             if (moveRoutine != null) StopCoroutine(moveRoutine);
             HideChute();
+            HideHatch(true);
             moveRoutine = null;
             worldScaling = false;
             enableTargetsOnArrive = false;
@@ -73,6 +74,7 @@ namespace ShootingGallery
             transform.localRotation = restRot;
             transform.localScale = restScale;
             SetTargetsAvailable(enableTargets);
+            ReadyHatch(true);
         }
 
         /// <summary>地面の下へ瞬時に隠す (起動時用 / 発掘モードで、プレイヤーから見えなくなった屋台を隠す時)</summary>
@@ -82,6 +84,7 @@ namespace ShootingGallery
             CaptureScale();
             SetTargetsAvailable(false);
             HideChute();
+            HideHatch(true);
             transform.localScale = restScale;
             transform.localPosition = restPos + Vector3.down * hiddenDepth;
             gameObject.SetActive(false);
@@ -92,6 +95,7 @@ namespace ShootingGallery
         {
             if (moveRoutine != null) StopCoroutine(moveRoutine);
             HideChute();
+            HideHatch(true);
             moveRoutine = null;
             CaptureScale();
             transform.localScale = restScale;
@@ -102,13 +106,72 @@ namespace ShootingGallery
             transform.localPosition = restPos + Vector3.down * hiddenDepth;
         }
 
-        /// <summary>地下からせり上がる。enableTargets = false なら的は出さない (ゲーム終了時に屋台だけ戻す時など)</summary>
+        // ---- 足元の長方形のハッチ (せり上がる / しまわれる時だけ床に出る。ほかの動きの時は小さくなって消える) ----
+        const float HatchOpenTime = 0.35f, HatchCloseTime = 0.35f;
+        StallHatch hatch;
+        float hatchGoneAt; // しまう時、閉じたハッチが消えきる時刻
+        /// <summary>しまっている途中の足元のハッチが、閉じて消えきるまでの秒数 (同じ場所に別の屋台を出す前に待つ)</summary>
+        public float HatchClearIn => hatch != null && hatch.Shown ? Mathf.Max(0f, hatchGoneAt - Time.time) : 0f;
+        float hatchTop; // 屋台のいちばん高い所 (足元から)。しまう時、これが床の下に入りきってからハッチを閉じる
+
+        StallHatch Hatch
+        {
+            get
+            {
+                if (hatch == null && StallHatch.Available && transform.parent != null)
+                {
+                    CaptureRestPos();
+                    CaptureScale();
+                    hatch = StallHatch.Create(this, restScale, parachute, hiddenDepth + 0.05f, out hatchTop, out float pitDepth);
+                    hiddenDepth = Mathf.Max(hiddenDepth, pitDepth - 0.05f); // しまった屋台のてっぺんが、閉じた扉より下になる深さまで沈める
+                }
+                return hatch;
+            }
+        }
+
+        /// <summary>足元のハッチをしまう (屋台は動かさない)。instant ならその場で消す</summary>
+        public void HideHatch(bool instant = false)
+        {
+            if (hatch != null) hatch.Hide(instant);
+        }
+
+        /// <summary>
+        /// 屋台が地面に着いて止まった: いつでも下へしまえるように、足元に開いたハッチ (と床板) を用意しておく。
+        /// instant なら、ふくらむ様子も見せずにその場で出す
+        /// </summary>
+        void ReadyHatch(bool instant = false)
+        {
+            if (!gameObject.activeInHierarchy || worldScaling || Hatch == null) return;
+            hatch.Place(restPos, restRot);
+            hatch.ShowOpen(instant);
+        }
+
+        void Start()
+        {
+            // 始めから地面に立っている屋台 (タイトルのメイン屋台など) にも、足元のハッチを用意する
+            if (moveRoutine == null && (transform.localPosition - restPos).sqrMagnitude < 0.0001f) ReadyHatch(true);
+        }
+
+        /// <summary>
+        /// 地下からせり上がる。enableTargets = false なら的は出さない (ゲーム終了時に屋台だけ戻す時など)。
+        /// 地下から出る時は、先に足元のハッチが開いてから上がる (全体の秒数は duration のまま)
+        /// </summary>
         public void Rise(float duration, bool enableTargets = true)
         {
             CaptureRestPos();
-            gameObject.SetActive(true);
+            bool hidden = !gameObject.activeSelf;
+            bool below = hidden || transform.localPosition.y < restPos.y - 0.05f;
             enableTargetsOnArrive = enableTargets;
-            Move(restPos, transform.localRotation, duration, null);
+            float wait = 0f;
+            if (below && Hatch != null)
+            {
+                // 隠れていた屋台は、穴の底 (てっぺんまで閉じた扉より下) から出す。ハッチを作る前に隠した屋台は浅い所にいることがある
+                if (hidden) transform.localPosition = restPos + Vector3.down * hiddenDepth;
+                hatch.Place(restPos, restRot);
+                wait = Mathf.Min(hatch.Open(HatchOpenTime), duration * 0.4f);
+            }
+            gameObject.SetActive(true);
+            Move(restPos, transform.localRotation, duration - wait, () => ReadyHatch(), wait);
         }
 
         const float BuryDepth = 6f; // 砂に埋もれる時に、傾いた向きにそって沈む深さ
@@ -126,6 +189,7 @@ namespace ShootingGallery
             SetTargetsAvailable(false);
             if (moveRoutine != null) StopCoroutine(moveRoutine);
             HideChute();
+            HideHatch();
             worldScaling = false;
             transform.localScale = restScale;
             buryTilt = RandomTilt();
@@ -139,6 +203,7 @@ namespace ShootingGallery
             CaptureScale();
             if (moveRoutine != null) StopCoroutine(moveRoutine);
             HideChute();
+            HideHatch();
             worldScaling = false;
             transform.localScale = restScale;
             buryTilt = RandomTilt();
@@ -192,6 +257,7 @@ namespace ShootingGallery
             }
             transform.localPosition = restPos;
             transform.localRotation = restRot;
+            ReadyHatch();
             if (enableTargetsOnArrive)
             {
                 enableTargetsOnArrive = false;
@@ -215,6 +281,7 @@ namespace ShootingGallery
             SetTargetsAvailable(false);
             if (moveRoutine != null) StopCoroutine(moveRoutine);
             HideChute();
+            HideHatch();
             worldScaling = false;
             transform.localScale = restScale;
             moveRoutine = StartCoroutine(AdriftRoutine(ship, shipHalfWidth, sternZ, seaY, delay, splash));
@@ -318,6 +385,7 @@ namespace ShootingGallery
             SetTargetsAvailable(false);
             if (moveRoutine != null) StopCoroutine(moveRoutine);
             HideChute();
+            HideHatch();
             worldScaling = false;
             transform.localScale = restScale;
             moveRoutine = StartCoroutine(FallRoutine(duration, delay));
@@ -408,6 +476,7 @@ namespace ShootingGallery
             CaptureScale();
             if (moveRoutine != null) StopCoroutine(moveRoutine);
             HideChute();
+            HideHatch();
             worldScaling = false;
             transform.localScale = restScale;
             gameObject.SetActive(true);
@@ -446,6 +515,7 @@ namespace ShootingGallery
                 SetTargetsAvailable(true);
             }
             moveRoutine = null;
+            ReadyHatch();
             // パラシュートがしぼんで横へ倒れ、消える
             if (parachute != null)
             {
@@ -469,6 +539,11 @@ namespace ShootingGallery
             enableTargetsOnArrive = false;
             SetTargetsAvailable(false);
             Move(restPos + Vector3.down * hiddenDepth, transform.localRotation, duration, () => gameObject.SetActive(false));
+            if (Hatch == null) return;
+            // 開いたハッチの中へ沈み、屋台のてっぺんが床の下に入りきったら閉じる (MoveTo の ease out: e = 1 - (1 - t)^3 を t について解く)
+            hatch.Place(restPos, restRot);
+            float e = hiddenDepth > 0f ? Mathf.Clamp01((hatchTop + 0.15f) / hiddenDepth) : 1f;
+            hatchGoneAt = Time.time + hatch.CloseAfter(duration * (1f - Mathf.Pow(1f - e, 1f / 3f)), HatchCloseTime);
         }
 
         /// <summary>
@@ -486,7 +561,8 @@ namespace ShootingGallery
                 transform.localPosition = restPos + Vector3.down * hiddenDepth;
                 return;
             }
-            Move(restPos, localRot, duration, null);
+            HideHatch(); // 屋台が足元のハッチから離れていく
+            Move(restPos, localRot, duration, () => ReadyHatch()); // 着いた所でまた足元にハッチを用意する
         }
 
         /// <summary>
@@ -502,6 +578,7 @@ namespace ShootingGallery
             SetTargetsAvailable(false);
             if (moveRoutine != null) StopCoroutine(moveRoutine);
             HideChute();
+            HideHatch();
             moveRoutine = StartCoroutine(Squash(1f, 0f, duration, () =>
             {
                 transform.localScale = restScale;
@@ -517,6 +594,7 @@ namespace ShootingGallery
             CaptureScale();
             if (moveRoutine != null) StopCoroutine(moveRoutine);
             HideChute();
+            HideHatch();
             moveRoutine = null;
             gameObject.SetActive(true);
             transform.localPosition = restPos;
@@ -538,6 +616,7 @@ namespace ShootingGallery
             }
             transform.localScale = grow ? restScale : new Vector3(restScale.x * 0.001f, restScale.y, restScale.z);
             moveRoutine = null;
+            if (grow) ReadyHatch();
             if (enableTargetsOnArrive)
             {
                 enableTargetsOnArrive = false;
@@ -557,6 +636,7 @@ namespace ShootingGallery
             CaptureScale();
             if (moveRoutine != null) StopCoroutine(moveRoutine);
             HideChute();
+            HideHatch();
             moveRoutine = null;
             worldScaling = true;
             if (growing)
@@ -594,6 +674,7 @@ namespace ShootingGallery
         {
             worldScaling = false;
             SetWorldScale(1f);
+            ReadyHatch();
             if (!enableTargetsOnArrive) return;
             enableTargetsOnArrive = false;
             SetTargetsAvailable(true);
@@ -606,18 +687,19 @@ namespace ShootingGallery
             return 1f + (c + 1f) * t * t * t + c * t * t;
         }
 
-        void Move(Vector3 toPos, Quaternion toRot, float duration, System.Action onDone)
+        void Move(Vector3 toPos, Quaternion toRot, float duration, System.Action onDone, float delay = 0f)
         {
             if (moveRoutine != null) StopCoroutine(moveRoutine);
             HideChute();
             CaptureScale();
             transform.localScale = restScale; // 入れ替えの途中で止められても元の大きさに戻す
             worldScaling = false;
-            moveRoutine = StartCoroutine(MoveTo(toPos, toRot, duration, onDone));
+            moveRoutine = StartCoroutine(MoveTo(toPos, toRot, duration, onDone, delay));
         }
 
-        IEnumerator MoveTo(Vector3 toPos, Quaternion toRot, float duration, System.Action onDone)
+        IEnumerator MoveTo(Vector3 toPos, Quaternion toRot, float duration, System.Action onDone, float delay)
         {
+            if (delay > 0f) yield return new WaitForSeconds(delay); // 足元のハッチが開くのを待つ
             Vector3 fromPos = transform.localPosition;
             Quaternion fromRot = transform.localRotation;
             float t = 0f;

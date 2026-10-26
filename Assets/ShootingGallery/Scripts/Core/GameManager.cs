@@ -26,7 +26,7 @@ namespace ShootingGallery
         [Tooltip("WORLD GATE の輪の屋台 (1段だけの屋台 6軒。1軒目が正面)。WORLD GATE の間はメイン屋台・フィーバー屋台の代わりにこれを使う")]
         public Stall[] gateStalls;
         [Tooltip("プレイヤー(中心)からメイン屋台までの距離 (フィーバー外)。輪の半径はこれより小さくならない")]
-        public float stallRadius = 3.5f;
+        public float stallRadius = 4.4f;
         [Tooltip("輪に並べた時の、隣どうしの屋台 (屋根の手前の角・提灯) の間のすき間 (m)。輪の半径はこれが空くように決まる")]
         public float stallGap = 0.05f;
         [Tooltip("タイトルの真ん中の 100,000 POINTS の的 (100,000 点を取るまでの時間を競う)")]
@@ -45,6 +45,10 @@ namespace ShootingGallery
         public Font font;
         [Tooltip("青い玉を撃つと始まるボーナスステージ (足元の床が開いて地下室の的を撃つ)")]
         public BonusStage bonusStage;
+        [Tooltip("屋台の足元の長方形のハッチの材質 (0 = 枠, 1 = 穴の暗がり, 2 = 扉, 3 = 扉の合わせ目の線)")]
+        public Material[] stallHatchMaterials;
+        [Tooltip("屋台が増える時 (フィーバー・WORLD GATE・屋台の拡張) に、メイン屋台の前の床から出る左右の赤い矢印 (左向き, 右向き)")]
+        public BonusArrow[] sideArrows;
         [Tooltip("スナイパーの的を撃つと始まるスナイパーチャレンジ (遠くの大きな的を1発で狙う)")]
         public SniperChallenge sniper;
         [Tooltip("マシンガンチャレンジの的を撃つと始まるマシンガンチャレンジ (屋台3軒分に並んだ的をマシンガンで撃つ)")]
@@ -379,6 +383,7 @@ namespace ShootingGallery
         void Awake()
         {
             I = this;
+            StallHatch.materials = stallHatchMaterials;
             highScore = PlayerPrefs.GetInt(HighScoreKey, 0);
             bestTime = PlayerPrefs.GetFloat(BestTimeKey, 0f);
             Stall.TargetsShowing += OnStallTargetsShowing;
@@ -525,6 +530,8 @@ namespace ShootingGallery
             UpdateStageBgm(); // モードの BGM の大きさ (GameManager.Bgm.cs)
             UpdateFinale(); // 2 MIN の終わりのクラッカーと拍手 (GameManager.Finale.cs)
             UpdateControllerView(); // タイトルで操作方法の看板を見ている間は、手元をコントローラーの模型に
+            UpdateBonusArrows(); // ボーナスステージが開く時の「下を見て」の矢印を、屋台の目の前へ (屋台が滑ると、いっしょに滑る)
+            UpdateSideArrows(); // 屋台が増えた時の、左右を見てほしい赤い矢印 (GameManager.Fever.cs)
             if (State == GameState.Playing)
             {
                 elapsed += Time.deltaTime;
@@ -1032,7 +1039,7 @@ namespace ShootingGallery
                     if (bonusStage != null && !bonusStage.IsBusy)
                     {
                         BonusUsedThisFever = true;
-                        bonusStage.Open();
+                        bonusStage.Open(); // しばらく、屋台ごとに目の前の床から「下を見て」の矢印が出る (UpdateBonusArrows)
                         Sfx.Play("bonus");
                         ShowMessage("BONUS CHANCE!\nLOOK DOWN!!", 2.5f, popupColor);
                     }
@@ -1292,6 +1299,7 @@ namespace ShootingGallery
             foreach (var s in stageStalls)
             {
                 if (!shrink) s.Sink(stallMoveDuration); // 怪獣モード (shrink) は集めるだけ。床といっしょに縮める (ScaleWorld)
+                else s.HideHatch(); // 屋台を残したまま世界が変わる: 足元のハッチ (地下のしまう所) は先に片付けておく
             }
         }
 

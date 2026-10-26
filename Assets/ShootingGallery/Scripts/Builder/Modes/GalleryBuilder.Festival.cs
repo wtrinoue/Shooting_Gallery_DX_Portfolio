@@ -10,7 +10,7 @@ namespace ShootingGallery
     /// </summary>
     public partial class GalleryBuilder
     {
-        const float FestivalStallDistance = 4.6f; // プレイヤーから屋台の原点まで
+        const float FestivalStallDistance = 4.9f; // プレイヤーから屋台の原点まで (隣の屋台の足元のハッチと重ならない距離)
         const float FestivalStallWidth = 6.4f;
         const float FestivalFrontZ = -1.0f;       // 屋台のローカルで、いちばん手前 (カウンター) の位置
         const float FestivalRoofY = 3.3f;
@@ -26,6 +26,7 @@ namespace ShootingGallery
             var ringToss = BuildRingTossStall(root);
             var goldfish = BuildGoldfishStall(root, out var water, out var fish, out var scoopPoi, out var bowl);
             var food = BuildFoodStall(root, out var slots, out var balance);
+            LayoutFestivalStalls(new[] { shateki, ringToss, goldfish, food });
             var lanterns = BuildFestivalLanterns(root);
 
             var stage = go.AddComponent<FestivalStage>();
@@ -95,6 +96,36 @@ namespace ShootingGallery
             t.localPosition = rot * new Vector3(0f, 0f, FestivalStallDistance);
             t.localRotation = rot;
             return t;
+        }
+
+        /// <summary>
+        /// 4軒の屋台を、足元のハッチ (StallHatch) が隣と重ならない、いちばん近い距離に並べ直す。
+        /// 屋台ごとに部品のメッシュから外形 (横幅の半分と手前の端) を測り、ハッチの枠の外側の手前の角が、
+        /// 隣との境目 (45度の線) より自分の側にあるようにする: (R + 手前の端)·sin45 ≥ 幅の半分·cos45 → R ≥ 幅の半分 − 手前の端
+        /// </summary>
+        void LayoutFestivalStalls(Stall[] stalls)
+        {
+            const float Clearance = 0.02f; // 隣のハッチとのすき間 (片側)
+            float radius = 0f;
+            foreach (var s in stalls)
+            {
+                float half = 0f, front = 0f;
+                foreach (var mf in s.GetComponentsInChildren<MeshFilter>(true))
+                {
+                    if (mf.sharedMesh == null) continue;
+                    var b = mf.sharedMesh.bounds;
+                    for (int i = 0; i < 8; i++)
+                    {
+                        var c = b.center + Vector3.Scale(b.extents, new Vector3((i & 1) == 0 ? -1 : 1, (i & 2) == 0 ? -1 : 1, (i & 4) == 0 ? -1 : 1));
+                        var p = s.transform.InverseTransformPoint(mf.transform.TransformPoint(c));
+                        half = Mathf.Max(half, Mathf.Abs(p.x));
+                        front = Mathf.Min(front, p.z);
+                    }
+                }
+                radius = Mathf.Max(radius, (half + StallHatch.Outset) - (front - StallHatch.Outset) + Clearance * Mathf.Sqrt(2f));
+            }
+            foreach (var s in stalls)
+                s.transform.localPosition = s.transform.localRotation * new Vector3(0f, 0f, radius);
         }
 
         Stall FinishFestivalStall(Transform t, List<Target> targets)

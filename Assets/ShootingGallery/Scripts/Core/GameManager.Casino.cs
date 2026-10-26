@@ -173,14 +173,21 @@ namespace ShootingGallery
         void UpdateCasinoAim()
         {
             if (!CasinoActive || !casinoHall.IsOpen || State != GameState.Playing || player == null || player.rightGun == null) return;
-            if (player.Weapon != WeaponType.Dart && player.Weapon != WeaponType.Coin) return; // (ほかの武器の的を取った時などは、そのまま)
-            var gun = player.rightGun.transform;
-            if (!Physics.Raycast(gun.position, gun.forward, out var hit, 40f, ~0, QueryTriggerInteraction.Ignore)) return;
+            CasinoAim(player.rightGun, player.Weapon, false);
+            if (player.DualWield && player.leftGun != null) CasinoAim(player.leftGun, player.LeftWeapon, true); // (二丁拳銃の時は左右別々に)
+        }
+
+        // gun の向きの先のゲームの武器に、その手の銃だけ持ち替える
+        void CasinoAim(GunController gun, WeaponType current, bool left)
+        {
+            if (current != WeaponType.Dart && current != WeaponType.Coin) return; // (ほかの武器の的を取った時などは、そのまま)
+            var t = gun.transform;
+            if (!Physics.Raycast(t.position, t.forward, out var hit, 40f, ~0, QueryTriggerInteraction.Ignore)) return;
             WeaponType? want = null;
             if (hit.collider.GetComponentInParent<SlotMachine>() != null || hit.collider.GetComponentInParent<BallRoulette>() != null) want = WeaponType.Coin;
             else if (hit.collider.GetComponentInParent<RouletteWheel>() != null) want = WeaponType.Dart;
-            if (!want.HasValue || player.Weapon == want.Value) return;
-            player.SwitchStageWeapon(want.Value);
+            if (!want.HasValue || current == want.Value) return;
+            player.SwitchStageWeapon(want.Value, left);
             Sfx.Play("click");
         }
 

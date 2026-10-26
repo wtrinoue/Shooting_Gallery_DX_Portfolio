@@ -81,6 +81,7 @@ namespace ShootingGallery
         InputAction leftTrigger;
 
         WeaponType weapon = WeaponType.Handgun;
+        WeaponType leftWeapon = WeaponType.Handgun; // 二丁拳銃の左手の武器 (ふだんは右手と同じ。夏祭り・カジノでは、それぞれの手で狙った先の武器になる)
         float weaponTimeLeft;
         float weaponDuration;
         bool stageWeapon; // モード専用の武器 (時間が来ても自動では戻らない。GameManager が屋台が見えてから戻す)
@@ -94,6 +95,8 @@ namespace ShootingGallery
 
         public bool DualWield => dualWield;
         public WeaponType Weapon => weapon;
+        /// <summary>左手の銃の武器 (狙った先で持ち替えるモードでは、右手と違うことがある)</summary>
+        public WeaponType LeftWeapon => leftWeapon;
 
         // ---- 視点を整える (どのモードでもない時の、いつもの立ち位置・大きさ・視点の高さに戻す) ----
         // 発掘・潜水艦・音楽モードはプレイヤーを上下に動かす。不具合や途中で止められたことで元に戻りきらなくても、
@@ -324,24 +327,23 @@ namespace ShootingGallery
             else rightGun.SetInfo(rightGun.IsCharging ? "CHARGING..." : rightGun.NeedsReload ? $"RELOAD {rightGun.Loaded}/{def.magazine} : PULL TRIGGER" :rightGun.IsReloading ? (weapon == WeaponType.Poi ? "NEXT POI..." : "RELOADING...") : def.displayName); // 残りの弾は銃の上の弾の列で見せる
             if (leftGun != null) leftGun.SetInfo("");
 
+            // ゲージは手ごとに、その手の武器で出す (夏祭り・カジノでは左右で武器が違うことがある)
+            UpdateGauge(rightGun, weapon);
+            if (leftGun != null) UpdateGauge(leftGun, leftWeapon);
+        }
+
+        void UpdateGauge(GunController gun, WeaponType type)
+        {
             // 弾込めのゲージで見せる武器 (コルク銃・ポイ): 撃つと空になり、たまっていく。満タンになったら撃てる (武器の色に変わる)
-            if (def.reloadGauge)
+            if (Weapons.Get(type).reloadGauge)
             {
-                SetReloadGauge(rightGun);
-                if (leftGun != null) SetReloadGauge(leftGun);
+                float k = gun.ReloadProgress;
+                gun.SetGauge(Mathf.Max(0.02f, k), k >= 1f ? GaugeColor(type) : new Color(0.55f, 0.55f, 0.6f));
                 return;
             }
             // 残り時間はゲージで表示 (ハンドガンの時は非表示)
-            float ratio = weapon == WeaponType.Handgun || weaponDuration <= 0f ? 0f : weaponTimeLeft / weaponDuration;
-            Color gaugeColor = ratio < 0.3f ? new Color(1f, 0.25f, 0.2f) : GaugeColor(weapon);
-            rightGun.SetGauge(ratio, gaugeColor);
-            if (leftGun != null) leftGun.SetGauge(ratio, gaugeColor);
-        }
-
-        void SetReloadGauge(GunController gun)
-        {
-            float k = gun.ReloadProgress;
-            gun.SetGauge(Mathf.Max(0.02f, k), k >= 1f ? GaugeColor(weapon) : new Color(0.55f, 0.55f, 0.6f));
+            float ratio = type == WeaponType.Handgun || weapon == WeaponType.Handgun || weaponDuration <= 0f ? 0f : weaponTimeLeft / weaponDuration;
+            gun.SetGauge(ratio, ratio < 0.3f ? new Color(1f, 0.25f, 0.2f) : GaugeColor(type));
         }
 
         static Color GaugeColor(WeaponType type) => type switch
@@ -379,20 +381,26 @@ namespace ShootingGallery
         }
 
         /// <summary>
-        /// モード専用の武器を、別のモード専用の武器に持ち替える (狙った先で武器が変わる時)。ゲージ (残り時間と満タンの長さ) はそのまま続ける
+        /// モード専用の武器を、別のモード専用の武器に持ち替える (狙った先で武器が変わる時)。left なら左手の銃だけ、そうでなければ右手の銃だけ
+        /// (二丁拳銃の時は、それぞれの手で狙った先の武器になる)。ゲージ (残り時間と満タンの長さ) はそのまま続ける。
+        /// 夏祭り・カジノの持ち替えなので、たぐり寄せず、その手が少し震えるだけ
         /// </summary>
-        public void SwitchStageWeapon(WeaponType type)
+        public void SwitchStageWeapon(WeaponType type, bool left = false)
         {
-            float left = weaponTimeLeft, full = weaponDuration;
-            bool changed = type != weapon;
-            GiveWeapon(type, left, null, false); // (夏祭り・カジノの、見ている所での持ち替え: たぐり寄せず、手が少し震えるだけ)
-            if (changed)
+            if (left)
             {
-                XRBridge.Haptic(UnityEngine.XR.XRNode.RightHand, 0.3f, 0.06f);
+                if (leftGun == null || type == leftWeapon) return;
+                leftWeapon = type;
+                leftGun.SetWeapon(type);
                 if (dualWield) XRBridge.Haptic(UnityEngine.XR.XRNode.LeftHand, 0.3f, 0.06f);
+                return;
             }
-            weaponDuration = full;
             stageWeapon = true;
+            if (type == weapon) return;
+            weapon = type;
+            rightGun.SetWeapon(type);
+            if (!dualWield && leftGun != null) { leftWeapon = type; leftGun.SetWeapon(type); } // (左手の銃がない間は、右手に合わせておく)
+            XRBridge.Haptic(UnityEngine.XR.XRNode.RightHand, 0.3f, 0.06f);
         }
 
         /// <summary>
@@ -417,6 +425,7 @@ namespace ShootingGallery
             bool changed = type != weapon; // (銃が入れ替わる時だけ、たぐり寄せる)
             stageWeapon = false;
             weapon = type;
+            leftWeapon = type;
             weaponTimeLeft = duration;
             weaponDuration = duration;
             rightGun.SetWeapon(type);
@@ -430,6 +439,7 @@ namespace ShootingGallery
             StopFlight(rightGun, rightFlight);
             StopFlight(leftGun, leftFlight);
             weapon = WeaponType.Handgun;
+            leftWeapon = WeaponType.Handgun;
             weaponTimeLeft = 0f;
             stageWeapon = false;
             rightGun.SetWeapon(weapon);

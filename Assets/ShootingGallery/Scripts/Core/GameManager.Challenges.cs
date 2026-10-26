@@ -29,7 +29,6 @@ namespace ShootingGallery
         bool CanOfferChallenge(Target target, float lifetime, float challengeTime)
         {
             if (target == null || State != GameState.Playing || ChallengeActive) return false;
-            if (bonusStage != null && bonusStage.IsBusy) return false;
             var stall = target.GetComponentInParent<Stall>();
             if (stall == null || !stall.IsSettled) return false;
 
@@ -144,13 +143,19 @@ namespace ShootingGallery
                 foreach (var s in new[] { ring[(i + ring.Count - 1) % ring.Count], ring[(i + 1) % ring.Count] })
                     if (!machineGunStalls.Contains(s)) machineGunStalls.Add(s);
             }
-            foreach (var s in machineGunStalls) s.Sink(stallMoveDuration);
+            // 引っ込める屋台は、テンポよく一気に沈める。横長の屋台は、その足元のハッチが閉じて消えきってから出す (ハッチが重ならないように)
+            float clear = 0f;
+            foreach (var s in machineGunStalls)
+            {
+                s.Sink(MachineGunChallenge.SinkTime);
+                clear = Mathf.Max(clear, s.HatchClearIn);
+            }
 
             MachineGunChallengeActive = true;
             Vector3 center = player.transform.position;
             Vector3 dir = stall.transform.position - center;
             dir.y = 0f;
-            machineGunChallenge.Show(center, dir, dir.magnitude);
+            machineGunChallenge.Show(center, dir, dir.magnitude, clear + 0.05f);
             machineGunGiven = false;
 
             Sfx.Play("sniperready");
@@ -177,8 +182,8 @@ namespace ShootingGallery
             int hits = machineGunChallenge.Hits, total = machineGunChallenge.Total;
             machineGunChallenge.Hide();
 
-            // 最後のカップが落ちるのを少し見せてから、横長の屋台が沈むのと同時に元の屋台を戻す
-            StartCoroutine(RiseStallsAfter(new List<Stall>(machineGunStalls), machineGunChallenge.SwapBackDelay));
+            // 最後のカップが落ちるのを少し見せてから横長の屋台が沈み、その足元のハッチが閉じて消えきったら元の屋台を戻す (ハッチが重ならないように)
+            StartCoroutine(RiseStallsAfterMachineGunStall(new List<Stall>(machineGunStalls)));
             machineGunStalls.Clear();
 
             if (machineGunGiven && player.Weapon == WeaponType.MachineGun) player.ResetWeapon();
@@ -193,6 +198,16 @@ namespace ShootingGallery
                 Sfx.Play("snipermiss");
                 ShowMessage($"TIME UP!\n{hits} / {total} CUPS", 2f, new Color(0.7f, 0.7f, 0.8f));
             }
+        }
+
+        // 横長の屋台が沈みきり、足元のハッチが閉じて消えきるのを待ってから、引っ込めた屋台を戻す
+        IEnumerator RiseStallsAfterMachineGunStall(List<Stall> stalls)
+        {
+            yield return new WaitForSeconds(machineGunChallenge.SwapBackDelay + 0.05f);
+            var mg = machineGunChallenge.stall;
+            for (float t = 0f; mg != null && t < 4f && (mg.gameObject.activeInHierarchy || mg.HatchClearIn > 0f); t += Time.deltaTime)
+                yield return null;
+            yield return RiseStallsAfter(stalls, 0f);
         }
 
         // 引っ込めた屋台を戻す。待っている間に豪華版 ⇔ 普通版に入れ替わっていたら、その場所の今の版を戻す

@@ -32,7 +32,7 @@ namespace ShootingGallery
 
         [Header("Layout")]
         [Tooltip("プレイヤー(中心)から屋台までの距離")]
-        public float stallRadius = 3.5f;
+        public float stallRadius = 4.4f;
 
         [Header("Rules")]
         public float roundDuration = 120f;
@@ -254,6 +254,15 @@ namespace ShootingGallery
             gm.debugStalls = debugStalls;
             gm.gateStalls = gateStalls;
             gm.bonusStage = bonusStage;
+            gm.sideArrows = new[] { BuildSideArrow(world, true), BuildSideArrow(world, false) }; // 屋台が増える時に、メイン屋台の前に出る左右の赤い矢印
+            gm.stallHatchMaterials = new[]
+            {
+                Mat("Pit_Rim", new Color(0.6f, 0.6f, 0.65f), null, false, 0.7f),
+                HatchMaskMat(),
+                Mat("Iris_Blade_B", new Color(0.22f, 0.22f, 0.26f), null, false, 0.75f),
+                Mat("Iris_Edge", new Color(1f, 0.75f, 0.3f), new Color(0.5f, 0.32f, 0.05f), false, 0.7f),
+                Mat("StallHatch_Wall", new Color(0.5f, 0.5f, 0.52f), null, false, 0.15f, true)
+            };
             gm.sniper = sniper;
             gm.machineGunChallenge = machineGunChallenge;
             gm.navalBattle = navalBattle;

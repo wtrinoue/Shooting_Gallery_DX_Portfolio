@@ -8,9 +8,9 @@ namespace ShootingGallery
     /// </summary>
     public partial class GalleryBuilder
     {
-        // 足元の丸い穴 (ハッチ) の半径。メイン屋台 (半径 3.5m。屋台は中心から 2.3m 〜 4.3m) の、屋台の奥行きの半分くらいまで重なる大きさ。
+        // 足元の丸い穴 (ハッチ) の半径。メイン屋台 (半径 4.4m。足元のハッチの枠が中心から約 2.8m) と、その手前の「下を見て」の矢印のハッチ (約 2.25 〜 2.75m) に当たらない大きさ。
         // フィーバーで輪になると屋台は外へ下がる (GameManager.RingRadius) が、ハッチは広がらない
-        const float PitRadius = 3.3f;
+        const float PitRadius = 2.1f;
         // 地面の厚さ。絞り羽根はこの厚さの中を回り、開くと周りの地面の下に隠れる
         const float GroundThickness = 0.2f;
 
@@ -23,7 +23,7 @@ namespace ShootingGallery
             var mesh = GroundMesh(Far, PitRadius, GroundThickness);
             ground.AddComponent<MeshFilter>().sharedMesh = mesh;
             var groundRenderer = ground.AddComponent<MeshRenderer>();
-            groundRenderer.sharedMaterial = Mat("Ground", new Color(0.22f, 0.18f, 0.14f));
+            groundRenderer.sharedMaterial = GroundMat();
             groundRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off; // 床は影を受けるだけ (落とす相手がない)
             ground.AddComponent<MeshCollider>().sharedMesh = mesh;
 
@@ -33,6 +33,36 @@ namespace ShootingGallery
             var rimGlow = Mat("Pit_RimGlow", new Color(1f, 0.75f, 0.3f), new Color(1.2f, 0.75f, 0.2f));
             FlatRing(rim, "Rim", PitRadius + 0.05f, 0.008f, 0.08f, 0.012f, 64, rimMat);
             FlatRing(rim, "RimGlow", PitRadius + 0.005f, 0.014f, 0.015f, 0.01f, 64, rimGlow);
+        }
+
+        /// <summary>
+        /// 地面の材質。ほかの不透明な物より少し後 (Geometry+20) に描く: 屋台の足元のハッチの穴 (HatchMaskMat。Geometry+10) の所だけ地面が描かれず、
+        /// 先に描いた地下のしまう所 (灰色の壁) と、そこで待っている屋台が見える
+        /// </summary>
+        Material GroundMat()
+        {
+            const string Name = "Ground";
+            if (mats.TryGetValue(Name, out var cached)) return cached;
+            var mat = new Material(litShader) { name = Name };
+            mat.SetColor("_BaseColor", new Color(0.22f, 0.18f, 0.14f));
+            mat.SetFloat("_Smoothness", 0.25f);
+            mat.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Geometry + 20;
+            mat = SaveAsAssetIfEditing(mat, Name);
+            mats[Name] = mat;
+            return mat;
+        }
+
+        /// <summary>屋台の足元のハッチの穴にかぶせる、色を出さない板の材質 (ShootingGallery/Hatch Mask)。シェーダーが見つからなければ null (ハッチを出さない)</summary>
+        Material HatchMaskMat()
+        {
+            const string Name = "StallHatch_Mask";
+            if (mats.TryGetValue(Name, out var cached)) return cached;
+            var shader = Shader.Find("ShootingGallery/Hatch Mask");
+            if (shader == null) return null;
+            var mat = new Material(shader) { name = Name };
+            mat = SaveAsAssetIfEditing(mat, Name);
+            mats[Name] = mat;
+            return mat;
         }
 
         /// <summary>地面に寝かせた輪 (見た目だけ)。radius の円に沿って、幅 width の細い板を並べる</summary>
@@ -50,7 +80,7 @@ namespace ShootingGallery
 
         /// <summary>
         /// ボーナスステージ:
-        ///   床: 穴をふさぐ8枚の絞り羽根。穴のふちの軸のまわりに全部同じ向きに回り、カメラの絞りのように渦を巻いて開く (開くと周りの地面の下に隠れる)。
+        ///   床: 穴をふさぐ8枚の絞り羽根。穴のふちの軸のまわりに全部同じ向きに回り、カメラの絞りのように渦を巻いて開く (開ききったら羽根は消す)。
         ///   地下室: 穴と同じ半径の半球。内側の2段の輪と底に的が並び、どれを撃っても撃つたびに ド→レ→ミ… と上がる。
         ///   ランプ: 穴のふちに8個。当てるたびに虹色に1つずつ点く。
         /// </summary>
@@ -169,14 +199,14 @@ namespace ShootingGallery
                 targets.Add(target);
                 return target;
             }
-            // 穴が大きくなったので、輪の的の数を増やして同じくらいの間隔でまんべんなく並べる
-            const int RingCount = 12;
-            const float RingDiameter = 0.62f;
+            // 輪の的は8個ずつ、まんべんなく並べる
+            const int RingCount = 8;
+            const float RingDiameter = 0.58f;
             for (int i = 0; i < RingCount; i++)
                 WallTarget($"Target_Upper_{i}", 70f, i * Mathf.PI * 2f / RingCount, RingDiameter, i);
             for (int i = 0; i < RingCount; i++)
                 WallTarget($"Target_Lower_{i}", 42f, (i + 0.5f) * Mathf.PI * 2f / RingCount, RingDiameter, i + 3);
-            const float BottomDiameter = 1.2f;
+            const float BottomDiameter = 1.05f;
             var bottom = WallTarget("Target_Bottom", 0f, 0f, BottomDiameter, 5);
             MakeText(bottom.visual, "Label", "DO RE MI", new Vector3(0f, BottomDiameter * 0.34f, -0.02f), BottomDiameter * 0.11f, Color.white);
 
@@ -193,15 +223,166 @@ namespace ShootingGallery
 
             var stage = go.AddComponent<BonusStage>();
             stage.irisBlades = blades;
-            stage.irisOpenAngle = 180f - Lean; // 羽根がまっすぐ外を向くまで回して、全部地面の下に隠す
+            stage.irisAxis = Vector3.up;
+            stage.irisOpenAngle = 180f - Lean; // 羽根がまっすぐ外を向くまで回して、全部地面の下に隠す (開ききったら羽根は SetActive(false) で消す)
             stage.targets = targets.ToArray();
             stage.pointLabels = labels.ToArray();
             stage.lampsOn = lampsOn;
             stage.hideWhileOpen = playerMark != null ? new[] { playerMark } : new GameObject[0];
+            stage.arrow = BuildBonusArrow(go.transform);
+            stage.arrowRadius = PitRadius + 0.4f; // 矢印のハッチを置ける、いちばん内側 (穴のふちの輪とランプにかからない)
             foreach (var t in targets) t.SetAvailable(false);
             foreach (var lamp in lampsOn) lamp.SetActive(false);
             go.SetActive(true);
             return stage;
+        }
+
+        /// <summary>
+        /// 「下を見て」の矢印 (BonusArrow) の見本 (BonusStage が屋台の数だけ複製する): 床の小さな長方形のハッチ (穴の中は灰色) と、そこからせり上がる台。
+        /// 台の柱の上に、矢印の形に切り抜いた青いパネル。地面に対して 45 度に傾けて (+Z = 穴の真ん中にいるプレイヤーの方へ下がる向き)、足元を指す。隠した状態で作る
+        /// </summary>
+        BonusArrow BuildBonusArrow(Transform parent) =>
+            BuildFloorArrow(parent, "BonusArrow", Mat("BonusArrow_Blue", new Color(0.2f, 0.55f, 1f), new Color(0.25f, 0.6f, 1.4f), false, 0.6f),
+                            Quaternion.Euler(-45f, 0f, 0f), 0.6f, 0.45f, 0.35f * Mathf.Cos(45f * Mathf.Deg2Rad)); // パネルの下 (-Y) が、地面に対して 45 度下のプレイヤーの方 (+Z) を指す
+
+        /// <summary>
+        /// 床のハッチからせり上がる矢印 (BonusArrow) を作る。panelRot = 矢印のパネル (-Y を指す) の向き。length / width = ハッチの穴の横の長さ / 奥行き。
+        /// halfHeight = パネルの真ん中から上のはしまでの高さ (しまう深さに使う)。隠した状態で作る
+        /// </summary>
+        BonusArrow BuildFloorArrow(Transform parent, string name, Material panelMat, Quaternion panelRot, float length, float width, float halfHeight)
+        {
+            const float Depth = 1.25f, Wall = 0.03f, Frame = 0.03f;
+            const float ArrowY = 0.55f; // 矢印のパネルの真ん中の高さ
+            var root = Group(parent, name);
+            var body = Group(root, "Body");
+            var frameMat = Mat("Pit_Rim", new Color(0.6f, 0.6f, 0.65f), null, false, 0.7f);
+            var doorMat = Mat("Iris_Blade_B", new Color(0.22f, 0.22f, 0.26f), null, false, 0.75f);
+            var seamMat = Mat("Iris_Edge", new Color(1f, 0.75f, 0.3f), new Color(0.5f, 0.32f, 0.05f), false, 0.7f);
+            var wallMat = Mat("StallHatch_Wall", new Color(0.5f, 0.5f, 0.52f), null, false, 0.15f, true);
+            // 穴 (ここだけ地面が描かれない) と、中の灰色の壁と底。枠
+            var mask = HatchMaskMat();
+            if (mask != null) Prim(PrimitiveType.Cube, "HoleMask", body, new Vector3(0f, 0.001f, 0f), new Vector3(length, 0.002f, width), mask, false);
+            foreach (float s in new[] { -1f, 1f })
+            {
+                Prim(PrimitiveType.Cube, "PitWall", body, new Vector3(s * (length + Wall) / 2f, -Depth / 2f, 0f), new Vector3(Wall, Depth, width + Wall * 2f), wallMat, false);
+                Prim(PrimitiveType.Cube, "PitWall", body, new Vector3(0f, -Depth / 2f, s * (width + Wall) / 2f), new Vector3(length, Depth, Wall), wallMat, false);
+                Prim(PrimitiveType.Cube, "Frame", body, new Vector3(s * (length + Frame) / 2f, 0.01f, 0f), new Vector3(Frame, 0.02f, width + Frame * 2f), frameMat, false);
+                Prim(PrimitiveType.Cube, "Frame", body, new Vector3(0f, 0.01f, s * (width + Frame) / 2f), new Vector3(length, 0.02f, Frame), frameMat, false);
+            }
+            Prim(PrimitiveType.Cube, "PitFloor", body, new Vector3(0f, -Depth - Wall / 2f, 0f), new Vector3(length + Wall * 2f, Wall, width + Wall * 2f), wallMat, false);
+            var doors = new Transform[2];
+            var seams = new Transform[2];
+            for (int i = 0; i < 2; i++)
+            {
+                doors[i] = Prim(PrimitiveType.Cube, "Door", body, Vector3.zero, Vector3.one, doorMat, false).transform;
+                seams[i] = Prim(PrimitiveType.Cube, "DoorSeam", body, Vector3.zero, Vector3.one, seamMat, false).transform;
+            }
+
+            // せり上がる台: 床板・柱・矢印の形のパネル
+            var lift = Group(body, "Lift");
+            Prim(PrimitiveType.Cube, "Plate", lift, new Vector3(0f, -0.015f, 0f), new Vector3(length - 0.02f, 0.03f, width - 0.02f), frameMat, false);
+            Prim(PrimitiveType.Cylinder, "Pole", lift, new Vector3(0f, ArrowY / 2f, -0.03f), new Vector3(0.05f, ArrowY / 2f, 0.05f), frameMat, false);
+            var arrow = Group(lift, "Arrow");
+            arrow.localPosition = new Vector3(0f, ArrowY, 0f);
+            arrow.localRotation = panelRot;
+            MeshObj(arrow, "Panel", ArrowPanelMesh(), Vector3.zero, panelMat);
+            // まわりの白いふち: 少し大きく、少し薄い矢印の板を重ねる (色の板が表と裏に少し出て、ふちだけ白く見える)
+            MeshObj(arrow, "Outline", ArrowPanelMesh(0.03f, 0.02f), Vector3.zero, Mat("FloorArrow_Outline", Color.white, new Color(0.6f, 0.6f, 0.6f), false, 0.5f));
+
+            var c = root.gameObject.AddComponent<BonusArrow>();
+            c.body = body;
+            c.doors = doors;
+            c.seams = seams;
+            c.lift = lift;
+            c.arrow = arrow;
+            c.length = length;
+            c.width = width;
+            c.liftDepth = ArrowY + halfHeight + 0.1f; // パネルの上のはしまで床の下に入る
+            root.gameObject.SetActive(false);
+            return c;
+        }
+
+        /// <summary>
+        /// 屋台が増える時 (フィーバー・WORLD GATE・屋台の拡張) に、メイン屋台の前の「下を見て」の矢印の両隣に出る、左右を指す赤い矢印 (left = 左向き)。
+        /// パネルは床に垂直に立ち、プレイヤー (+Z) の方を向く
+        /// </summary>
+        BonusArrow BuildSideArrow(Transform parent, bool left) =>
+            BuildFloorArrow(parent, left ? "SideArrow_Left" : "SideArrow_Right", Mat("SideArrow_Red", new Color(1f, 0.2f, 0.15f), new Color(1.4f, 0.2f, 0.12f), false, 0.6f),
+                            Quaternion.Euler(0f, 0f, left ? 90f : -90f), 0.8f, 0.2f, 0.21f); // パネルの下 (-Y) が、プレイヤーから見て左 / 右 (+Z がプレイヤーの方なので +X / -X) を指す。横に寝かせた矢じりの幅の半分が高さ
+
+        // 反時計回りの輪郭を、外へ d だけ広げる (角は辺を平行にずらした線どうしの交わる所へ)
+        static Vector2[] Outset(Vector2[] p, float d)
+        {
+            var q = new Vector2[p.Length];
+            for (int i = 0; i < p.Length; i++)
+            {
+                var prev = p[(i + p.Length - 1) % p.Length];
+                var next = p[(i + 1) % p.Length];
+                var e0 = (p[i] - prev).normalized;
+                var e1 = (next - p[i]).normalized;
+                var n0 = new Vector2(e0.y, -e0.x); // 反時計回りの辺の外向き
+                var n1 = new Vector2(e1.y, -e1.x);
+                q[i] = p[i] + (n0 + n1) / (1f + Vector2.Dot(n0, n1)) * d;
+            }
+            return q;
+        }
+
+        /// <summary>
+        /// 矢印の形に切り抜いた板 (厚さ thick)。-Y の向きを指し、真ん中が原点: 矢じり (幅 0.42m・長さ 0.3m) と軸 (幅 0.16m・長さ 0.4m)。
+        /// outset を渡すと、輪郭をその分だけ外へ広げる (白いふち用)
+        /// </summary>
+        Mesh ArrowPanelMesh(float outset = 0f, float thick = 0.03f)
+        {
+            string meshName = outset > 0f ? $"BonusArrowPanel_Outline_{outset:0.000}_{thick:0.000}" : "BonusArrowPanel";
+            if (meshes.TryGetValue(meshName, out var cached)) return cached;
+            const float HeadW = 0.21f, HeadL = 0.3f, ShaftW = 0.08f, ShaftL = 0.4f;
+            float top = (HeadL + ShaftL) / 2f, bottom = -top, neck = bottom + HeadL;
+            // 輪郭 (反時計回り、表 = +Z から見て)
+            var outline = new[]
+            {
+                new Vector2(0f, bottom), new Vector2(HeadW, neck), new Vector2(ShaftW, neck), new Vector2(ShaftW, top),
+                new Vector2(-ShaftW, top), new Vector2(-ShaftW, neck), new Vector2(-HeadW, neck)
+            };
+            if (outset > 0f) outline = Outset(outline, outset);
+            var verts = new List<Vector3>();
+            var normals = new List<Vector3>();
+            var tris = new List<int>();
+            // 表と裏 (矢じりの三角形と、軸の四角形)
+            int[][] faces = { new[] { 0, 1, 6 }, new[] { 2, 3, 4 }, new[] { 2, 4, 5 } };
+            foreach (float side in new[] { 1f, -1f })
+                foreach (var f in faces)
+                {
+                    int b = verts.Count;
+                    foreach (int i in f)
+                    {
+                        verts.Add(new Vector3(outline[i].x, outline[i].y, side * thick / 2f));
+                        normals.Add(Vector3.forward * side);
+                    }
+                    if (side > 0f) tris.AddRange(new[] { b, b + 1, b + 2 });
+                    else tris.AddRange(new[] { b, b + 2, b + 1 });
+                }
+            // 側面
+            for (int i = 0; i < outline.Length; i++)
+            {
+                var a = outline[i];
+                var d = outline[(i + 1) % outline.Length];
+                var n = new Vector3(d.y - a.y, a.x - d.x, 0f).normalized; // 反時計回りの輪郭の外向き
+                int b = verts.Count;
+                verts.Add(new Vector3(a.x, a.y, thick / 2f));
+                verts.Add(new Vector3(d.x, d.y, thick / 2f));
+                verts.Add(new Vector3(d.x, d.y, -thick / 2f));
+                verts.Add(new Vector3(a.x, a.y, -thick / 2f));
+                for (int k = 0; k < 4; k++) normals.Add(n);
+                tris.AddRange(new[] { b, b + 2, b + 1, b, b + 3, b + 2 });
+            }
+            var mesh = new Mesh { name = meshName };
+            mesh.SetVertices(verts);
+            mesh.SetNormals(normals);
+            mesh.SetTriangles(tris, 0);
+            mesh.RecalculateBounds();
+            mesh = SaveMeshIfEditing(mesh, meshName);
+            meshes[meshName] = mesh;
+            return mesh;
         }
 
         /// <summary>a から b まで細い棒を渡す (半球の内側の光る線用)</summary>

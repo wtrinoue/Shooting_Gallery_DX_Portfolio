@@ -11,12 +11,12 @@ namespace ShootingGallery
 
         /// <summary>
         /// この的を DELUXE の的に化けさせてよいか (WeaponDropper が聞く)。
-        /// 豪華タイム中・チャレンジ中・ボーナスステージ中は出さない。撃たれるまでの間に時間切れが来る時も出さない。
+        /// 豪華タイム中・チャレンジ中は出さない (ボーナスステージ中は出す)。撃たれるまでの間に時間切れが来る時も出さない。
         /// </summary>
         public bool CanOfferDeluxe(Target target, float lifetime)
         {
             if (deluxeMainStall == null || target == null || State != GameState.Playing) return false;
-            if (DeluxeActive || ChallengeActive || (bonusStage != null && bonusStage.IsBusy)) return false;
+            if (DeluxeActive || ChallengeActive) return false; // (ボーナスステージ (床下の地下室) とは別々に動く)
             var stall = target.GetComponentInParent<Stall>();
             if (stall == null || !stall.IsSettled) return false;
             return timeLeft > lifetime + 8f;
@@ -38,6 +38,14 @@ namespace ShootingGallery
 
             Sfx.Play("deluxe");
             ShowMessage("DELUXE TIME!!\nGRAND STALLS OPEN!", 3f, new Color(1f, 0.8f, 0.3f));
+        }
+
+        /// <summary>豪華タイムの途中に、もう1つ DELUXE の的を撃った: 屋台はそのまま、残り時間 (HUD の DELUXE のカウント) を増やす</summary>
+        void ExtendDeluxe()
+        {
+            deluxeLeft += deluxeDuration;
+            Sfx.Play("deluxe");
+            ShowMessage($"DELUXE EXTENDED!!\n+{Mathf.CeilToInt(deluxeDuration)} SEC", 2f, new Color(1f, 0.8f, 0.3f));
         }
 
         /// <summary>豪華タイムが終わった: 豪華版の屋台を、同じ場所で普通の屋台に戻す</summary>
