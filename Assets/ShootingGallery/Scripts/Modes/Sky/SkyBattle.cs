@@ -217,7 +217,7 @@ namespace ShootingGallery
             bgm.time = 0f;
             bgm.volume = 0f;
             bgm.Play();
-            bgmTarget = bgmVolume;
+            bgmTarget = Mathf.Min(1f, bgmVolume * Sfx.BgmBoost);
         }
 
         void SetStageVisible(bool visible)

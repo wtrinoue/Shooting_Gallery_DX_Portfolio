@@ -281,7 +281,7 @@ namespace ShootingGallery
                 bgm.volume = 0f;
                 bgm.time = 0f;
                 bgm.Play();
-                bgmTarget = bgmVolume;
+                bgmTarget = Mathf.Min(1f, bgmVolume * Sfx.BgmBoost);
             }
             else bgmTarget = 0f;
         }

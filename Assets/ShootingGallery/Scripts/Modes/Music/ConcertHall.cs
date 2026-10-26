@@ -286,10 +286,18 @@ namespace ShootingGallery
         void Awake()
         {
             Instance = this;
-            music = gameObject.AddComponent<AudioSource>();
+            // 曲は、目の前の楽団の真ん中から聞こえる (楽団の位置は UpdateMusicPosition で毎フレーム合わせる。ほかのモードの BGM は今まで通りどこでも同じ)
+            var band = new GameObject("BandMusic");
+            band.transform.SetParent(transform, false);
+            music = band.AddComponent<AudioSource>();
             music.playOnAwake = false;
             music.loop = true;
-            music.spatialBlend = 0f;
+            music.spatialBlend = 0.85f;  // ほとんど楽団の方から。少しだけ全体にも広げて、横を向いても小さくなりすぎないように
+            music.spread = 100f;         // 楽団は横に広いので、音も左右に広げる
+            music.dopplerLevel = 0f;     // (プレイヤーが上下に動いても、音程を変えない)
+            music.rolloffMode = AudioRolloffMode.Linear;
+            music.minDistance = 25f;     // 楽団までの距離では、元の大きさのまま
+            music.maxDistance = 120f;
             for (int i = 0; i < 6; i++)
             {
                 var go = new GameObject($"Voice{i}");
@@ -503,7 +511,7 @@ namespace ShootingGallery
         // BGM を流し始める (曲ができていれば)。演奏の途中から始める時は、今の拍の位置から鳴らして、楽器の揺れとずれないようにする
         // 今の BGM の音量: 演奏の始まりは introVolume、introFadeSeconds かけてなめらかに musicVolume へ下げる
         float CurrentMusicVolume() =>
-            Mathf.Lerp(introVolume, musicVolume, Mathf.SmoothStep(0f, 1f, (Time.time - playStartTime) / Mathf.Max(0.01f, introFadeSeconds)));
+            Mathf.Min(1f, Mathf.Lerp(introVolume, musicVolume, Mathf.SmoothStep(0f, 1f, (Time.time - playStartTime) / Mathf.Max(0.01f, introFadeSeconds))) * Sfx.BgmBoost);
 
         // 曲 1周の拍の数 (頭に戻った時に拍を数え続けるため)
         float LoopBeats(AudioClip clip) => Mathf.Max(1f, TimeToBeat(clip.length) - TimeToBeat(0f));
@@ -990,8 +998,24 @@ namespace ShootingGallery
             src.Play();
         }
 
+        // 曲の音源を、楽団 (楽器の並び) の真ん中に置く。ステージがせり上がったり、プレイヤーが動いたりしても、いつも楽団の方から聞こえる
+        void UpdateMusicPosition()
+        {
+            if (music == null || !IsActive || instruments == null) return;
+            Vector3 sum = Vector3.zero;
+            int n = 0;
+            foreach (var inst in instruments)
+            {
+                if (inst == null || !inst.gameObject.activeInHierarchy) continue;
+                sum += inst.transform.position;
+                n++;
+            }
+            if (n > 0) music.transform.position = sum / n;
+        }
+
         void Update()
         {
+            UpdateMusicPosition();
             // 拍: 演奏中は曲の再生位置から (楽器の揺れが音とずれないように)。それ以外はゆっくり進める
             if (music != null && music.isPlaying && music.clip != null)
             {

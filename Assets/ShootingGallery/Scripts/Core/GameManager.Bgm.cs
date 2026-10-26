@@ -46,7 +46,7 @@ namespace ShootingGallery
             stageBgm.time = 0f;
             stageBgm.volume = 0f;
             stageBgm.Play();
-            stageBgmTarget = stageBgmVolume;
+            stageBgmTarget = Mathf.Min(1f, stageBgmVolume * Sfx.BgmBoost);
             stageBgmStopAfterStalls = null; // (前のモードの「屋台が戻ったら止める」は取り消す)
         }
 
@@ -90,6 +90,7 @@ namespace ShootingGallery
         [Tooltip("ラウンドの BGM (タイトルの的を撃った時から流れる。別の世界のモードの間は小さくして一時停止し、戻ったら続きから)")]
         public AudioClip roundBgm;
         [Range(0f, 1f)] public float roundBgmVolume = 0.4f;
+        float RoundBgmLevel => Mathf.Min(1f, roundBgmVolume * Sfx.BgmBoost);
         /// <summary>2 MIN のタイムアタックで、別の世界から戻った時に曲の位置を残り時間に合わせる境目 (秒。1分42秒)</summary>
         const float TimeAttackBgmSync = 102f;
 
@@ -110,7 +111,7 @@ namespace ShootingGallery
             if (roundBgm.loadState == AudioDataLoadState.Unloaded) roundBgm.LoadAudioData();
             roundBgmSource.clip = roundBgm;
             roundBgmSource.time = 0f;
-            roundBgmSource.volume = roundBgmVolume; // (頭から、すぐにいつもの大きさで。カウントダウンの 3 とそろうように)
+            roundBgmSource.volume = RoundBgmLevel; // (頭から、すぐにいつもの大きさで。カウントダウンの 3 とそろうように)
             roundBgmSource.Play();
             roundBgmOn = true;
         }
@@ -139,7 +140,7 @@ namespace ShootingGallery
         {
             if (roundBgmSource == null || roundBgmSource.clip == null) return;
             bool want = roundBgmOn && !WorldModeActive;
-            float target = want ? roundBgmVolume : 0f;
+            float target = want ? RoundBgmLevel : 0f;
             if (want && !roundBgmSource.isPlaying)
             {
                 // 別の世界から戻ってきた: 一時停止していた続きから。
@@ -148,7 +149,7 @@ namespace ShootingGallery
                     roundBgmSource.time = Mathf.Clamp(TimeAttackBgmSync - timeLeft, 0f, Mathf.Max(0f, roundBgmSource.clip.length - 0.05f));
                 roundBgmSource.UnPause();
             }
-            roundBgmSource.volume = Mathf.MoveTowards(roundBgmSource.volume, target, Time.deltaTime * roundBgmVolume / 1.2f);
+            roundBgmSource.volume = Mathf.MoveTowards(roundBgmSource.volume, target, Time.deltaTime * RoundBgmLevel / 1.2f);
             if (!want && roundBgmSource.isPlaying && roundBgmSource.volume <= 0f)
             {
                 if (roundBgmOn) roundBgmSource.Pause(); // 別の世界の間は一時停止

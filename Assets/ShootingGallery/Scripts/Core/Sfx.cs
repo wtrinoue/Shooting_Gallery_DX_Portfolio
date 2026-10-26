@@ -177,7 +177,7 @@ namespace ShootingGallery
         {
             if (instance == null || instance.scaleNotes.Length == 0) return;
             index = Mathf.Clamp(index, 0, instance.scaleNotes.Length - 1);
-            instance.source.PlayOneShot(instance.scaleNotes[index], 0.8f);
+            instance.source.PlayOneShot(instance.scaleNotes[index], 0.8f * SfxBoost);
         }
 
         public static void PlayShot(WeaponType type)
@@ -208,6 +208,11 @@ namespace ShootingGallery
             instance.PlayLimited("shot", clip, volume, fade: false);
         }
 
+        /// <summary>効果音全体の大きさの倍率 (撃った音・当たった音・モードの音など、Sfx で鳴らす音すべて)</summary>
+        const float SfxBoost = 1.5f;
+        /// <summary>BGM 全体の大きさの倍率 (どのモードの曲も、Inspector の音量にこれをかけて鳴らす。上限は 1)</summary>
+        public const float BgmBoost = 2f;
+
         // 音の種類ごとの、最後に鳴らした時刻と、続けて鳴った回数
         readonly System.Collections.Generic.Dictionary<string, (float time, int count)> recent =
             new System.Collections.Generic.Dictionary<string, (float, int)>();
@@ -229,7 +234,7 @@ namespace ShootingGallery
             }
             recent[group] = (now, count);
             volume *= Mathf.Max(burstMinVolume, 1f / (1f + 0.5f * count));
-            source.PlayOneShot(clip, volume);
+            source.PlayOneShot(clip, volume * SfxBoost);
         }
 
         public static void Play(string name) => Play(name, 1f);
@@ -307,7 +312,7 @@ namespace ShootingGallery
             };
             if (clip == null) return;
             if (limited) instance.PlayLimited(group, clip, 0.6f * volumeScale);
-            else instance.source.PlayOneShot(clip, 0.6f * volumeScale);
+            else instance.source.PlayOneShot(clip, 0.6f * volumeScale * SfxBoost);
         }
 
         /// <summary>
