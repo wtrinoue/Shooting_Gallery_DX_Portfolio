@@ -292,8 +292,6 @@ namespace ShootingGallery
             music = band.AddComponent<AudioSource>();
             music.playOnAwake = false;
             music.loop = true;
-            music.spatialBlend = 0.85f;  // ほとんど楽団の方から。少しだけ全体にも広げて、横を向いても小さくなりすぎないように
-            music.spread = 100f;         // 楽団は横に広いので、音も左右に広げる
             music.dopplerLevel = 0f;     // (プレイヤーが上下に動いても、音程を変えない)
             music.rolloffMode = AudioRolloffMode.Linear;
             music.minDistance = 25f;     // 楽団までの距離では、元の大きさのまま
@@ -304,11 +302,11 @@ namespace ShootingGallery
                 go.transform.SetParent(transform, false);
                 var src = go.AddComponent<AudioSource>();
                 src.playOnAwake = false;
-                src.spatialBlend = 0.6f; // どの楽器が鳴ったか、少し方向が分かるように
                 src.minDistance = 4f;
                 src.maxDistance = 40f;
                 voicePool.Add(src);
             }
+            SetupSpatial();
             stageBase = new float[stageLights.Length];
             for (int i = 0; i < stageLights.Length; i++) stageBase[i] = stageLights[i] != null ? stageLights[i].intensity : 0f;
             if (lightweight)
@@ -981,6 +979,7 @@ namespace ShootingGallery
             int baseMidi = ConcertMusic.BaseMidi(voice);
             src.pitch = baseMidi > 0 ? Mathf.Clamp(ConcertMusic.Hz(midi) / ConcertMusic.Hz(baseMidi), 0.1f, 3f) : Random.Range(0.95f, 1.05f);
             src.transform.position = pos;
+            SetVoiceSpatial(src, true);
             src.clip = clip;
             src.volume = volume;
             src.Play();
@@ -993,6 +992,7 @@ namespace ShootingGallery
             nextVoice = (nextVoice + 1) % voicePool.Count;
             src.pitch = 1f;
             src.transform.localPosition = Vector3.up * 2f; // プレイヤーのまわり (カーテンの音)
+            SetVoiceSpatial(src, false); // カーテンの音は方向を付けない
             src.clip = clip;
             src.volume = volume;
             src.Play();
@@ -1013,9 +1013,59 @@ namespace ShootingGallery
             if (n > 0) music.transform.position = sum / n;
         }
 
+        // ---- 立体音響 (Meta XR Audio の HRTF。Project Settings → Audio → Spatializer Plugin で選んである時だけ) ----
+        // プラグインの番号 (MetaXRAudioSource.NativeParameterIndex と同じ。WebGL ではプラグインが無いので、SDK の型は直接使わない)
+        const int SpGain = 0;        // 音量の上乗せ (0〜20dB)
+        const int SpRadius = 4;      // 音源の大きさ (m)。0 だと点、大きいと広がった音になる
+        const int SpDisableRoom = 5; // 1 = 部屋の反響を付けない (反響用の部屋の形は作っていないので切る)
+        [Tooltip("曲 (楽団) の音源の大きさ (m)。楽団の横幅くらいにすると、目の前に広がって聞こえる")]
+        public float bandRadius = 3.5f;
+        [Tooltip("曲の音量の上乗せ (dB)。立体音響にすると少し小さく聞こえるので、その分")]
+        public float bandGainDb = 3f;
+        bool spatialPlugin; // 立体音響のプラグインが選ばれているか
+
+        void SetupSpatial()
+        {
+            spatialPlugin = !string.IsNullOrEmpty(AudioSettings.GetSpatializerPluginName());
+            if (spatialPlugin)
+            {
+                // 曲は楽団の位置から、頭の向きに合わせて聞こえる (正面を向くと目の前、横を向くと横から)
+                music.spatialize = true;
+                music.spatialBlend = 1f;
+            }
+            else
+            {
+                // プラグインが無い時 (WebGL など): 今まで通り、ほとんど楽団の方から。少しだけ全体にも広げる
+                music.spatialBlend = 0.85f;
+                music.spread = 100f;
+            }
+        }
+
+        // 楽器の音: プラグインがあれば HRTF で鳴った楽器の方から。無ければ今まで通り、少し方向が分かる程度
+        void SetVoiceSpatial(AudioSource src, bool directional)
+        {
+            src.spatialize = directional && spatialPlugin;
+            src.spatialBlend = !directional ? 0f : spatialPlugin ? 1f : 0.6f;
+            if (src.spatialize)
+            {
+                src.SetSpatializerFloat(SpRadius, 0.3f);
+                src.SetSpatializerFloat(SpDisableRoom, 1f);
+            }
+        }
+
+        // 曲のプラグイン設定は、鳴っている間に毎フレーム渡す (鳴り始める前に渡すと効かないことがあるため。MetaXRAudioSource と同じやり方)
+        void UpdateSpatial()
+        {
+            if (!spatialPlugin || music == null || !music.isPlaying) return;
+            music.SetSpatializerFloat(SpGain, Mathf.Clamp(bandGainDb, 0f, 20f));
+            music.SetSpatializerFloat(SpRadius, Mathf.Max(0f, bandRadius));
+            music.SetSpatializerFloat(SpDisableRoom, 1f);
+        }
+
         void Update()
         {
             UpdateMusicPosition();
+            UpdateSpatial();
             // 拍: 演奏中は曲の再生位置から (楽器の揺れが音とずれないように)。それ以外はゆっくり進める
             if (music != null && music.isPlaying && music.clip != null)
             {

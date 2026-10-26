@@ -29,10 +29,11 @@ MonoBehaviour:
   revolverShot: {fileID: 8300000, guid: 26f3f49adf370a7488fec76a5dff3f0d, type: 3}
   revolverReload: {fileID: 8300000, guid: e47b59fccf277ab449cc3c2e3d48b3de, type: 3}
   roundBgm: {fileID: 8300000, guid: e37a4cc308e971641be6baa2eaa517e9, type: 3}
-  finaleApplause: {fileID: 8300000, guid: 02d5c191ddb5f2e45a1b66e7304eb298, type: 3}
+  finaleApplause: {fileID: 8300000, guid: 1c8281e37424dba4785988f8875c8afc, type: 3}
   pocochiImage: {fileID: 2800000, guid: a3ae682e2292a6e45983c93ce5104b97, type: 3}
   concertBeatMap: {fileID: 4900000, guid: 94913ff248bbd764caa4cac98736f58e, type: 3}
   shaders:
+  - {fileID: 4800000, guid: 138d426bc7f61cd48851fcfbb235b8f7, type: 3}
   - {fileID: 4800000, guid: fac2f7e847b9ca742aaf4fa4a26e3bd8, type: 3}
   - {fileID: 4800000, guid: f5a0b9b5bcf498eb292680ed12437489, type: 3}
   - {fileID: 4800000, guid: 6d8b0e8fa3482284cba658cbbc28ac44, type: 3}
