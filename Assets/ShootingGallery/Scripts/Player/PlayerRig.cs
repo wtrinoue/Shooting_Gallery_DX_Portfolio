@@ -365,6 +365,7 @@ namespace ShootingGallery
             WeaponType.CorkGun => new Color(1f, 0.8f, 0.3f),
             WeaponType.Poi => new Color(0.4f, 0.8f, 1f),
             WeaponType.Coin => new Color(1f, 0.85f, 0.25f),
+            WeaponType.Ball => new Color(0.3f, 0.55f, 1f),
             WeaponType.Torpedo => new Color(0.35f, 0.9f, 1f),
             WeaponType.Trumpet => new Color(1f, 0.82f, 0.3f),
             WeaponType.Imagination => new Color(0.95f, 0.6f, 1f),

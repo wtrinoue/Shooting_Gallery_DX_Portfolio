@@ -200,10 +200,10 @@ namespace ShootingGallery
                      : type == WeaponType.Shuriken || type == WeaponType.Dart || type == WeaponType.Pickaxe ? instance.shurikenThrow
                      : type == WeaponType.CorkGun ? instance.corkPop
                      : type == WeaponType.Lightning ? instance.zap
-                     : type == WeaponType.RingToss || type == WeaponType.Poi || type == WeaponType.Coin ? instance.fusuma // ふわっと投げる音
+                     : type == WeaponType.RingToss || type == WeaponType.Poi || type == WeaponType.Coin || type == WeaponType.Ball ? instance.fusuma // ふわっと投げる音
                      : instance.handgunShot;
             // 二丁拳銃で左右同時に撃っても1発分の音。つるはしは押しっぱなしで次々に投げるので、続けて聞いても気にならない小ささに
-            bool soft = type == WeaponType.Pickaxe || type == WeaponType.RingToss || type == WeaponType.Poi || type == WeaponType.Coin;
+            bool soft = type == WeaponType.Pickaxe || type == WeaponType.RingToss || type == WeaponType.Poi || type == WeaponType.Coin || type == WeaponType.Ball;
             float volume = soft ? 0.25f : type == WeaponType.Lightning ? 0.4f : 0.5f; // (アンノウンの電撃は、BGM を聞かせるために少しだけ小さめ)
             instance.PlayLimited("shot", clip, volume, fade: false);
         }

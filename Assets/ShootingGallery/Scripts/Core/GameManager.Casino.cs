@@ -52,6 +52,7 @@ namespace ShootingGallery
             FadeAmbience(normalFogColor, casinoAmbient, null, 1.6f);
             if (State != GameState.Playing) return;
             player.GiveStageWeapon(WeaponType.Dart, casinoHall.TimeLeft);
+            switchClickQuietUntil = Time.time + SwitchClickQuiet; // (持ったばかりの持ち替えは、音を鳴らさない)
             ShowMessage("WELCOME TO THE CASINO!\nSHOOT THE SLOTS, ROULETTES & DARTS!", 3f, new Color(1f, 0.85f, 0.3f));
         }
 
@@ -96,7 +97,7 @@ namespace ShootingGallery
             if (!CasinoActive) return;
             casinoHall.End();
             // (ダーツ・コインのどちらを持っていても、元に戻す)
-            if (player.Weapon == WeaponType.Dart || player.Weapon == WeaponType.Coin) ReleaseStageWeapon(player.Weapon);
+            if (player.Weapon == WeaponType.Dart || player.Weapon == WeaponType.Coin || player.Weapon == WeaponType.Ball) ReleaseStageWeapon(player.Weapon);
             StartCoroutine(RiseStallsAfter(new List<Stall>(stageStalls), casinoHall.CloseTime + 0.1f));
             stageStalls.Clear();
             if (State == GameState.Playing)
@@ -167,7 +168,7 @@ namespace ShootingGallery
         // ---- 狙った先で、武器を持ち替える ----
 
         /// <summary>
-        /// カジノで遊んでいる間、銃の向きの先にあるゲームの武器に持ち替える (スロット・ルーレット = コイン、ダーツボード = ダーツ)。
+        /// カジノで遊んでいる間、銃の向きの先にあるゲームの武器に持ち替える (スロット = コイン、ボールのルーレット = 青い球、ダーツボード = ダーツ)。
         /// 何もない方向を向いている時は、持っている武器のまま
         /// </summary>
         void UpdateCasinoAim()
@@ -177,18 +178,32 @@ namespace ShootingGallery
             if (player.DualWield && player.leftGun != null) CasinoAim(player.leftGun, player.LeftWeapon, true); // (二丁拳銃の時は左右別々に)
         }
 
+        // ---- 狙った先で持ち替える時の音 (カジノ・夏祭り) ----
+        // 左右の手が同時に持ち替えたり、境目で何度も持ち替えたりしても、カチッは間をあけて1回だけ。モードが始まって武器を持ったばかりの間は鳴らさない
+        const float SwitchClickQuiet = 0.8f;    // 武器を持ってから、持ち替えの音を鳴らさない秒数 (手元へ飛んでくる間に、左右が狙った先に合わせて持ち替わるので)
+        const float SwitchClickInterval = 0.3f; // 次の持ち替えの音まで、最低これだけあける
+        float switchClickQuietUntil;
+
+        void PlaySwitchClick()
+        {
+            if (Time.time < switchClickQuietUntil) return;
+            switchClickQuietUntil = Time.time + SwitchClickInterval;
+            Sfx.Play("click");
+        }
+
         // gun の向きの先のゲームの武器に、その手の銃だけ持ち替える
         void CasinoAim(GunController gun, WeaponType current, bool left)
         {
-            if (current != WeaponType.Dart && current != WeaponType.Coin) return; // (ほかの武器の的を取った時などは、そのまま)
+            if (current != WeaponType.Dart && current != WeaponType.Coin && current != WeaponType.Ball) return; // (ほかの武器の的を取った時などは、そのまま)
             var t = gun.transform;
             if (!Physics.Raycast(t.position, t.forward, out var hit, 40f, ~0, QueryTriggerInteraction.Ignore)) return;
             WeaponType? want = null;
-            if (hit.collider.GetComponentInParent<SlotMachine>() != null || hit.collider.GetComponentInParent<BallRoulette>() != null) want = WeaponType.Coin;
+            if (hit.collider.GetComponentInParent<SlotMachine>() != null) want = WeaponType.Coin;
+            else if (hit.collider.GetComponentInParent<BallRoulette>() != null) want = WeaponType.Ball; // (ボールのルーレットは青い球)
             else if (hit.collider.GetComponentInParent<RouletteWheel>() != null) want = WeaponType.Dart;
             if (!want.HasValue || current == want.Value) return;
             player.SwitchStageWeapon(want.Value, left);
-            Sfx.Play("click");
+            PlaySwitchClick();
         }
 
         // スロットから金色のコインがあふれ出る (光の玉が次々にはじける)

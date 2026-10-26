@@ -7,10 +7,10 @@ namespace ShootingGallery
     /// <summary>1丁の銃。見た目の切り替えと発射(レイキャスト)を担当する。</summary>
     public class GunController : MonoBehaviour
     {
-        [Tooltip("WeaponType の順 (Handgun, MachineGun, Shotgun, Bomb, Sniper, Bazooka, Shuriken, FireBall, Dart, Revolver, Missile, Flashlight, Pickaxe, RingToss, CorkGun, Poi, Coin, Torpedo, Trumpet, Imagination, AirMachineGun, Lightning) に並べた見た目")]
-        public GameObject[] models = new GameObject[22];
+        [Tooltip("WeaponType の順 (Handgun, MachineGun, Shotgun, Bomb, Sniper, Bazooka, Shuriken, FireBall, Dart, Revolver, Missile, Flashlight, Pickaxe, RingToss, CorkGun, Poi, Coin, Torpedo, Trumpet, Imagination, AirMachineGun, Lightning, Ball) に並べた見た目")]
+        public GameObject[] models = new GameObject[23];
         [Tooltip("各見た目の銃口。最初の子をマズルフラッシュとして使う")]
-        public Transform[] muzzles = new Transform[22];
+        public Transform[] muzzles = new Transform[23];
         [Header("夏祭り (輪投げの輪 / コルク / ポイ / お金)")]
         [Tooltip("輪の形 (ドーナツ形のメッシュ) と、投げるたびに選ぶ輪の色")]
         public Mesh ringMesh;
@@ -18,6 +18,8 @@ namespace ShootingGallery
         public Material corkMaterial;
         public Material poiFrameMaterial, poiPaperMaterial;
         public Material coinMaterial;
+        [Tooltip("カジノのボールのルーレットに投げる青い球")]
+        public Material ballMaterial;
         [Tooltip("コルク銃の先に込めてあるコルク (撃つと消え、弾込めが終わると戻る)")]
         public GameObject corkLoaded;
         [Header("怪獣 / カジノ / 西部劇")]
@@ -32,7 +34,11 @@ namespace ShootingGallery
         public Material dartFlightMaterial;
         public Material pickaxeHandleMaterial;
         public Material pickaxeHeadMaterial;
-        [Tooltip("リボルバーの弾倉 (弾込めの間だけ回る)")]
+        [Header("薬きょう (撃った時に、銃の外側へ飛び出す)")]
+        [Tooltip("ハンドガン・リボルバーの黄色い真ちゅう / マシンガン (空中の機関銃も) の茶色っぽい銅 / ショットガンの赤い筒 / スナイパーの黒")]
+        public Material casingBrassMaterial;
+        public Material casingCopperMaterial, casingRedMaterial, casingBlackMaterial;
+        [Tooltip("リボルバーの弾倉 (最初の子が胴、残りの6つが弾。撃ちきると外側へ振り出して薬きょうを落とし、弾込めのたびに1発ずつ回って込める)")]
         public Transform revolverCylinder;
         [Tooltip("弾数のある武器 (リボルバー) の残りの弾を表す、銃の上に並んだ弾。撃つたびに右から灰色になり、弾込めで左から黄色に戻る")]
         public Transform ammoRoot;
@@ -150,7 +156,6 @@ namespace ShootingGallery
         float reloadUntil; // 弾込めが終わる時刻
         int loaded;          // トリガーで込めている途中の、込め終わった弾の数
         float nextLoadTime;  // 次にトリガーで込められる時刻 (引いた勢いで2回込めないように、少し間をあける)
-        float cylinderSpinUntil; // 込めた時に、リボルバーの弾倉を少し回す
 
         void Awake()
         {
@@ -168,6 +173,7 @@ namespace ShootingGallery
                 laserDotRenderer = laserDot.GetComponent<Renderer>();
                 if (laserDotRenderer != null) redDotMaterial = laserDotRenderer.sharedMaterial;
             }
+            CaptureCylinder();
             SetWeapon(WeaponType.Handgun);
             SetGauge(0f, Color.white);
         }
@@ -177,6 +183,8 @@ namespace ShootingGallery
         {
             flashRoutine = null;
             reloadRoutine = null;
+            cylinderRoutine = null;
+            SnapCylinder(); // (振り出す途中で止まっても、今の弾込めの状態の形にしておく)
             foreach (var m in muzzles)
                 if (m != null && m.childCount > 0) m.GetChild(0).gameObject.SetActive(false);
         }
@@ -226,13 +234,17 @@ namespace ShootingGallery
             battery = 1f;
             batteryDepleted = false;
             SetBeam(false);
+            // リボルバーの弾倉は、満タンで閉じた形に戻す
+            if (cylinderRoutine != null) StopCoroutine(cylinderRoutine);
+            cylinderRoutine = null;
+            SnapCylinder();
         }
 
-        static bool HasLaser(WeaponType type) => type == WeaponType.Sniper || type == WeaponType.Shuriken || type == WeaponType.Dart || type == WeaponType.Pickaxe || type == WeaponType.CorkGun || type == WeaponType.Coin || IsArc(type);
+        static bool HasLaser(WeaponType type) => type == WeaponType.Sniper || type == WeaponType.Shuriken || type == WeaponType.Dart || type == WeaponType.Pickaxe || type == WeaponType.CorkGun || type == WeaponType.Coin || type == WeaponType.Ball || IsArc(type);
 
         /// <summary>放物線で投げる武器 (夏祭りの輪・ポイ)。白いレーザーの代わりに、落ちる所までの放物線を見せる (お金はまっすぐ飛ぶので白いレーザー)</summary>
         static bool IsArc(WeaponType type) => type == WeaponType.RingToss || type == WeaponType.Poi;
-        static bool IsFestival(WeaponType type) => IsArc(type) || type == WeaponType.CorkGun || type == WeaponType.Coin;
+        static bool IsFestival(WeaponType type) => IsArc(type) || type == WeaponType.CorkGun || type == WeaponType.Coin || type == WeaponType.Ball; // (カジノの球も、お金と同じ投げ方)
 
         /// <summary>弾込めの進み具合 (0 = 撃った直後 〜 1 = 撃てる)。弾込めのない武器はいつも 1</summary>
         public float ReloadProgress
@@ -412,7 +424,7 @@ namespace ShootingGallery
         {
             loaded = Mathf.Min(def.magazine, loaded + def.reloadStep);
             nextLoadTime = Time.time + 0.12f;
-            cylinderSpinUntil = Time.time + 0.2f;
+            if (current == WeaponType.Revolver) LoadChamber(loaded >= def.magazine); // 弾倉が1発分回って、弾が1発込められる (満タンになったら閉じる)
             XRBridge.Haptic(hapticNode, 0.25f, 0.04f);
             if (loaded < def.magazine)
             {
@@ -430,9 +442,6 @@ namespace ShootingGallery
             UpdateLaser();
             UpdateAmmoRow();
             UpdateFlashlight();
-            // 弾込め中・弾を込めた時は、リボルバーの弾倉がくるくる回る
-            if (revolverCylinder != null && current == WeaponType.Revolver && (Time.time < reloadUntil || Time.time < cylinderSpinUntil))
-                revolverCylinder.Rotate(0f, 720f * Time.deltaTime, 0f, Space.Self);
             // コルク銃の先のコルクと、手に持ったポイは、弾込め (次のポイが来る) まで出さない
             bool ready = Time.time >= reloadUntil;
             if (corkLoaded != null && current == WeaponType.CorkGun && corkLoaded.activeSelf != ready) corkLoaded.SetActive(ready);
@@ -578,12 +587,12 @@ namespace ShootingGallery
             if (IsFestival(current))
             {
                 var kind = current == WeaponType.RingToss ? FestivalThrow.Kind.Ring : current == WeaponType.CorkGun ? FestivalThrow.Kind.Cork
-                         : current == WeaponType.Poi ? FestivalThrow.Kind.Poi : FestivalThrow.Kind.Coin;
+                         : current == WeaponType.Poi ? FestivalThrow.Kind.Poi : current == WeaponType.Ball ? FestivalThrow.Kind.Ball : FestivalThrow.Kind.Coin;
                 float gravity = def.projectileGravity;
                 Vector3 velocity = IsArc(current) ? ArcVelocity(origin, muzzle.forward, out gravity) : muzzle.forward * def.projectileSpeed;
                 FestivalThrow.Spawn(kind, origin, velocity, gravity, this, hitMask);
                 // 手に持った輪・お金は投げたら消え、少しして次が出る (ポイとコルクは弾込めが終わるまで出ない: LateUpdate)
-                if (current == WeaponType.RingToss || current == WeaponType.Coin)
+                if (current == WeaponType.RingToss || current == WeaponType.Coin || current == WeaponType.Ball)
                 {
                     if (reloadRoutine != null) StopCoroutine(reloadRoutine);
                     reloadRoutine = isActiveAndEnabled ? StartCoroutine(Reload(def.fireInterval * 0.8f)) : null;
@@ -639,6 +648,7 @@ namespace ShootingGallery
             }
             else
                 FireHitscan(def, muzzle, origin);
+            EjectCasing(current); // 薬きょうが銃の外側へ飛び出す (ハンドガン・マシンガン・ショットガン・スナイパー)
 
             // 弾数のある武器: 撃ちきったら弾込め (トリガーで込める武器は、次にトリガーを引くまで空のまま)
             if (def.magazine > 0 && --ammo <= 0 && def.reloadStep <= 0)
@@ -648,6 +658,7 @@ namespace ShootingGallery
                 readyAt[current] = reloadUntil;
                 if (current != WeaponType.Poi) Sfx.Play("reload"); // ポイは次のポイが来るのを待つだけ (音なし)
             }
+            if (current == WeaponType.Revolver && ammo <= 0) OpenCylinder(); // 撃ちきった: 弾倉を外側へ振り出して、6発の薬きょうを落とす
 
             if (flashRoutine != null) StopCoroutine(flashRoutine);
             // 自分の弾でスナイパーの的を取ると左手の銃はその場で非表示になるので、その時はフラッシュを出さない
@@ -798,6 +809,152 @@ namespace ShootingGallery
             flash.transform.localRotation = Quaternion.Euler(0, 0, Random.Range(0f, 360f));
             yield return new WaitForSeconds(0.04f);
             flash.SetActive(false);
+        }
+
+        // ---- 薬きょう ----
+
+        /// <summary>銃の外側 (右手は右、左手は左)</summary>
+        float OutSide => hapticNode == XRNode.LeftHand ? -1f : 1f;
+
+        // 撃った時に、銃の外側へ薬きょうが飛び出す (少し飛んで落ちる)。ほかの武器は何もしない
+        void EjectCasing(WeaponType type)
+        {
+            float side = OutSide;
+            Vector3 port, velocity; // 銃のローカルの、飛び出す所と速さ
+            float diameter, length;
+            Material mat, baseMat = null;
+            switch (type)
+            {
+                case WeaponType.Handgun: // 外側へ (金色の真ちゅう)
+                    port = new Vector3(side * 0.015f, 0.025f, 0.04f); velocity = new Vector3(side * 1.4f, 1.3f, -0.3f);
+                    diameter = 0.011f; length = 0.02f; mat = casingBrassMaterial;
+                    break;
+                case WeaponType.MachineGun:
+                case WeaponType.AirMachineGun: // 外側へ (茶色っぽい銅)
+                    port = new Vector3(side * 0.03f, 0.03f, 0.08f); velocity = new Vector3(side * 1.8f, 1.1f, -0.2f);
+                    diameter = 0.012f; length = 0.03f; mat = casingCopperMaterial;
+                    break;
+                case WeaponType.Shotgun: // 外側の斜め後ろへ (赤い筒と金色の雷管の台)
+                    port = new Vector3(side * 0.03f, 0.03f, 0.03f); velocity = new Vector3(side * 1.2f, 1f, -1.3f);
+                    diameter = 0.022f; length = 0.055f; mat = casingRedMaterial; baseMat = casingBrassMaterial;
+                    break;
+                case WeaponType.Sniper: // 真横へ (黒)
+                    port = new Vector3(side * 0.025f, 0.025f, 0.06f); velocity = new Vector3(side * 2f, 0.6f, 0f);
+                    diameter = 0.013f; length = 0.05f; mat = casingBlackMaterial;
+                    break;
+                default:
+                    return;
+            }
+            if (mat == null) return;
+            var t = transform;
+            velocity += Random.insideUnitSphere * 0.25f;
+            // 薬きょうの口 (+Y) を銃口の向きにして出す (飛びながら、くるくる回る)
+            ShellCasing.Spawn(t.TransformPoint(port), t.rotation * Quaternion.Euler(90f, 0f, 0f), t.TransformDirection(velocity), diameter, length, mat, baseMat);
+        }
+
+        // ---- リボルバーの弾倉 ----
+        // 撃ちきると、弾倉が外側 (右手は右、左手は左) へ振り出され、6発の薬きょうが手前へ落ちる。
+        // トリガーを引くたびに、弾倉が1発分 (60 度) 回って弾が1発込められ、6発込め終わると元の所へ戻る
+
+        const float CylinderSwingTime = 0.15f, CylinderStepTime = 0.1f, ChamberAngle = 60f;
+        Transform[] chambers = new Transform[0]; // 弾倉の6つの弾 (込めてある時だけ見える)
+        Vector3 cylinderHome;
+        Quaternion cylinderHomeRot;
+        float cylinderSpin;      // 弾倉の回った角度 (1発込めるたびに 60 度)
+        float cylinderOpen;      // 0 = 閉じている, 1 = 振り出している
+        Coroutine cylinderRoutine;
+
+        // 弾倉の元の位置と、6つの弾を覚える (最初の子は弾倉の胴)
+        void CaptureCylinder()
+        {
+            if (revolverCylinder == null) return;
+            cylinderHome = revolverCylinder.localPosition;
+            cylinderHomeRot = revolverCylinder.localRotation;
+            chambers = new Transform[Mathf.Max(0, revolverCylinder.childCount - 1)];
+            for (int i = 0; i < chambers.Length; i++) chambers[i] = revolverCylinder.GetChild(i + 1);
+        }
+
+        // 振り出した時の、弾倉の位置のずれ (銃のローカル。外側へ、少し下へ)
+        Vector3 CylinderOut => new Vector3(OutSide * 0.034f, -0.012f, 0f);
+
+        void PoseCylinder()
+        {
+            if (revolverCylinder == null) return;
+            revolverCylinder.localPosition = cylinderHome + CylinderOut * cylinderOpen;
+            revolverCylinder.localRotation = cylinderHomeRot * Quaternion.Euler(0f, cylinderSpin, 0f); // (ローカルの Y が銃身の向き)
+        }
+
+        // 今の弾込めの状態の形にする: 撃ちきって込めている途中なら振り出して込めた分だけ弾を見せ、そうでなければ閉じて全部見せる
+        void SnapCylinder()
+        {
+            if (revolverCylinder == null) return;
+            bool open = current == WeaponType.Revolver && NeedsReload;
+            cylinderOpen = open ? 1f : 0f;
+            for (int i = 0; i < chambers.Length; i++)
+                if (chambers[i] != null) chambers[i].gameObject.SetActive(!open || i < loaded);
+            PoseCylinder();
+        }
+
+        void RunCylinder(IEnumerator routine)
+        {
+            if (revolverCylinder == null) return;
+            if (cylinderRoutine != null) StopCoroutine(cylinderRoutine);
+            cylinderRoutine = isActiveAndEnabled ? StartCoroutine(routine) : null;
+            if (cylinderRoutine == null) SnapCylinder();
+        }
+
+        void OpenCylinder() => RunCylinder(OpenCylinderRoutine());
+
+        IEnumerator OpenCylinderRoutine()
+        {
+            yield return SwingCylinder(1f);
+            // 6発の薬きょうが、弾倉から手前へ抜けて落ちる (口を銃口の向きにしたまま。少しずつずらして)
+            for (int i = 0; i < chambers.Length; i++)
+            {
+                var c = chambers[i];
+                if (c == null || !c.gameObject.activeSelf) continue;
+                c.gameObject.SetActive(false);
+                var velocity = -transform.forward * Random.Range(0.6f, 0.9f) + transform.right * (OutSide * 0.3f) + Random.insideUnitSphere * 0.15f;
+                ShellCasing.Spawn(c.position - revolverCylinder.up * 0.01f, revolverCylinder.rotation, velocity, 0.0085f, 0.024f, casingBrassMaterial);
+                if (i % 2 == 1) yield return null;
+            }
+            cylinderRoutine = null;
+        }
+
+        // 1発込める: 弾倉が1発分回って、込めた弾が見える。full なら回ったあと閉じる
+        void LoadChamber(bool full) => RunCylinder(LoadChamberRoutine(full));
+
+        IEnumerator LoadChamberRoutine(bool full)
+        {
+            if (cylinderOpen < 1f) yield return SwingCylinder(1f);
+            int n = Mathf.Clamp(loaded, 1, chambers.Length);
+            for (int i = 0; i < chambers.Length; i++)
+                if (chambers[i] != null) chambers[i].gameObject.SetActive(i < n || full);
+            float from = cylinderSpin, to = Mathf.Round(cylinderSpin / ChamberAngle) * ChamberAngle + ChamberAngle;
+            for (float t = 0f; t < 1f; t += Time.deltaTime / CylinderStepTime)
+            {
+                cylinderSpin = Mathf.Lerp(from, to, Mathf.SmoothStep(0f, 1f, t));
+                PoseCylinder();
+                yield return null;
+            }
+            cylinderSpin = to % 360f;
+            PoseCylinder();
+            if (full) yield return SwingCylinder(0f);
+            cylinderRoutine = null;
+        }
+
+        // 弾倉を振り出す (to = 1) / 戻す (to = 0)
+        IEnumerator SwingCylinder(float to)
+        {
+            float from = cylinderOpen;
+            for (float t = 0f; t < 1f; t += Time.deltaTime / CylinderSwingTime)
+            {
+                cylinderOpen = Mathf.Lerp(from, to, Mathf.SmoothStep(0f, 1f, t));
+                PoseCylinder();
+                yield return null;
+            }
+            cylinderOpen = to;
+            PoseCylinder();
         }
     }
 }

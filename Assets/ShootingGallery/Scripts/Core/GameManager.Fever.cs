@@ -105,6 +105,105 @@ namespace ShootingGallery
             }
         }
 
+        // ---- フィーバーが終わる時の、メイン屋台の方を指す緑の矢印 ----
+        // それぞれの屋台の前の、メイン屋台に近い方の端から、円周にそってメイン屋台の方を指す (真後ろの屋台は両端から外向きに)
+        const float ReturnArrowTime = 5f;  // 出しておく秒数
+        const float ReturnArrowEnd = 1f;   // 屋台の真ん中から、矢印を置く端まで (円周にそった長さ m)
+        readonly List<BonusArrow> returnArrowsShown = new List<BonusArrow>();
+        readonly List<BonusArrow>[] returnArrowPool = { new List<BonusArrow>(), new List<BonusArrow>() }; // 左向き / 右向き
+        float returnArrowLeft;
+        Coroutine returnArrowRoutine;
+        readonly List<(float yaw, float r, bool left)> returnArrowPlan = new List<(float, float, bool)>();
+
+        // しまわれる前の屋台の場所から矢印の置き場所を決めておき、屋台がしまわれきったら出す
+        void ShowReturnArrows()
+        {
+            if (returnArrows == null || returnArrows.Length < 2 || returnArrows[0] == null || mainStall == null) return;
+            if (ChallengeActive) return; // 別の世界・チャレンジの間 (周りの屋台がもうしまわれている / 見えていない) は出さない
+            HideReturnArrows();
+            returnArrowPlan.Clear();
+            var mp = mainStall.transform.localPosition;
+            float mainYaw = Mathf.Atan2(mp.x, mp.z) * Mathf.Rad2Deg;
+            float sector = 180f / (activeFeverStalls.Count + 1); // 屋台1軒分の扇の半分 (度)
+            float minRadius = bonusStage != null ? bonusStage.arrowRadius : 2.5f;
+            var a0 = returnArrows[0];
+            foreach (var s in activeFeverStalls)
+            {
+                if (s == null || !s.IsSettled) continue; // 出ている屋台だけ (しまわれた・せり上がる途中の屋台の所には出さない)
+                var p = s.transform.localPosition;
+                float dist = new Vector2(p.x, p.z).magnitude;
+                if (dist < 0.01f) continue;
+                float yaw = Mathf.Atan2(p.x, p.z) * Mathf.Rad2Deg;
+                float rel = Mathf.DeltaAngle(mainYaw, yaw); // + = メイン屋台から右回り (プレイヤーから見て右) の屋台
+                // 「下を見て」の矢印と同じ距離 (屋台の足元のハッチのすぐ手前)。端は、隣の屋台の扇にかからない所まで
+                float r = Mathf.Max(minRadius, dist - HatchFrontDepth - a0.width / 2f - 0.06f);
+                float offset = Mathf.Min(ReturnArrowEnd, sector * Mathf.Deg2Rad * r - a0.length / 2f - 0.1f) / r * Mathf.Rad2Deg;
+                if (Mathf.Abs(rel) >= 179f)
+                {   // 真後ろ: 両端から、外向きに (どちらから回ってもよい)
+                    returnArrowPlan.Add((yaw - offset, r, true));
+                    returnArrowPlan.Add((yaw + offset, r, false));
+                }
+                else if (rel > 0f) returnArrowPlan.Add((yaw - offset, r, true)); // 右側の屋台: メイン屋台側の端 (プレイヤーから見て左) で、左を指す
+                else returnArrowPlan.Add((yaw + offset, r, false));             // 左側の屋台: メイン屋台側の端 (右) で、右を指す
+            }
+            if (returnArrowPlan.Count == 0) return;
+            returnArrowRoutine = StartCoroutine(ShowReturnArrowsAfter(stallMoveDuration));
+        }
+
+        IEnumerator ShowReturnArrowsAfter(float delay)
+        {
+            yield return new WaitForSeconds(delay); // 周りの屋台がしまわれきるまで待つ
+            returnArrowRoutine = null;
+            if (IsFever || ChallengeActive) yield break; // (待っている間に、次のフィーバー・別の世界・チャレンジが始まった)
+            foreach (var p in returnArrowPlan) PlaceReturnArrow(p.yaw, p.r, p.left);
+            returnArrowLeft = ReturnArrowTime;
+        }
+
+        // yaw の向き、穴の真ん中から r の床に矢印を出す (left = プレイヤーから見て左を指す)。見本を複製して使い回す
+        void PlaceReturnArrow(float yaw, float r, bool left)
+        {
+            int k = left ? 0 : 1;
+            BonusArrow a = null;
+            foreach (var c in returnArrowPool[k])
+                if (c != null && !c.Showing && !c.gameObject.activeSelf) { a = c; break; }
+            if (a == null)
+            {
+                var template = returnArrows[k];
+                if (template == null) return;
+                a = Instantiate(template, template.transform.parent);
+                a.name = template.name;
+                a.HideImmediate();
+                returnArrowPool[k].Add(a);
+            }
+            a.Place(Quaternion.Euler(0f, yaw, 0f) * Vector3.forward * r);
+            a.Show();
+            returnArrowsShown.Add(a);
+        }
+
+        void UpdateReturnArrows()
+        {
+            if (returnArrowLeft <= 0f) return;
+            returnArrowLeft -= Time.deltaTime;
+            if (returnArrowLeft <= 0f || IsFever) HideReturnArrows(); // (時間切れ・次のフィーバー)
+        }
+
+        /// <summary>床の矢印 (青い「下を見て」・赤い左右・緑のメイン屋台へ) を全部しまう (別の世界・チャレンジへ行く時など、邪魔になりそうな時)</summary>
+        void HideAllArrows()
+        {
+            sideArrowLeft = 0f;
+            if (sideArrows != null) foreach (var a in sideArrows) if (a != null) a.Hide();
+            if (returnArrowLeft > 0f || returnArrowRoutine != null || returnArrowsShown.Count > 0) HideReturnArrows();
+            if (bonusStage != null && bonusStage.ArrowsActive) bonusStage.HideArrows();
+        }
+
+        void HideReturnArrows()
+        {
+            returnArrowLeft = 0f;
+            if (returnArrowRoutine != null) { StopCoroutine(returnArrowRoutine); returnArrowRoutine = null; }
+            foreach (var a in returnArrowsShown) if (a != null) a.Hide();
+            returnArrowsShown.Clear();
+        }
+
         float RingRadius(int n)
         {
             if (n < 2) return stallRadius;
@@ -166,6 +265,7 @@ namespace ShootingGallery
         {
             IsFever = false;
             if (bonusStage != null) bonusStage.Close();
+            ShowReturnArrows(); // (時間切れ・点数を取りきったラウンドの終わりでも) 周りの屋台がしまわれたら、それぞれの屋台があった所からメイン屋台の方を指す矢印を出す
             foreach (var s in feverStalls) s.Sink(stallMoveDuration);
             activeFeverStalls.Clear();
             mainStall.Slide(mainHomePos, mainHomeRot, stallMoveDuration); // メイン屋台は最初の位置へ戻る

@@ -431,6 +431,20 @@ namespace ShootingGallery
             var ltMuzzle = Muzzle(lt, new Vector3(0f, 0.01f, 0.16f), ltGlow);
             gun.lightningMaterial = Mat("Lightning_Bolt", new Color(0.8f, 0.5f, 1f), new Color(2.4f, 1.3f, 3.2f), true);
 
+            // 22: 青い球 (カジノのボールのルーレット用。指先に青い球を1つ持っている。投げると消えて、すぐ次が出る)
+            var bl = Group(gunGo.transform, "Model_Ball");
+            var ballBlue = Mat("Casino_Ball_Blue", new Color(0.15f, 0.4f, 1f), new Color(0.05f, 0.15f, 0.45f), false, 0.85f);
+            GunPart(PrimitiveType.Sphere, bl, new Vector3(0f, 0.015f, 0.07f), Vector3.one * 0.05f, ballBlue);
+            var blMuzzle = Group(bl, "Muzzle"); // マズルフラッシュは無し
+            blMuzzle.localPosition = new Vector3(0f, 0.015f, 0.1f);
+            gun.ballMaterial = ballBlue;
+
+            // 薬きょう (撃った時に、銃の外側へ飛び出す)
+            gun.casingBrassMaterial = Mat("Casing_Brass", new Color(1f, 0.8f, 0.25f), new Color(0.12f, 0.08f, 0f), false, 0.85f); // ハンドガン・リボルバー: 黄色い真ちゅう
+            gun.casingCopperMaterial = Mat("Casing_Copper", new Color(0.62f, 0.33f, 0.16f), null, false, 0.8f);                // マシンガン: 茶色っぽい銅
+            gun.casingRedMaterial = Mat("Casing_ShotgunRed", new Color(0.85f, 0.12f, 0.1f), null, false, 0.35f);              // ショットガン: 赤い筒
+            gun.casingBlackMaterial = Mat("Casing_Black", new Color(0.06f, 0.06f, 0.07f), null, false, 0.7f);                  // スナイパー: 黒
+
             var laserMat = Mat("Laser", new Color(1f, 0.1f, 0.1f), null, true);
             var laserGo = new GameObject("Laser");
             laserGo.transform.SetParent(gunGo.transform, false);
@@ -456,8 +470,8 @@ namespace ShootingGallery
             gun.bombMaterial = Mat("Bomb", new Color(0.12f, 0.12f, 0.14f), new Color(0.5f, 0.15f, 0f));
             gun.explosionMaterial = TransparentMat("Explosion", new Color(1f, 0.55f, 0.15f, 0.8f));
             gun.models = new[] { hg.gameObject, mg.gameObject, sg.gameObject, bm.gameObject, sr.gameObject, bz.gameObject, sk.gameObject, kj.gameObject, dt.gameObject, rv.gameObject, ms.gameObject, fl.gameObject, px.gameObject,
-                                 rt.gameObject, cg.gameObject, po.gameObject, cn.gameObject, tp.gameObject, tr.gameObject, im.gameObject, am.gameObject, lt.gameObject };
-            gun.muzzles = new[] { hgMuzzle, mgMuzzle, sgMuzzle, bmMuzzle, srMuzzle, bzMuzzle, skMuzzle, kjMuzzle, dtMuzzle, rvMuzzle, msMuzzle, flMuzzle, pxMuzzle, rtMuzzle, cgMuzzle, poMuzzle, cnMuzzle, tpMuzzle, trMuzzle, imMuzzle, amMuzzle, ltMuzzle };
+                                 rt.gameObject, cg.gameObject, po.gameObject, cn.gameObject, tp.gameObject, tr.gameObject, im.gameObject, am.gameObject, lt.gameObject, bl.gameObject };
+            gun.muzzles = new[] { hgMuzzle, mgMuzzle, sgMuzzle, bmMuzzle, srMuzzle, bzMuzzle, skMuzzle, kjMuzzle, dtMuzzle, rvMuzzle, msMuzzle, flMuzzle, pxMuzzle, rtMuzzle, cgMuzzle, poMuzzle, cnMuzzle, tpMuzzle, trMuzzle, imMuzzle, amMuzzle, ltMuzzle, blMuzzle };
             gun.ringMesh = ringMesh;
             gun.ringMaterials = ringMats;
             gun.corkMaterial = cork;

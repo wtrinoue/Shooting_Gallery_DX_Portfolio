@@ -255,6 +255,7 @@ namespace ShootingGallery
             gm.gateStalls = gateStalls;
             gm.bonusStage = bonusStage;
             gm.sideArrows = new[] { BuildSideArrow(world, true), BuildSideArrow(world, false) }; // 屋台が増える時に、メイン屋台の前に出る左右の赤い矢印
+            gm.returnArrows = new[] { BuildReturnArrow(world, true), BuildReturnArrow(world, false) }; // フィーバーが終わる時に、屋台の前からメイン屋台の方を指す緑の矢印の見本
             gm.stallHatchMaterials = new[]
             {
                 Mat("Pit_Rim", new Color(0.6f, 0.6f, 0.65f), null, false, 0.7f),

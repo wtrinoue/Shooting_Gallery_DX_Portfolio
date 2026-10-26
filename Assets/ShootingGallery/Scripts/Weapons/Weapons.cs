@@ -2,7 +2,7 @@ using UnityEngine;
 
 namespace ShootingGallery
 {
-    public enum WeaponType { Handgun = 0, MachineGun = 1, Shotgun = 2, Bomb = 3, Sniper = 4, Bazooka = 5, Shuriken = 6, FireBall = 7, Dart = 8, Revolver = 9, Missile = 10, Flashlight = 11, Pickaxe = 12, RingToss = 13, CorkGun = 14, Poi = 15, Coin = 16, Torpedo = 17, Trumpet = 18, Imagination = 19, AirMachineGun = 20, Lightning = 21 }
+    public enum WeaponType { Handgun = 0, MachineGun = 1, Shotgun = 2, Bomb = 3, Sniper = 4, Bazooka = 5, Shuriken = 6, FireBall = 7, Dart = 8, Revolver = 9, Missile = 10, Flashlight = 11, Pickaxe = 12, RingToss = 13, CorkGun = 14, Poi = 15, Coin = 16, Torpedo = 17, Trumpet = 18, Imagination = 19, AirMachineGun = 20, Lightning = 21, Ball = 22 }
 
     public struct WeaponDef
     {
@@ -68,6 +68,8 @@ namespace ShootingGallery
                     return new WeaponDef { displayName = "CORK GUN", fireInterval = 0.2f, automatic = false, pellets = 1, range = 30f, projectile = true, projectileSpeed = 24f, projectileGravity = 1.5f, magazine = 1, reloadTime = 0.8f, reloadGauge = true };
                 case WeaponType.Poi: // 夏祭りモード (金魚すくい)。ポイを向けた所へ輪投げと同じ放物線で投げ入れる。確率ですくえたり破れたりする。投げたら次のポイが来るまで待つ (ゲージ)
                     return new WeaponDef { displayName = "POI", fireInterval = 0.2f, automatic = false, pellets = 1, range = 20f, projectile = true, projectileSpeed = 6.5f, projectileGravity = 6f, magazine = 1, reloadTime = 1.4f, reloadGauge = true };
+                case WeaponType.Ball: // カジノモード (ボールのルーレット)。青い球をまっすぐ投げて、当たったルーレットを回す。白いレーザーで狙う
+                    return new WeaponDef { displayName = "BALL", fireInterval = 0.35f, automatic = false, pellets = 1, range = 25f, projectile = true, projectileSpeed = 16f, projectileGravity = 0f };
                 case WeaponType.Coin: // 夏祭りモード (食べ物の屋台)。お金をまっすぐ投げて、当たったメニューの板の料理を買う (お金は夏祭りで稼いだ分)。白いレーザーで狙う
                     return new WeaponDef { displayName = "COIN", fireInterval = 0.35f, automatic = false, pellets = 1, range = 25f, projectile = true, projectileSpeed = 16f, projectileGravity = 0f };
                 case WeaponType.Flashlight: // 幽霊モード専用。トリガーを引いている間だけ光り、照らした的を倒す。電池が減り、使わないと回復する (GunController)

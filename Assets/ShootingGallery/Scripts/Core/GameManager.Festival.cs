@@ -41,6 +41,7 @@ namespace ShootingGallery
             RenderSettings.fogEndDistance = Mathf.Max(normalFogEnd, 180f);
             FadeAmbience(festivalSkyColor, normalAmbient, festivalSkyColor, 2.5f); // 星がきれいに見える、深い藍色の夜空へ
             player.GiveStageWeapon(festivalStage.WeaponFor(player.head.transform.forward, WeaponType.Handgun), festivalStage.duration);
+            switchClickQuietUntil = Time.time + SwitchClickQuiet; // (持ったばかりの持ち替えは、音を鳴らさない)
             Sfx.Play("stageup");
             ShowMessage("SUMMER FESTIVAL!!\nWIN GAMES = EARN MONEY\nSPEND IT AT THE FOOD STALL!", 3.5f, new Color(1f, 0.55f, 0.35f));
         }
@@ -60,7 +61,7 @@ namespace ShootingGallery
                 if (w != player.Weapon)
                 {
                     player.SwitchStageWeapon(w); // (ゲージは続きから)
-                    Sfx.Play("click");
+                    PlaySwitchClick();
                 }
             }
             if (player.DualWield && player.leftGun != null)
@@ -69,7 +70,7 @@ namespace ShootingGallery
                 if (w != player.LeftWeapon)
                 {
                     player.SwitchStageWeapon(w, true);
-                    Sfx.Play("click");
+                    PlaySwitchClick();
                 }
             }
         }

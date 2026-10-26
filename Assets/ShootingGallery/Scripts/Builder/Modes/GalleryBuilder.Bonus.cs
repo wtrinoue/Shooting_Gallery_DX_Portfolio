@@ -307,7 +307,17 @@ namespace ShootingGallery
         /// パネルは床に垂直に立ち、プレイヤー (+Z) の方を向く
         /// </summary>
         BonusArrow BuildSideArrow(Transform parent, bool left) =>
-            BuildFloorArrow(parent, left ? "SideArrow_Left" : "SideArrow_Right", Mat("SideArrow_Red", new Color(1f, 0.2f, 0.15f), new Color(1.4f, 0.2f, 0.12f), false, 0.6f),
+            BuildSideArrow(parent, left, left ? "SideArrow_Left" : "SideArrow_Right", Mat("SideArrow_Red", new Color(1f, 0.2f, 0.15f), new Color(1.4f, 0.2f, 0.12f), false, 0.6f));
+
+        /// <summary>
+        /// フィーバーが終わる時に、それぞれの屋台の前から、円周にそってメイン屋台の方を指す緑の矢印の見本 (left = 左向き。GameManager が数だけ複製する)。
+        /// パネルは床に垂直に立ち、屋台と平行 (プレイヤーの方を向く)
+        /// </summary>
+        BonusArrow BuildReturnArrow(Transform parent, bool left) =>
+            BuildSideArrow(parent, left, left ? "ReturnArrow_Left" : "ReturnArrow_Right", Mat("ReturnArrow_Green", new Color(0.2f, 0.9f, 0.3f), new Color(0.2f, 1.2f, 0.3f), false, 0.6f));
+
+        BonusArrow BuildSideArrow(Transform parent, bool left, string name, Material mat) =>
+            BuildFloorArrow(parent, name, mat,
                             Quaternion.Euler(0f, 0f, left ? 90f : -90f), 0.8f, 0.2f, 0.21f); // パネルの下 (-Y) が、プレイヤーから見て左 / 右 (+Z がプレイヤーの方なので +X / -X) を指す。横に寝かせた矢じりの幅の半分が高さ
 
         // 反時計回りの輪郭を、外へ d だけ広げる (角は辺を平行にずらした線どうしの交わる所へ)

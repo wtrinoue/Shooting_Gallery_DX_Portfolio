@@ -49,6 +49,8 @@ namespace ShootingGallery
         public Material[] stallHatchMaterials;
         [Tooltip("屋台が増える時 (フィーバー・WORLD GATE・屋台の拡張) に、メイン屋台の前の床から出る左右の赤い矢印 (左向き, 右向き)")]
         public BonusArrow[] sideArrows;
+        [Tooltip("フィーバーが終わる時に、それぞれの屋台の前から円周にそってメイン屋台の方を指す緑の矢印の見本 (左向き, 右向き。屋台の数だけ複製する)")]
+        public BonusArrow[] returnArrows;
         [Tooltip("スナイパーの的を撃つと始まるスナイパーチャレンジ (遠くの大きな的を1発で狙う)")]
         public SniperChallenge sniper;
         [Tooltip("マシンガンチャレンジの的を撃つと始まるマシンガンチャレンジ (屋台3軒分に並んだ的をマシンガンで撃つ)")]
@@ -530,8 +532,10 @@ namespace ShootingGallery
             UpdateStageBgm(); // モードの BGM の大きさ (GameManager.Bgm.cs)
             UpdateFinale(); // 2 MIN の終わりのクラッカーと拍手 (GameManager.Finale.cs)
             UpdateControllerView(); // タイトルで操作方法の看板を見ている間は、手元をコントローラーの模型に
+            if (ChallengeActive) HideAllArrows(); // 別の世界・チャレンジの間は、床の矢印 (青・赤・緑) を全部しまっておく (邪魔にならないように)
             UpdateBonusArrows(); // ボーナスステージが開く時の「下を見て」の矢印を、屋台の目の前へ (屋台が滑ると、いっしょに滑る)
             UpdateSideArrows(); // 屋台が増えた時の、左右を見てほしい赤い矢印 (GameManager.Fever.cs)
+            UpdateReturnArrows(); // フィーバーが終わる時の、メイン屋台の方を指す緑の矢印 (GameManager.Fever.cs)
             if (State == GameState.Playing)
             {
                 elapsed += Time.deltaTime;
@@ -1036,13 +1040,7 @@ namespace ShootingGallery
                     break;
                 case TargetKind.BlueOrb:
                     popupColor = new Color(0.35f, 0.65f, 1f);
-                    if (bonusStage != null && !bonusStage.IsBusy)
-                    {
-                        BonusUsedThisFever = true;
-                        bonusStage.Open(); // しばらく、屋台ごとに目の前の床から「下を見て」の矢印が出る (UpdateBonusArrows)
-                        Sfx.Play("bonus");
-                        ShowMessage("BONUS CHANCE!\nLOOK DOWN!!", 2.5f, popupColor);
-                    }
+                    StackFeatureHit(target, point); // (フレームの終わりにまとめて調べる: ボーナスステージを開く)
                     break;
                 case TargetKind.BigBonus:
                     popupColor = new Color(0.4f, 0.9f, 1f);
@@ -1060,35 +1058,26 @@ namespace ShootingGallery
                     popupColor = new Color(0.4f, 1f, 0.9f);
                     ShowMessage($"UFO!!  +{target.points}", 2f, popupColor);
                     break;
-                // 武器の的: マシンガンチャレンジ中は武器を持ち替えない (点数だけ入る)
+                // 武器の的・フィーバーの的: 積んでおき、フレームの終わりにまとめて調べる (ProcessFeatureHits。マシンガンチャレンジ中は武器を持ち替えない)
                 case TargetKind.Bomb:
                     popupColor = new Color(1f, 0.55f, 0.15f);
-                    if (MachineGunChallengeActive) { Sfx.Play("hit"); break; }
-                    player.GiveWeapon(WeaponType.Bomb, specialWeaponDuration, point); // (撃った的から、銃が手元へ飛んでくる)
-                    Sfx.Play("pickup");
-                    ShowMessage("BOMB!", 1.5f, popupColor);
+                    StackFeatureHit(target, point);
                     break;
                 case TargetKind.MachineGun:
                     popupColor = new Color(0.4f, 0.7f, 1f);
-                    if (MachineGunChallengeActive) { Sfx.Play("hit"); break; }
-                    player.GiveWeapon(WeaponType.MachineGun, specialWeaponDuration, point);
-                    Sfx.Play("pickup");
-                    ShowMessage("MACHINE GUN!", 1.5f, popupColor);
+                    StackFeatureHit(target, point);
                     break;
                 case TargetKind.Shotgun:
                     popupColor = new Color(0.4f, 1f, 0.5f);
-                    if (MachineGunChallengeActive) { Sfx.Play("hit"); break; }
-                    player.GiveWeapon(WeaponType.Shotgun, specialWeaponDuration, point);
-                    Sfx.Play("pickup");
-                    ShowMessage("SHOTGUN!", 1.5f, popupColor);
+                    StackFeatureHit(target, point);
                     break;
                 case TargetKind.Fever:
                     popupColor = new Color(1f, 0.3f, 0.3f);
-                    StartFever(point); // 左手の銃が、撃った的から飛んでくる
+                    StackFeatureHit(target, point);
                     break;
                 case TargetKind.Sniper:
                     popupColor = new Color(1f, 0.25f, 0.3f);
-                    RequestMode(target); // 順番待ちに入れる (他のモードの途中なら、終わってから始まる)
+                    StackFeatureHit(target, point); // 積んでおき、フレームの終わりにまとめて調べる (同時に当たった機能付きの的の中から、始めるモードを決める)
                     break;
                 case TargetKind.SniperBig:
                     popupColor = new Color(1f, 0.85f, 0.3f);
@@ -1098,22 +1087,22 @@ namespace ShootingGallery
                     break;
                 case TargetKind.MachineGunChallenge:
                     popupColor = new Color(1f, 0.85f, 0.2f);
-                    RequestMode(target); // 順番待ちに入れる (他のモードの途中なら、終わってから始まる)
+                    StackFeatureHit(target, point); // 積んでおき、フレームの終わりにまとめて調べる (同時に当たった機能付きの的の中から、始めるモードを決める)
                     break;
                 case TargetKind.Naval:
                     popupColor = new Color(0.4f, 0.75f, 1f);
-                    RequestMode(target); // 順番待ちに入れる (他のモードの途中なら、終わってから始まる)
+                    StackFeatureHit(target, point); // 積んでおき、フレームの終わりにまとめて調べる (同時に当たった機能付きの的の中から、始めるモードを決める)
                     break;
                 case TargetKind.Sky:
                     popupColor = new Color(0.55f, 0.85f, 1f);
-                    RequestMode(target); // 順番待ちに入れる (他のモードの途中なら、終わってから始まる)
+                    StackFeatureHit(target, point); // 積んでおき、フレームの終わりにまとめて調べる (同時に当たった機能付きの的の中から、始めるモードを決める)
                     break;
                 case TargetKind.Aerial:
                     popupColor = new Color(1f, 0.7f, 0.25f); // 撃墜の演出は OnEnemyDown
                     break;
                 case TargetKind.Ninja:
                     popupColor = new Color(0.75f, 0.5f, 1f);
-                    RequestMode(target); // 順番待ちに入れる (他のモードの途中なら、終わってから始まる)
+                    StackFeatureHit(target, point); // 積んでおき、フレームの終わりにまとめて調べる (同時に当たった機能付きの的の中から、始めるモードを決める)
                     break;
                 case TargetKind.NinjaPanel:
                     popupColor = target.points >= 500 ? new Color(1f, 0.85f, 0.3f) : new Color(0.85f, 0.75f, 1f);
@@ -1122,11 +1111,11 @@ namespace ShootingGallery
                     break;
                 case TargetKind.Deluxe:
                     popupColor = new Color(1f, 0.8f, 0.3f);
-                    RequestMode(target); // 順番待ちに入れる (他のモードの途中なら、終わってから始まる)
+                    StackFeatureHit(target, point); // 積んでおき、フレームの終わりにまとめて調べる (同時に当たった機能付きの的の中から、始めるモードを決める)
                     break;
                 case TargetKind.Kaiju:
                     popupColor = new Color(0.4f, 1f, 0.4f);
-                    RequestMode(target); // 順番待ちに入れる (他のモードの途中なら、終わってから始まる)
+                    StackFeatureHit(target, point); // 積んでおき、フレームの終わりにまとめて調べる (同時に当たった機能付きの的の中から、始めるモードを決める)
                     break;
                 case TargetKind.KaijuBuilding:
                     popupColor = new Color(1f, 0.75f, 0.3f);
@@ -1140,7 +1129,7 @@ namespace ShootingGallery
                     break;
                 case TargetKind.Casino:
                     popupColor = new Color(1f, 0.4f, 0.6f);
-                    RequestMode(target); // 順番待ちに入れる (他のモードの途中なら、終わってから始まる)
+                    StackFeatureHit(target, point); // 積んでおき、フレームの終わりにまとめて調べる (同時に当たった機能付きの的の中から、始めるモードを決める)
                     break;
                 case TargetKind.Roulette:
                     popupColor = target.points >= 500 ? new Color(1f, 0.85f, 0.3f) : new Color(1f, 0.5f, 0.7f);
@@ -1157,7 +1146,7 @@ namespace ShootingGallery
                     break;
                 case TargetKind.Western:
                     popupColor = new Color(0.95f, 0.75f, 0.35f);
-                    RequestMode(target); // 順番待ちに入れる (他のモードの途中なら、終わってから始まる)
+                    StackFeatureHit(target, point); // 積んでおき、フレームの終わりにまとめて調べる (同時に当たった機能付きの的の中から、始めるモードを決める)
                     break;
                 case TargetKind.Rider:
                     popupColor = new Color(0.95f, 0.75f, 0.35f);
@@ -1165,7 +1154,7 @@ namespace ShootingGallery
                     break;
                 case TargetKind.Space:
                     popupColor = new Color(0.6f, 0.7f, 1f);
-                    RequestMode(target); // 順番待ちに入れる (他のモードの途中なら、終わってから始まる)
+                    StackFeatureHit(target, point); // 積んでおき、フレームの終わりにまとめて調べる (同時に当たった機能付きの的の中から、始めるモードを決める)
                     break;
                 case TargetKind.SpaceObject:
                     popupColor = target.points >= 500 ? new Color(1f, 0.85f, 0.35f) : new Color(0.6f, 0.9f, 1f);
@@ -1173,11 +1162,11 @@ namespace ShootingGallery
                     break;
                 case TargetKind.Ghost:
                     popupColor = new Color(0.75f, 0.5f, 1f);
-                    RequestMode(target); // 順番待ちに入れる (他のモードの途中なら、終わってから始まる)
+                    StackFeatureHit(target, point); // 積んでおき、フレームの終わりにまとめて調べる (同時に当たった機能付きの的の中から、始めるモードを決める)
                     break;
                 case TargetKind.Mine:
                     popupColor = new Color(1f, 0.75f, 0.35f);
-                    RequestMode(target); // 順番待ちに入れる (他のモードの途中なら、終わってから始まる)
+                    StackFeatureHit(target, point); // 積んでおき、フレームの終わりにまとめて調べる (同時に当たった機能付きの的の中から、始めるモードを決める)
                     break;
                 case TargetKind.MineObject:
                     popupColor = target.points >= 500 ? new Color(1f, 0.85f, 0.35f) : new Color(0.7f, 0.95f, 1f);
@@ -1186,7 +1175,7 @@ namespace ShootingGallery
                     break;
                 case TargetKind.Submarine:
                     popupColor = new Color(1f, 0.85f, 0.25f);
-                    RequestMode(target); // 順番待ちに入れる (他のモードの途中なら、終わってから始まる)
+                    StackFeatureHit(target, point); // 積んでおき、フレームの終わりにまとめて調べる (同時に当たった機能付きの的の中から、始めるモードを決める)
                     break;
                 case TargetKind.SubmarineObject: // 海の生き物・ほかの潜水艦・壺・宝箱
                     popupColor = target.points >= 1000 ? new Color(1f, 0.85f, 0.3f) : target.points >= 400 ? new Color(1f, 0.55f, 0.45f) : new Color(0.55f, 0.95f, 1f);
@@ -1196,15 +1185,15 @@ namespace ShootingGallery
                     break;
                 case TargetKind.Music:
                     popupColor = new Color(1f, 0.85f, 0.3f);
-                    RequestMode(target); // 順番待ちに入れる (他のモードの途中なら、終わってから始まる)
+                    StackFeatureHit(target, point); // 積んでおき、フレームの終わりにまとめて調べる (同時に当たった機能付きの的の中から、始めるモードを決める)
                     break;
                 case TargetKind.Museum:
                     popupColor = new Color(0.95f, 0.7f, 1f);
-                    RequestMode(target); // 順番待ちに入れる (他のモードの途中なら、終わってから始まる)
+                    StackFeatureHit(target, point); // 積んでおき、フレームの終わりにまとめて調べる (同時に当たった機能付きの的の中から、始めるモードを決める)
                     break;
                 case TargetKind.Unknown:
                     popupColor = new Color(0.8f, 0.75f, 1f);
-                    RequestMode(target); // 順番待ちに入れる (他のモードの途中なら、終わってから始まる)
+                    StackFeatureHit(target, point); // 積んでおき、フレームの終わりにまとめて調べる (同時に当たった機能付きの的の中から、始めるモードを決める)
                     break;
                 case TargetKind.UnknownObject: // ワープゲートから紛れ込んできた物 (別の世界へ転送されるびりびりの音は UnknownObject が鳴らした)
                     popupColor = target.points >= 500 ? new Color(1f, 0.85f, 0.35f) : new Color(0.8f, 0.78f, 1f);
@@ -1226,7 +1215,7 @@ namespace ShootingGallery
                     break;
                 case TargetKind.Festival:
                     popupColor = new Color(1f, 0.55f, 0.35f);
-                    RequestMode(target); // 順番待ちに入れる (他のモードの途中なら、終わってから始まる)
+                    StackFeatureHit(target, point); // 積んでおき、フレームの終わりにまとめて調べる (同時に当たった機能付きの的の中から、始めるモードを決める)
                     break;
                 case TargetKind.FestivalPrize: // 射的の景品が後ろへ倒れて落ちた
                     popupColor = target.points >= 500 ? new Color(1f, 0.85f, 0.35f) : new Color(1f, 0.7f, 0.45f);

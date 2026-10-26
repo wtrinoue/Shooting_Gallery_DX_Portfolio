@@ -180,8 +180,8 @@ namespace ShootingGallery
             spareArrows.Add(a);
         }
 
-        /// <summary>矢印を全部しまう。instant ならその場で消す</summary>
-        void HideArrows(bool instant = false)
+        /// <summary>矢印を全部しまう (別の世界へ行く時なども GameManager から)。instant ならその場で消す</summary>
+        public void HideArrows(bool instant = false)
         {
             arrowTimeLeft = 0f;
             foreach (var a in arrows.Values)
