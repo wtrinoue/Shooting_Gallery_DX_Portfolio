@@ -31,8 +31,8 @@ namespace ShootingGallery
             var blue = Mat("Target_GateBlue", new Color(0.2f, 0.25f, 0.85f), new Color(0.05f, 0.06f, 0.3f));
             Bullseye(pivot, y + 0.62f, 0.55f, blue, Mat("Target_White", Color.white), Mat("Target_GatePurple", new Color(0.6f, 0.2f, 0.85f), new Color(0.2f, 0.05f, 0.3f)));
             var ink = new Color(0.08f, 0.08f, 0.2f);
-            MakeText(pivot, "LabelWorld", "WORLD", new Vector3(0f, y + 0.685f, -0.03f), 0.1f, ink);
-            MakeText(pivot, "LabelGate", "GATE", new Vector3(0f, y + 0.555f, -0.03f), 0.1f, ink);
+            TitleLabel(pivot, "LabelWorld", "WORLD", new Vector3(0f, y + 0.685f, -0.03f), 0.1f, ink);
+            TitleLabel(pivot, "LabelGate", "GATE", new Vector3(0f, y + 0.555f, -0.03f), 0.1f, ink);
             return target;
         }
 

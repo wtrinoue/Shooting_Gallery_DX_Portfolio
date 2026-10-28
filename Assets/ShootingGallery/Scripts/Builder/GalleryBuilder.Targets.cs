@@ -93,8 +93,8 @@ namespace ShootingGallery
             var red = Mat("Target_StartRed", new Color(0.85f, 0.1f, 0.1f), new Color(0.3f, 0f, 0f));
             Bullseye(pivot, y + 0.62f, 0.55f, red, Mat("Target_White", Color.white), red);
             var ink = new Color(0.1f, 0.1f, 0.1f);
-            MakeText(pivot, "Label", "100,000", new Vector3(0f, y + 0.685f, -0.03f), 0.1f, ink);
-            MakeText(pivot, "Label2", "POINTS", new Vector3(0f, y + 0.555f, -0.03f), 0.09f, ink);
+            TitleLabel(pivot, "Label", "100,000", new Vector3(0f, y + 0.685f, -0.03f), 0.1f, ink);
+            TitleLabel(pivot, "Label2", "POINTS", new Vector3(0f, y + 0.555f, -0.03f), 0.09f, ink);
             return target;
         }
 
@@ -114,9 +114,27 @@ namespace ShootingGallery
             var green = Mat("Target_TimeGreen", new Color(0.15f, 0.65f, 0.25f), new Color(0.03f, 0.2f, 0.06f));
             Bullseye(pivot, y + 0.62f, 0.55f, green, Mat("Target_White", Color.white), Mat("Target_TimeYellow", new Color(1f, 0.85f, 0.2f), new Color(0.3f, 0.2f, 0f)));
             var ink = new Color(0.1f, 0.1f, 0.1f);
-            MakeText(pivot, "Label", "2", new Vector3(0f, y + 0.685f, -0.03f), 0.12f, ink);
-            MakeText(pivot, "Label2", "MIN", new Vector3(0f, y + 0.555f, -0.03f), 0.1f, ink);
+            TitleLabel(pivot, "Label", "2", new Vector3(0f, y + 0.685f, -0.03f), 0.12f, ink);
+            TitleLabel(pivot, "Label2", "MIN", new Vector3(0f, y + 0.555f, -0.03f), 0.1f, ink);
             return target;
+        }
+
+        /// <summary>
+        /// タイトルの的の文字: 太字で、まわりを白くふちどる (的の色の上でも読みやすいように)。
+        /// ふちどりは、同じ文字を白で8方向に少しずらして、文字のすぐうしろに重ねる。太さは、本体の文字を左右にごくわずかずらして重ねて出す
+        /// </summary>
+        void TitleLabel(Transform pivot, string name, string text, Vector3 pos, float height, Color ink)
+        {
+            float w = height * 0.07f; // ふちどりの太さ
+            for (int k = 0; k < 8; k++)
+            {
+                float a = k * Mathf.PI / 4f;
+                var o = MakeText(pivot, name + "_Outline", text, pos + new Vector3(Mathf.Cos(a) * w, Mathf.Sin(a) * w, 0.004f), height, Color.white);
+                o.fontStyle = FontStyle.Bold;
+            }
+            foreach (float dx in new[] { -0.012f, 0.012f }) // (太く見せる)
+                MakeText(pivot, name + "_Bold", text, pos + new Vector3(dx * height, 0f, -0.001f), height, ink).fontStyle = FontStyle.Bold;
+            MakeText(pivot, name, text, pos + new Vector3(0f, 0f, -0.002f), height, ink).fontStyle = FontStyle.Bold;
         }
 
         // タイトルの的 (START / WORLD GATE) の、屋台の床から円の下までの高さの目安 (円の中心は床から 1.72m)

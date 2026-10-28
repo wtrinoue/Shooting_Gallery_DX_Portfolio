@@ -506,7 +506,7 @@ namespace ShootingGallery
             if (free.Count == 0) return;
             var cart = free[Random.Range(0, free.Count)];
             var track = tunnelTracks[Random.Range(0, tunnelTracks.Length)];
-            bool reverse = Random.value < 0.5f;
+            bool reverse = !track.oneWay && Random.value < 0.5f; // (壁の中のトンネルは、いつも右から左へ)
             cart.track = track;
             cart.Run(reverse ? track.Length : 0f, reverse);
         }

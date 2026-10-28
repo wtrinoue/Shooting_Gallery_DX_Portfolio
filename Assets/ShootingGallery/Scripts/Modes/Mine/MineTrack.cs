@@ -10,6 +10,8 @@ namespace ShootingGallery
     {
         public Vector3[] points = new Vector3[0];
         public bool loop;
+        [Tooltip("いつも同じ向き (はじめ → おわり) に走る線路 (壁の中を横に通るトンネル)")]
+        public bool oneWay;
 
         float[] cumulative; // 各点までの道のりの長さ
 
