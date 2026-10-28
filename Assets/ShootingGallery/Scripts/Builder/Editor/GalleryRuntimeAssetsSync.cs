@@ -94,10 +94,6 @@ namespace ShootingGallery.EditorTools
 
             EditorUtility.SetDirty(assets);
             AssetDatabase.SaveAssets();
-            if (log || created)
-                Debug.Log($"[GalleryRuntimeAssets] 実機用のアセット一覧をそろえました (BGM {Count(assets.casinoBgm, assets.museumBgm, assets.concertBgm, assets.skyBgm, assets.festivalBgm, assets.ghostBgm, assets.kaijuBgm, assets.mineBgm, assets.navalBgm, assets.westernBgm, assets.spaceBgm, assets.submarineBgm, assets.ninjaBgm, assets.roundBgm, assets.unknownBgm, assets.finaleApplause)}/16, " +
-                          $"拍の表 {(assets.concertBeatMap != null ? "あり" : "なし")}, シェーダー {shaders.Count}, 材質 {materials.Count})" +
-                          (materials.Count == 0 ? "\n材質がありません。一度「シーンに生成」を押して、材質を作ってからビルドしてください" : ""));
         }
 
         static int Count(params Object[] objs)

@@ -85,7 +85,6 @@ namespace ShootingGallery
             log.AppendLine("○ 最小 API レベル 32 / IL2CPP / ARM64 / ASTC");
 
             AssetDatabase.SaveAssets();
-            Debug.Log("[QuestSetup]\n" + log);
             EditorUtility.DisplayDialog("Quest の VR 設定", log + "\nAPK を作り直して、Quest に入れ直してください。", "OK");
         }
 

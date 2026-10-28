@@ -108,7 +108,6 @@ namespace ShootingGallery
                 if (mf != null) DestroyImmediate(mf);
                 if (go.transform.childCount == 0 && go.GetComponents<Component>().Length == 1) DestroyImmediate(go); // (Transform だけ残った)
             }
-            Debug.Log($"[{meshPrefix}] 動かない部品 {before} 個を、{after} 個にまとめました");
             return (before, after);
         }
 

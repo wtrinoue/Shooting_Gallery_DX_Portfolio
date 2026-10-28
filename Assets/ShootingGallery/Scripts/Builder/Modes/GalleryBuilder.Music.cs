@@ -64,6 +64,7 @@ namespace ShootingGallery
             concert.stageFrontZ = HallFront; // これより奥の部品だけを、ステージの明かりで照らす
             concert.followSpots = lights.follow;
             concert.followBeams = lights.beams;
+            concert.maxStaffs = 2; // 同時に出す五線譜は 2 本まで (重さ対策。シーンに前の値が残っていても上書きする)
             concert.showWhilePlaying = lights.showWhilePlaying;
             concert.instruments = instruments.ToArray();
             concert.baton = baton;

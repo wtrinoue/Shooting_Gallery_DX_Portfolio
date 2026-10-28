@@ -124,7 +124,7 @@ namespace ShootingGallery
             if (!armed) return;
             // 当たった: 泡がぶわっと出る (壺はかけら、タコは墨も)。少しして、また現れる
             var p = hitTarget.transform.position;
-            Bubble.Burst(p, 0.6f, bubbleMaterial, 16);
+            Bubble.Burst(p, 0.6f, bubbleMaterial, 8); // (前は 16。泡が多いと GPU が重いので半分に)
             if (debrisMaterial != null) SpaceDebris.Spawn(p, 0.7f, debrisMaterial, 10);
             if (inkMaterial != null) Explosion.Spawn(p, 1.4f, inkMaterial);
             Sfx.Play("splash");

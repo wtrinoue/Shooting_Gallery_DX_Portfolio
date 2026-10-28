@@ -91,7 +91,6 @@ namespace ShootingGallery
         bool? xrModeApplied;
         float yaw, pitch;
         TrackedPoseDriver rightPose, leftPose;
-        float handCheckAt = -1f; // VR になってから手の追跡を確かめる時刻 (ログ用)
 
         public bool DualWield => dualWield;
         public WeaponType Weapon => weapon;
@@ -250,35 +249,6 @@ namespace ShootingGallery
         {
             SetDualWield(false);
             ResetWeapon();
-        }
-
-        // ---- 視点のずれの見張り (原因を調べるためのログ) ----
-        // プレイヤー (この物)・CameraOffset が、コードで動かされたらログに出す (どのモードの何で動いたか、スタックで分かる)。
-        // 1フレームが長くかかった (VR では画面が引きずられて、視点がずれたように見える) 時もログに出す
-        [Tooltip("視点が動いた時・フレームが重かった時に Console へログを出す (調べ終わったら切る)")]
-        public bool logViewChanges = true;
-        Vector3 watchPos, watchScale, watchOffset;
-        Quaternion watchRot;
-        bool watchReady;
-
-        void LateUpdate()
-        {
-            if (!logViewChanges) return;
-            var off = cameraOffset != null ? cameraOffset.localPosition : Vector3.zero;
-            if (watchReady)
-            {
-                if ((transform.localPosition - watchPos).sqrMagnitude > 1e-6f || (transform.localScale - watchScale).sqrMagnitude > 1e-6f
-                    || Quaternion.Angle(transform.localRotation, watchRot) > 0.05f || (off - watchOffset).sqrMagnitude > 1e-6f)
-                    Debug.Log($"[ViewWatch] 視点が動きました: 位置 {watchPos} → {transform.localPosition}, 向き {watchRot.eulerAngles} → {transform.localRotation.eulerAngles}, " +
-                              $"大きさ {watchScale} → {transform.localScale}, CameraOffset {watchOffset} → {off}");
-                if (Time.unscaledDeltaTime > 0.05f)
-                    Debug.Log($"[ViewWatch] フレームが重くなりました: {Time.unscaledDeltaTime * 1000f:0} ms (VR では画面が引きずられて、視点がずれたように見えます)");
-            }
-            watchPos = transform.localPosition;
-            watchScale = transform.localScale;
-            watchRot = transform.localRotation;
-            watchOffset = off;
-            watchReady = true;
         }
 
         void Update()
@@ -622,7 +592,6 @@ namespace ShootingGallery
             float eye = referenceHeightCm / 100f * eyeHeightRatio;
             calibratedOffsetY = eye - head.transform.localPosition.y; // head の localPosition は CameraOffset から見た、実際に追跡している頭の高さ
             cameraOffset.localPosition = Vector3.up * calibratedOffsetY.Value;
-            Debug.Log($"[PlayerRig] 身長 {referenceHeightCm}cm の人の視点に合わせました (目の高さ {eye:0.00}m, CameraOffset {calibratedOffsetY.Value:0.00}m)");
         }
 
         /// <summary>
@@ -647,7 +616,6 @@ namespace ShootingGallery
 
             if (xr)
             {
-                handCheckAt = Time.unscaledTime + 3f;
                 xrStartedAt = Time.unscaledTime;
                 bool floor = XRBridge.TrySetFloorOrigin();
                 floorOrigin = floor;
@@ -676,14 +644,9 @@ namespace ShootingGallery
 
         void UpdateHandsFallback()
         {
-            bool rightOk = HandFallback(rightHand, rightPose, UnityEngine.XR.XRNode.RightHand);
-            bool leftOk = HandFallback(leftHand, leftPose, UnityEngine.XR.XRNode.LeftHand);
+            HandFallback(rightHand, rightPose, UnityEngine.XR.XRNode.RightHand);
+            HandFallback(leftHand, leftPose, UnityEngine.XR.XRNode.LeftHand);
 
-            if (handCheckAt > 0f && Time.unscaledTime >= handCheckAt)
-            {
-                handCheckAt = -1f;
-                LogHandTracking(rightOk, leftOk);
-            }
         }
 
         /// <summary>Input System で手が追えていれば何もしない。追えていなければ XR の標準の API から読んで置く。手が動いていれば true</summary>
@@ -700,22 +663,6 @@ namespace ShootingGallery
             hand.localPosition = pos;
             hand.localRotation = rot;
             return true;
-        }
-
-        // VR になって少したってから、手がどの方法で追えているかをコンソールに出す (手が動かない時の原因調べ用)
-        void LogHandTracking(bool rightOk, bool leftOk)
-        {
-            var sb = new System.Text.StringBuilder("[PlayerRig] 手の追跡: ");
-            sb.Append($"右 {Describe(rightPose, rightOk)} / 左 {Describe(leftPose, leftOk)}\n");
-            sb.Append("Input System の XR 機器: ");
-            foreach (var d in InputSystem.devices)
-                if (d is TrackedDevice) sb.Append($"[{d.layout} \"{d.displayName}\" {string.Join(",", d.usages)}] ");
-            var xrDevices = new System.Collections.Generic.List<UnityEngine.XR.InputDevice>();
-            UnityEngine.XR.InputDevices.GetDevices(xrDevices);
-            sb.Append("\nXR の機器: ");
-            foreach (var d in xrDevices) sb.Append($"[{d.name} {d.characteristics}] ");
-            if (rightOk && leftOk) Debug.Log(sb.ToString());
-            else Debug.LogWarning(sb.ToString());
         }
 
         static string Describe(TrackedPoseDriver tpd, bool ok)

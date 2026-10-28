@@ -123,7 +123,6 @@ namespace ShootingGallery
             var shader = Shader.Find("ShootingGallery/Unknown Shard");
             if (shader == null)
             {
-                Debug.LogWarning("UnknownShard.shader が見つからないので、灰色の Unlit で代わりにします");
                 return Mat(Name + "_Fallback", new Color(0.55f, 0.55f, 0.57f), null, true);
             }
             var mat = new Material(shader) { name = Name };
@@ -139,7 +138,6 @@ namespace ShootingGallery
             var shader = Shader.Find(shaderName);
             if (shader == null)
             {
-                Debug.LogWarning($"{shaderName} が見つかりません");
                 return null;
             }
             var mat = new Material(shader) { name = name };
@@ -865,7 +863,6 @@ namespace ShootingGallery
             var shader = Shader.Find("ShootingGallery/Unknown Cosmos");
             if (shader == null)
             {
-                Debug.LogWarning("UnknownCosmos.shader が見つからないので、Unlit で代わりにします");
                 return transparent ? TransparentMat(name + "_Fallback", color) : Mat(name + "_Fallback", color, null, true);
             }
             var mat = new Material(shader) { name = name };

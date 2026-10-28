@@ -32,8 +32,6 @@ namespace ShootingGallery
 
         void Awake()
         {
-            WarnMissingMaterials();
-
             RenderSettings.skybox = null;
             RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
             SetAmbient(ambientColor);
@@ -54,25 +52,5 @@ namespace ShootingGallery
             }
         }
 
-        // 再生中に生成されたものをコピペすると、マテリアルが外れて全部ピンクになる。その時に原因を知らせる。
-        // 形 (メッシュ) がまだない物は描かれない (ピンクにならない) ので数えない (Unknown ステージの、使い回しの割れる部品の置き場など)
-        void WarnMissingMaterials()
-        {
-            int missing = 0;
-            foreach (var r in GetComponentsInChildren<Renderer>(true))
-            {
-                if (!(r is MeshRenderer) || r.GetComponent<TextMesh>() != null || r.sharedMaterial != null) continue;
-                var mf = r.GetComponent<MeshFilter>();
-                if (mf == null || mf.sharedMesh == null) continue;
-                missing++;
-            }
-            if (missing == 0) return;
-
-            Debug.LogError(
-                $"[ShootingGallery] マテリアルが外れているオブジェクトが {missing} 個あります (ピンク色に表示されます)。\n" +
-                "再生中に生成されたものをコピーして貼り付けると、再生終了と同時にマテリアルが消えるためこうなります。\n" +
-                "直し方: 貼り付けたものを削除し、再生を止めた状態で GalleryBuilder の「シーンに生成」ボタンを押して、" +
-                "できた ShootingGallery をコピーしてください。", this);
-        }
     }
 }

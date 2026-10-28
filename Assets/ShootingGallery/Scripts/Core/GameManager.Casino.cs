@@ -74,6 +74,8 @@ namespace ShootingGallery
         IEnumerator FadeSunRoutine(float to, float duration)
         {
             float from = sunLight.intensity;
+            // 明るくする時は、消してあった明かりを点けてから (明るさ 0 で消してある時がある)
+            if (to > 0.0001f) SetSunsEnabled(true);
             // ゲーム一式の外の平行光源も、太陽の普段の明るさに対する同じ割合へ
             float k = sunIntensity > 0.0001f ? to / sunIntensity : 0f;
             var othersFrom = new float[otherSuns.Count];
@@ -88,7 +90,15 @@ namespace ShootingGallery
             sunLight.intensity = to;
             for (int i = 0; i < otherSuns.Count; i++)
                 if (otherSuns[i] != null) otherSuns[i].intensity = otherSunIntensity[i] * k;
+            // 明るさ 0 になったら消す。明るさ 0 でも点いていると、画面の全部の点でこの明かりの計算だけはするので (GPU の無駄)
+            if (to <= 0.0001f) SetSunsEnabled(false);
             sunRoutine = null;
+        }
+
+        void SetSunsEnabled(bool on)
+        {
+            if (sunLight != null) sunLight.enabled = on;
+            foreach (var s in otherSuns) if (s != null) s.enabled = on;
         }
 
         /// <summary>カジノモードの時間切れ: 暗くして飾りを消し、壁を下げ、沈めた屋台を戻す (壁が下がりきってから)</summary>

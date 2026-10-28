@@ -96,7 +96,6 @@ namespace ShootingGallery
         {
             if (Application.isPlaying)
             {
-                UnityEngine.Debug.LogWarning("[GalleryBuilder] 再生中は使えません。再生を止めてから押してください。");
                 return;
             }
 
@@ -135,7 +134,6 @@ namespace ShootingGallery
         {
             if (Application.isPlaying)
             {
-                UnityEngine.Debug.LogWarning("[GalleryBuilder] 再生中は使えません。再生を止めてから押してください。");
                 return;
             }
 
@@ -165,7 +163,6 @@ namespace ShootingGallery
             }
             // 実機用のアセット一覧 (Resources/GalleryRuntimeAssets) に、保存した材質などを入れる
             UnityEditor.EditorApplication.ExecuteMenuItem("ShootingGallery/実機用のアセット一覧をそろえる (GalleryRuntimeAssets)");
-            UnityEngine.Debug.Log($"[GalleryBuilder] アセットだけを生成しました ({total.ElapsedMilliseconds / 1000f:0.0} 秒)。シーンには何も残していません");
         }
 #endif
 
@@ -367,14 +364,12 @@ namespace ShootingGallery
             // ↓ 追加のオブジェクトはこの下に書く
             // 例: Prim(PrimitiveType.Cube, "MyBox", world, new Vector3(2f, 0.5f, 1f), Vector3.one * 0.5f, Mat("MyBox", Color.cyan));
 
-            UnityEngine.Debug.Log($"[GalleryBuilder] 生成完了: 合計 {total.ElapsedMilliseconds} ms");
         }
 
         static string LoadingText(int done, int total) => $"NOW LOADING...\n{done} / {total}";
 
         static void LogStep(string label, Stopwatch sw)
         {
-            UnityEngine.Debug.Log($"[GalleryBuilder] {label}: {sw.ElapsedMilliseconds} ms");
             sw.Restart();
         }
 

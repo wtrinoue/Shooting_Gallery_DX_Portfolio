@@ -237,7 +237,7 @@ namespace ShootingGallery
         [Tooltip("ホールが出ている間は、外の明かりの影を切る")]
         public bool noShadowsInHall = true;
         [Tooltip("同時に出す五線譜の数の上限")]
-        public int maxStaffs = 3;
+        public int maxStaffs = 2; // (前は 3。五線譜は半透明の長い帯で、頭の上を通り過ぎて画面に広く重なり、GPU が重くなるので 2 本に)
 
         [Header("時間")]
         [Tooltip("音楽モードの長さ (秒。カーテンが閉まり始めてから)")]
@@ -322,9 +322,7 @@ namespace ShootingGallery
             LoadBeatMap();
             houseBase = houseLight != null ? houseLight.intensity : 0f;
             PrepareBaton();
-            int mergedParts = 0;
-            foreach (var inst in instruments) if (inst != null) { inst.Init(this); mergedParts += inst.MergedParts; }
-            Debug.Log($"[ConcertHall] 楽器の部品 {mergedParts} 個の見た目をまとめました (軽量化)");
+            foreach (var inst in instruments) if (inst != null) inst.Init(this);
             SplitStageLighting(); // (楽器の見た目をまとめた後に。まとめてできた Renderer にも付ける)
             foreach (var s in staffs) if (s != null) s.Init();
             if (curtain != null) { curtain.Init(); curtain.HideInstant(); }
@@ -668,7 +666,13 @@ namespace ShootingGallery
         {
             for (int i = 0; i < stageLights.Length; i++)
                 if (stageLights[i] != null) stageLights[i].intensity = stageBase[i] * Mathf.Lerp(dimLevel, playBright, k);
-            if (houseLight != null) houseLight.intensity = houseBase * Mathf.Lerp(1f, houseDuringPlay, k);
+            if (houseLight != null)
+            {
+                houseLight.intensity = houseBase * Mathf.Lerp(1f, houseDuringPlay, k);
+                // 演奏中 (明るくなりきった後) は、客席の明かりを消す。点いていると、客席側の画面の点が全部この明かりを計算して GPU が重い。
+                // 演奏中の客席は暗くてよい (ステージが目立つ) ので、環境光だけで見せる
+                houseLight.enabled = k < 0.95f;
+            }
             if (showWhilePlaying != null)
                 foreach (var go in showWhilePlaying) if (go != null) go.SetActive(k > 0.3f);
             lightLevel = k;
@@ -903,7 +907,7 @@ namespace ShootingGallery
             }
             inst.Jump(true);
             Hits++;
-            SpawnStaff();
+            // (前は、当てるたびに五線譜を追加で出していた。撃ちまくると上限の本数がいつも出ていて GPU が重くなったので、五線譜は時間で出るだけにした)
             PassSoloAfter(inst, 0.9f); // 少し見せてから、ソロが別の楽器へ移る
             return inst.points;
         }

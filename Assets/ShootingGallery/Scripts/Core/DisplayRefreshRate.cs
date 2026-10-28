@@ -19,7 +19,7 @@ namespace ShootingGallery
     {
         const float Wanted = 90f;
         // 視界の端を粗く描く強さ (0 = しない 〜 1 = いちばん強い)。強いほど GPU が軽くなるが、視界の端のぼやけ・ちらつきが目立つ
-        const float Foveation = 0.75f;
+        const float Foveation = 0.80f;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         static void Create()
@@ -53,11 +53,9 @@ namespace ShootingGallery
                     if (r <= Wanted + 0.5f && r > best) best = r; // 90 があれば 90。なければ 90 以下でいちばん速い速さ
                 if (best > 0f)
                 {
-                    bool ok = display.TryRequestDisplayRefreshRate(best);
-                    Debug.Log($"[DisplayRefreshRate] {best}Hz を頼みました ({(ok ? "受け付けられた" : "受け付けられなかった")})");
+                    display.TryRequestDisplayRefreshRate(best);
                 }
             }
-            else Debug.Log("[DisplayRefreshRate] 選べる速さが分かりません (OpenXR の Meta Quest: Display Utilities がオフかもしれません)");
             Destroy(gameObject);
         }
     }
