@@ -142,7 +142,7 @@ namespace ShootingGallery
         /// </summary>
         void ReadyHatch(bool instant = false)
         {
-            if (!gameObject.activeInHierarchy || worldScaling || Hatch == null) return;
+            if (!gameObject.activeInHierarchy || worldScaling || swappingOut || Hatch == null) return;
             hatch.Place(restPos, restRot);
             hatch.ShowOpen(instant);
         }
@@ -182,6 +182,7 @@ namespace ShootingGallery
         {
             if (moveRoutine != null) StopCoroutine(moveRoutine);
             driven = false;
+            swappingOut = false;
             if (squashRoutine != null) { StopCoroutine(squashRoutine); squashRoutine = null; } // (入れ替えの途中でほかの動きを始めた)
         }
 
@@ -652,6 +653,7 @@ namespace ShootingGallery
         // 縮む・広がる (横幅) は、動き (せり上がる・滑る・列で回る) とは別に進める。動いている途中の屋台は、動きながら変身し、
         // 新しい屋台が同じ動きの続きを引き継ぐ (位置の移動には関係なく、屋台そのものが変わる)
         Coroutine squashRoutine;
+        bool swappingOut;            // 豪華版に入れ替わって縮んでいる途中 (動きの続きで着いても、足元にハッチを出さない)
         Vector3 moveTarget;          // 今の動き (Move) の行き先
         Quaternion moveTargetRot;
         float moveEndsAt;            // 今の動きが終わる時刻
@@ -672,6 +674,7 @@ namespace ShootingGallery
             HideChute();
             HideHatch();
             if (squashRoutine != null) StopCoroutine(squashRoutine);
+            swappingOut = true;
             squashRoutine = StartCoroutine(Squash(1f, 0f, duration, 0f, () =>
             {
                 StopMove();
@@ -679,6 +682,7 @@ namespace ShootingGallery
                 transform.localScale = restScale;
                 transform.localPosition = restPos + Vector3.down * hiddenDepth;
                 gameObject.SetActive(false);
+                HideHatch(true); // (念のため) 消えた屋台の足元に、開いたハッチを残さない
             }));
         }
 
