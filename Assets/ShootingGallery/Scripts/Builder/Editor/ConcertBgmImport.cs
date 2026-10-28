@@ -11,7 +11,7 @@ namespace ShootingGallery.EditorTools
     public class ConcertBgmImport : AssetPostprocessor
     {
         // (曲を足した時に上げる。上がると、音のファイルが読み込み直されて、この設定になる)
-        public override uint GetVersion() => 7;
+        public override uint GetVersion() => 8;
 
         void OnPreprocessAudio()
         {

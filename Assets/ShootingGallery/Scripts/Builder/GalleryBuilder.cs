@@ -32,7 +32,7 @@ namespace ShootingGallery
 
         [Header("Layout")]
         [Tooltip("プレイヤー(中心)から屋台までの距離")]
-        public float stallRadius = 3.5f;
+        public float stallRadius = 4.4f;
 
         [Header("Rules")]
         public float roundDuration = 120f;
@@ -96,7 +96,6 @@ namespace ShootingGallery
         {
             if (Application.isPlaying)
             {
-                UnityEngine.Debug.LogWarning("[GalleryBuilder] 再生中は使えません。再生を止めてから押してください。");
                 return;
             }
 
@@ -122,6 +121,48 @@ namespace ShootingGallery
             {
                 editMode = false;
             }
+        }
+
+        /// <summary>
+        /// 材質・メッシュなどのアセットだけを作って保存し、シーンにはゲーム一式を残さない (インスペクターのボタンから呼ばれる)。
+        /// ゲーム一式はとても大きく、シーンに入れると GitHub に送れないので、シーンには GalleryBuilder だけを置いておき、再生した時に組み立てる。
+        /// その時に使う材質 (描き方の組み合わせごとビルドに入るように) や、作り置きの形を、ここで保存しておく。
+        /// 一度シーンの中に組み立てて (アセットを保存して)、組み立てた物はすぐに消す
+        /// </summary>
+        [ContextMenu("Generate Assets Only (アセットだけ生成)")]
+        public void GenerateAssetsOnly()
+        {
+            if (Application.isPlaying)
+            {
+                return;
+            }
+
+            var scene = gameObject.scene;
+            var rootsBefore = new HashSet<GameObject>(scene.GetRootGameObjects());
+            var total = Stopwatch.StartNew();
+            editMode = true;
+            try
+            {
+                Prepare();
+                world = new GameObject(WorldName).transform;
+                world.SetParent(transform, false);
+
+                var routine = BuildRoutine();
+                while (routine.MoveNext()) { } // 編集中は1フレームで最後まで作る
+
+                UnityEditor.AssetDatabase.SaveAssets();
+            }
+            finally
+            {
+                editMode = false;
+                // 組み立てた物は消す (途中で作られて、シーンの一番上に残った物も)
+                if (world != null) DestroyImmediate(world.gameObject);
+                world = null;
+                foreach (var go in scene.GetRootGameObjects())
+                    if (!rootsBefore.Contains(go)) DestroyImmediate(go);
+            }
+            // 実機用のアセット一覧 (Resources/GalleryRuntimeAssets) に、保存した材質などを入れる
+            UnityEditor.EditorApplication.ExecuteMenuItem("ShootingGallery/実機用のアセット一覧をそろえる (GalleryRuntimeAssets)");
         }
 #endif
 
@@ -254,6 +295,16 @@ namespace ShootingGallery
             gm.debugStalls = debugStalls;
             gm.gateStalls = gateStalls;
             gm.bonusStage = bonusStage;
+            gm.sideArrows = new[] { BuildSideArrow(world, true), BuildSideArrow(world, false) }; // 屋台が増える時に、メイン屋台の前に出る左右の赤い矢印
+            gm.returnArrows = new[] { BuildReturnArrow(world, true), BuildReturnArrow(world, false) }; // フィーバーが終わる時に、屋台の前からメイン屋台の方を指す緑の矢印の見本
+            gm.stallHatchMaterials = new[]
+            {
+                Mat("Pit_Rim", new Color(0.6f, 0.6f, 0.65f), null, false, 0.7f),
+                HatchMaskMat(),
+                Mat("Iris_Blade_B", new Color(0.22f, 0.22f, 0.26f), null, false, 0.75f),
+                Mat("Iris_Edge", new Color(1f, 0.75f, 0.3f), new Color(0.5f, 0.32f, 0.05f), false, 0.7f),
+                Mat("StallHatch_Wall", new Color(0.5f, 0.5f, 0.52f), null, false, 0.15f, true)
+            };
             gm.sniper = sniper;
             gm.machineGunChallenge = machineGunChallenge;
             gm.navalBattle = navalBattle;
@@ -282,6 +333,16 @@ namespace ShootingGallery
             gm.worldGateTarget = worldGateTarget;
             gm.controlsBoard = controlsBoard;
             gm.goalSign = BuildGoalSign(GameManager.GoalScore); // ラウンドの始まりに降りてくる、プロペラの付いた看板
+            // 2 MIN の終わりのクラッカーと紙吹雪 (GalleryBuilder.Finale.cs)。メイン・フィーバー・豪華屋台のすべてに同じ配置で1組ずつ
+            // (屋台の輪が広がって軒数が増えても、出ている屋台どれにも同じように出る)
+            var woodDark = Mat("Wood_Dark", new Color(0.25f, 0.16f, 0.1f));
+            var finaleSets = new System.Collections.Generic.List<FinaleCrackers>();
+            gm.mainFinaleCrackers = BuildFinaleCrackers(mainShell, "FinaleConfetti", woodDark, woodDark);
+            finaleSets.Add(gm.mainFinaleCrackers);
+            foreach (var s in feverStalls) finaleSets.Add(BuildFinaleCrackers(s.transform, $"FinaleConfetti_{s.name}", woodDark, woodDark));
+            finaleSets.Add(BuildFinaleCrackers(deluxeMain.transform, "FinaleConfetti_Deluxe", DxBlack, DxGold));
+            foreach (var s in deluxeFever) finaleSets.Add(BuildFinaleCrackers(s.transform, $"FinaleConfetti_{s.name}", DxBlack, DxGold));
+            gm.finaleCrackerSets = finaleSets.ToArray();
             gm.hudText = hudText;
             gm.messageText = msgText;
             gm.font = font;
@@ -303,14 +364,12 @@ namespace ShootingGallery
             // ↓ 追加のオブジェクトはこの下に書く
             // 例: Prim(PrimitiveType.Cube, "MyBox", world, new Vector3(2f, 0.5f, 1f), Vector3.one * 0.5f, Mat("MyBox", Color.cyan));
 
-            UnityEngine.Debug.Log($"[GalleryBuilder] 生成完了: 合計 {total.ElapsedMilliseconds} ms");
         }
 
         static string LoadingText(int done, int total) => $"NOW LOADING...\n{done} / {total}";
 
         static void LogStep(string label, Stopwatch sw)
         {
-            UnityEngine.Debug.Log($"[GalleryBuilder] {label}: {sw.ElapsedMilliseconds} ms");
             sw.Restart();
         }
 

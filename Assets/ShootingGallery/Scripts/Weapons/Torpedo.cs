@@ -13,10 +13,11 @@ namespace ShootingGallery
         const float MaxLifetime = 4.5f;
         const float LaunchSpeedRatio = 0.4f; // 撃った直後の速さ (最高速に対する割合)
         const float SpeedUpTime = 0.7f;      // 最高速になるまでの秒数
-        const float BubbleInterval = 0.03f;  // 泡を出す間隔 (秒)
+        const float BubbleInterval = 0.07f;  // 泡を出す間隔 (秒。前は 0.03。半透明の泡が重なると GPU が重いので減らした)
+        const float NoBubbleNear = 1f;       // 撃ってからこの距離 (m) までは、しっぽの泡を出さない (目の前で泡が画面を覆わないように)
 
         Vector3 direction;
-        float speed, blastRadius, age, nextBubble;
+        float speed, blastRadius, age, nextBubble, traveled;
         Material explosionMaterial, bubbleMaterial;
         Transform propeller, tail;
 
@@ -34,8 +35,9 @@ namespace ShootingGallery
             t.bubbleMaterial = bubbleMaterial;
             t.age = 0f;
             t.nextBubble = 0f;
-            // 撃った所に、ボコッと泡が出る
-            Bubble.Burst(position + direction.normalized * 0.1f, 0.25f, bubbleMaterial, 8);
+            t.traveled = 0f;
+            // 撃った所に、ボコッと泡が出る (目の前を覆わないように、銃口より少し先に少しだけ)
+            Bubble.Burst(position + direction.normalized * 0.6f, 0.25f, bubbleMaterial, 3);
         }
 
         const string PoolKey = "Torpedo";
@@ -92,7 +94,7 @@ namespace ShootingGallery
             if (propeller != null) propeller.Rotate(0f, 0f, 1500f * (0.3f + 0.7f * k) * dt, Space.Self);
 
             // 後ろのプロペラから、ぶくぶく泡が出る
-            if (age >= nextBubble && tail != null)
+            if (age >= nextBubble && tail != null && traveled >= NoBubbleNear)
             {
                 nextBubble = age + BubbleInterval;
                 Vector3 back = tail.position - direction * 0.08f + Random.insideUnitSphere * 0.03f;
@@ -107,13 +109,14 @@ namespace ShootingGallery
                 return;
             }
             transform.position += step;
+            traveled += step.magnitude;
             if (age >= MaxLifetime) Explode(transform.position);
         }
 
         void Explode(Vector3 point)
         {
             Bomb.Blast(point, blastRadius, explosionMaterial);
-            Bubble.Burst(point, blastRadius * 0.6f, bubbleMaterial, 28); // 水の中なので、爆発のあとに泡がぶわっと湧く
+            Bubble.Burst(point, blastRadius * 0.6f, bubbleMaterial, 14); // 水の中なので、爆発のあとに泡がぶわっと湧く
             FxPool.Release(PoolKey, gameObject);
         }
     }

@@ -177,7 +177,7 @@ namespace ShootingGallery
         {
             if (instance == null || instance.scaleNotes.Length == 0) return;
             index = Mathf.Clamp(index, 0, instance.scaleNotes.Length - 1);
-            instance.source.PlayOneShot(instance.scaleNotes[index], 0.8f);
+            instance.source.PlayOneShot(instance.scaleNotes[index], 0.8f * SfxBoost);
         }
 
         public static void PlayShot(WeaponType type)
@@ -200,13 +200,18 @@ namespace ShootingGallery
                      : type == WeaponType.Shuriken || type == WeaponType.Dart || type == WeaponType.Pickaxe ? instance.shurikenThrow
                      : type == WeaponType.CorkGun ? instance.corkPop
                      : type == WeaponType.Lightning ? instance.zap
-                     : type == WeaponType.RingToss || type == WeaponType.Poi || type == WeaponType.Coin ? instance.fusuma // ふわっと投げる音
+                     : type == WeaponType.RingToss || type == WeaponType.Poi || type == WeaponType.Coin || type == WeaponType.Ball ? instance.fusuma // ふわっと投げる音
                      : instance.handgunShot;
             // 二丁拳銃で左右同時に撃っても1発分の音。つるはしは押しっぱなしで次々に投げるので、続けて聞いても気にならない小ささに
-            bool soft = type == WeaponType.Pickaxe || type == WeaponType.RingToss || type == WeaponType.Poi || type == WeaponType.Coin;
+            bool soft = type == WeaponType.Pickaxe || type == WeaponType.RingToss || type == WeaponType.Poi || type == WeaponType.Coin || type == WeaponType.Ball;
             float volume = soft ? 0.25f : type == WeaponType.Lightning ? 0.4f : 0.5f; // (アンノウンの電撃は、BGM を聞かせるために少しだけ小さめ)
             instance.PlayLimited("shot", clip, volume, fade: false);
         }
+
+        /// <summary>効果音全体の大きさの倍率 (撃った音・当たった音・モードの音など、Sfx で鳴らす音すべて)</summary>
+        const float SfxBoost = 1.5f;
+        /// <summary>BGM 全体の大きさの倍率 (どのモードの曲も、Inspector の音量にこれをかけて鳴らす。上限は 1)</summary>
+        public const float BgmBoost = 2f;
 
         // 音の種類ごとの、最後に鳴らした時刻と、続けて鳴った回数
         readonly System.Collections.Generic.Dictionary<string, (float time, int count)> recent =
@@ -229,7 +234,7 @@ namespace ShootingGallery
             }
             recent[group] = (now, count);
             volume *= Mathf.Max(burstMinVolume, 1f / (1f + 0.5f * count));
-            source.PlayOneShot(clip, volume);
+            source.PlayOneShot(clip, volume * SfxBoost);
         }
 
         public static void Play(string name) => Play(name, 1f);
@@ -247,7 +252,56 @@ namespace ShootingGallery
             // 的に当たった音 (hit / bonus) は同じ種類として扱い、同時に倒しても1回だけ鳴らす
             string group = name == "bonus" ? "hit" : name;
             bool limited = name == "hit" || name == "bonus" || name == "explosion" || name == "pickup" || name == "ufo" || name == "thunk" || name == "fusuma" || name == "coin" || name == "reelstop" || name == "ghostpop" || name == "splash" || name == "rip" || name == "paint" || name == "chisel" || name == "clay" || name == "glass";
-            AudioClip clip = name switch
+            AudioClip clip = ClipFor(name);
+            if (clip == null) return;
+            if (limited) instance.PlayLimited(group, clip, 0.6f * volumeScale);
+            else instance.source.PlayOneShot(clip, 0.6f * volumeScale * SfxBoost);
+        }
+
+        // ---- 場所から鳴らす音 (立体音響。Project Settings → Audio の Spatializer Plugin が選んである時は HRTF で、頭の向きに合わせて聞こえる) ----
+        readonly System.Collections.Generic.List<AudioSource> spots = new System.Collections.Generic.List<AudioSource>();
+        int nextSpot;
+        const int SpotCount = 12; // 同時に鳴らせる数 (フィーバーの屋台が一度にいくつ出ても足りるように)
+
+        /// <summary>
+        /// name の音を、ワールド座標 position から鳴らす (屋台が出てきた場所など)。
+        /// 遠近感はほとんど付けず (輪の端の屋台でも同じくらいの大きさ)、方向だけが分かるようにする
+        /// </summary>
+        public static void PlayAt(string name, Vector3 position, float volumeScale = 1f)
+        {
+            if (instance == null) return;
+            var clip = ClipFor(name);
+            if (clip == null) return;
+            var src = instance.NextSpot();
+            src.transform.position = position;
+            src.clip = clip;
+            src.volume = Mathf.Min(1f, 0.6f * volumeScale * SfxBoost);
+            src.Play();
+        }
+
+        AudioSource NextSpot()
+        {
+            if (spots.Count < SpotCount)
+            {
+                var go = new GameObject($"Spot{spots.Count}");
+                go.transform.SetParent(transform, false);
+                var src = go.AddComponent<AudioSource>();
+                src.playOnAwake = false;
+                src.spatialBlend = 1f;
+                src.spatialize = !string.IsNullOrEmpty(AudioSettings.GetSpatializerPluginName()); // プラグインが無い時 (WebGL など) は普通の 3D の音
+                src.dopplerLevel = 0f;
+                src.rolloffMode = AudioRolloffMode.Linear;
+                src.minDistance = 40f; // 輪の屋台までの距離では小さくしない (方向だけ)
+                src.maxDistance = 120f;
+                spots.Add(src);
+                return src;
+            }
+            var next = spots[nextSpot];
+            nextSpot = (nextSpot + 1) % spots.Count;
+            return next;
+        }
+
+        static AudioClip ClipFor(string name) => name switch
             {
                 "stageup" => instance.stageUp,
                 "sniperready" => instance.sniperReady,
@@ -305,10 +359,6 @@ namespace ShootingGallery
                 "warpout" => instance.warpOut,
                 _ => null
             };
-            if (clip == null) return;
-            if (limited) instance.PlayLimited(group, clip, 0.6f * volumeScale);
-            else instance.source.PlayOneShot(clip, 0.6f * volumeScale);
-        }
 
         /// <summary>
         /// ステージアップ (グレードアップ) 音: 「ギュイーン」と上がるスイープ → キラッとした3段の上昇音 → 明るい和音。

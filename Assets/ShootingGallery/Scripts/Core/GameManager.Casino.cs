@@ -48,10 +48,11 @@ namespace ShootingGallery
         // ダーツを渡す (手元のゲージがゲームの残り時間)
         void OnCasinoOpened()
         {
-            RenderSettings.ambientLight = new Color(1.5f, 1.15f, 0.85f);
+            SceneEnvironment.SetAmbient(new Color(1.5f, 1.15f, 0.85f));
             FadeAmbience(normalFogColor, casinoAmbient, null, 1.6f);
             if (State != GameState.Playing) return;
             player.GiveStageWeapon(WeaponType.Dart, casinoHall.TimeLeft);
+            switchClickQuietUntil = Time.time + SwitchClickQuiet; // (持ったばかりの持ち替えは、音を鳴らさない)
             ShowMessage("WELCOME TO THE CASINO!\nSHOOT THE SLOTS, ROULETTES & DARTS!", 3f, new Color(1f, 0.85f, 0.3f));
         }
 
@@ -73,13 +74,31 @@ namespace ShootingGallery
         IEnumerator FadeSunRoutine(float to, float duration)
         {
             float from = sunLight.intensity;
+            // 明るくする時は、消してあった明かりを点けてから (明るさ 0 で消してある時がある)
+            if (to > 0.0001f) SetSunsEnabled(true);
+            // ゲーム一式の外の平行光源も、太陽の普段の明るさに対する同じ割合へ
+            float k = sunIntensity > 0.0001f ? to / sunIntensity : 0f;
+            var othersFrom = new float[otherSuns.Count];
+            for (int i = 0; i < otherSuns.Count; i++) othersFrom[i] = otherSuns[i] != null ? otherSuns[i].intensity : 0f;
             for (float t = 0f; t < 1f; t += Time.deltaTime / duration)
             {
                 sunLight.intensity = Mathf.Lerp(from, to, t);
+                for (int i = 0; i < otherSuns.Count; i++)
+                    if (otherSuns[i] != null) otherSuns[i].intensity = Mathf.Lerp(othersFrom[i], otherSunIntensity[i] * k, t);
                 yield return null;
             }
             sunLight.intensity = to;
+            for (int i = 0; i < otherSuns.Count; i++)
+                if (otherSuns[i] != null) otherSuns[i].intensity = otherSunIntensity[i] * k;
+            // 明るさ 0 になったら消す。明るさ 0 でも点いていると、画面の全部の点でこの明かりの計算だけはするので (GPU の無駄)
+            if (to <= 0.0001f) SetSunsEnabled(false);
             sunRoutine = null;
+        }
+
+        void SetSunsEnabled(bool on)
+        {
+            if (sunLight != null) sunLight.enabled = on;
+            foreach (var s in otherSuns) if (s != null) s.enabled = on;
         }
 
         /// <summary>カジノモードの時間切れ: 暗くして飾りを消し、壁を下げ、沈めた屋台を戻す (壁が下がりきってから)</summary>
@@ -88,7 +107,7 @@ namespace ShootingGallery
             if (!CasinoActive) return;
             casinoHall.End();
             // (ダーツ・コインのどちらを持っていても、元に戻す)
-            if (player.Weapon == WeaponType.Dart || player.Weapon == WeaponType.Coin) ReleaseStageWeapon(player.Weapon);
+            if (player.Weapon == WeaponType.Dart || player.Weapon == WeaponType.Coin || player.Weapon == WeaponType.Ball) ReleaseStageWeapon(player.Weapon);
             StartCoroutine(RiseStallsAfter(new List<Stall>(stageStalls), casinoHall.CloseTime + 0.1f));
             stageStalls.Clear();
             if (State == GameState.Playing)
@@ -159,21 +178,42 @@ namespace ShootingGallery
         // ---- 狙った先で、武器を持ち替える ----
 
         /// <summary>
-        /// カジノで遊んでいる間、銃の向きの先にあるゲームの武器に持ち替える (スロット・ルーレット = コイン、ダーツボード = ダーツ)。
+        /// カジノで遊んでいる間、銃の向きの先にあるゲームの武器に持ち替える (スロット = コイン、ボールのルーレット = 青い球、ダーツボード = ダーツ)。
         /// 何もない方向を向いている時は、持っている武器のまま
         /// </summary>
         void UpdateCasinoAim()
         {
             if (!CasinoActive || !casinoHall.IsOpen || State != GameState.Playing || player == null || player.rightGun == null) return;
-            if (player.Weapon != WeaponType.Dart && player.Weapon != WeaponType.Coin) return; // (ほかの武器の的を取った時などは、そのまま)
-            var gun = player.rightGun.transform;
-            if (!Physics.Raycast(gun.position, gun.forward, out var hit, 40f, ~0, QueryTriggerInteraction.Ignore)) return;
-            WeaponType? want = null;
-            if (hit.collider.GetComponentInParent<SlotMachine>() != null || hit.collider.GetComponentInParent<BallRoulette>() != null) want = WeaponType.Coin;
-            else if (hit.collider.GetComponentInParent<RouletteWheel>() != null) want = WeaponType.Dart;
-            if (!want.HasValue || player.Weapon == want.Value) return;
-            player.SwitchStageWeapon(want.Value);
+            CasinoAim(player.rightGun, player.Weapon, false);
+            if (player.DualWield && player.leftGun != null) CasinoAim(player.leftGun, player.LeftWeapon, true); // (二丁拳銃の時は左右別々に)
+        }
+
+        // ---- 狙った先で持ち替える時の音 (カジノ・夏祭り) ----
+        // 左右の手が同時に持ち替えたり、境目で何度も持ち替えたりしても、カチッは間をあけて1回だけ。モードが始まって武器を持ったばかりの間は鳴らさない
+        const float SwitchClickQuiet = 0.8f;    // 武器を持ってから、持ち替えの音を鳴らさない秒数 (手元へ飛んでくる間に、左右が狙った先に合わせて持ち替わるので)
+        const float SwitchClickInterval = 0.3f; // 次の持ち替えの音まで、最低これだけあける
+        float switchClickQuietUntil;
+
+        void PlaySwitchClick()
+        {
+            if (Time.time < switchClickQuietUntil) return;
+            switchClickQuietUntil = Time.time + SwitchClickInterval;
             Sfx.Play("click");
+        }
+
+        // gun の向きの先のゲームの武器に、その手の銃だけ持ち替える
+        void CasinoAim(GunController gun, WeaponType current, bool left)
+        {
+            if (current != WeaponType.Dart && current != WeaponType.Coin && current != WeaponType.Ball) return; // (ほかの武器の的を取った時などは、そのまま)
+            var t = gun.transform;
+            if (!Physics.Raycast(t.position, t.forward, out var hit, 40f, ~0, QueryTriggerInteraction.Ignore)) return;
+            WeaponType? want = null;
+            if (hit.collider.GetComponentInParent<SlotMachine>() != null) want = WeaponType.Coin;
+            else if (hit.collider.GetComponentInParent<BallRoulette>() != null) want = WeaponType.Ball; // (ボールのルーレットは青い球)
+            else if (hit.collider.GetComponentInParent<RouletteWheel>() != null) want = WeaponType.Dart;
+            if (!want.HasValue || current == want.Value) return;
+            player.SwitchStageWeapon(want.Value, left);
+            PlaySwitchClick();
         }
 
         // スロットから金色のコインがあふれ出る (光の玉が次々にはじける)

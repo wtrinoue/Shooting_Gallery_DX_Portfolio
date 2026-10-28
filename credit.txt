@@ -1,0 +1,89 @@
+■ 射的屋さんデラックス 使用楽曲・音源一覧
+
+【ラウンド】
+・ラウンドのBGM（2 MIN / 100,000 POINTS / エンドレス）
+  ファイル: normal/offenbach_tengokutojigoku.mp3
+  曲名: 天国と地獄（オッフェンバック）
+  出典: 音楽の卵（takai）
+・2 MIN 終了時の拍手
+  ファイル: normal/clap_in_hall.mp3
+  出典: 小森平（https://taira-komori.net/event01.html）
+
+【別の世界のモード】
+・カジノモード
+  ファイル: casino_stage/maou_bgm_acoustic01b.mp3
+  出典: 魔王魂
+・音楽モード
+  ファイル: music_stage/music_stage.mp3（拍の表: music_stage/music_stage.csv）
+  出典: 魔王魂
+・夏祭りモード
+  ファイル: festival_stage/maou_bgm_ethnic09.mp3
+  出典: 魔王魂
+・美術館モード
+  ファイル: museum_stage/cks_russianoodori.mp3
+  曲名: ロシアの踊り（チャイコフスキー「くるみ割り人形」より）
+  出典: 音楽の卵（takai）
+・空中ステージ
+  ファイル: sky_stage/oozora.mp3
+  曲名: 大空は君のもの
+  出典: 音楽の卵（takai）
+・幽霊モード
+  ファイル: ghost_stage/Noisy_Grave.mp3
+  曲名: Noisy Grave／作曲: こおろぎ
+  出典: OpenTracks
+・怪獣モード
+  ファイル: kaiju_stage/Candy_Coated_Catastrophe.mp3
+  出典: Google Gemini（AI で生成）
+・鉱山モード
+  ファイル: mine_stage/Veins_of_Glowing_Stone.mp3
+  出典: Google Gemini（AI で生成）
+・海戦モード
+  ファイル: pirate_stage/Battle_on_the_Ship.mp3
+  曲名: Battle on the Ship／作曲: beckman
+  出典: OpenTracks
+・西部劇モード
+  ファイル: western_stage/monume-american-western-country-576992.mp3
+  出典: 魔王魂
+・宇宙モード
+  ファイル: space_stage/leberch-space-587944.mp3
+  曲名: Space／作者: leberch
+  出典: pixabay
+・潜水艦モード
+  ファイル: ocean_stage/kallydru-ocean-stillness-407237.mp3
+  曲名: Ocean Stillness／作者: kallydru
+  出典: pixabay
+・忍者モード
+  ファイル: ninja_stage/kazekiri.mp3
+  曲名: 風切／作曲: ゆうり（Yuli Audio Craft）
+  出典: OpenTracks
+・Unknownステージ
+  ファイル: unknown_stage/lux-aeterna-liminal-pigments-612888.mp3
+  曲名: Liminal Pigments／作者: lux-aeterna
+  出典: pixabay
+
+【効果音（ファイルを使っているもの）】
+・西部劇 リボルバーの銃声
+  ファイル: western_stage/gun/mrfriends-pistol-shot-233473.mp3
+  曲名: Pistol Shot／作者: mrfriends
+  出典: pixabay
+・西部劇 弾を込める音
+  ファイル: western_stage/gun/universfield-gun-reload-123781.mp3
+  曲名: Gun Reload／作者: universfield
+  出典: pixabay
+
+※ファイルはすべて Assets/Source/ の下にあります。
+※上記以外の効果音は、すべてゲームのコードで生成しています。
+
+【利用規約で確認したこと（2026-10-23）】
+・クレジット表記が必須: 魔王魂（「音楽：魔王魂」など）
+・可能ならリンク表示を: 小森平（https://taira-komori.net/）
+・AI で作った物を人が作ったと思わせない: Google Gemini
+・不要（あると喜ばれる）: 音楽の卵、OpenTracks（3曲とも作曲者の条件は「サイト準拠」）、pixabay
+・どこも共通の禁止: 曲・音そのものの再配布や販売、自作と偽ること
+・ゲーム内のクレジット: Assets/Resources/THIRD_PARTY_NOTICES.txt の 4.〜9.
+
+
+
+拍手はhttps://taira-komori.net/event01.htmlです。
+
+

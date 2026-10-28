@@ -29,17 +29,34 @@ namespace ShootingGallery
             kind == TargetKind.Naval || kind == TargetKind.Sky || kind == TargetKind.Ninja || kind == TargetKind.Kaiju ||
             kind == TargetKind.Casino || kind == TargetKind.Western || kind == TargetKind.Space || kind == TargetKind.Ghost || kind == TargetKind.Mine || kind == TargetKind.Festival || kind == TargetKind.Submarine || kind == TargetKind.Music || kind == TargetKind.Museum || kind == TargetKind.Unknown;
 
-        /// <summary>モードの的を撃った: すぐに始める (同時に撃った2番目以降は取り消す)</summary>
-        void RequestMode(Target target)
+        /// <summary>モードの的の、始め方の情報 (撃たれた時に覚えておく。的の種類・向き・屋台)</summary>
+        PendingMode MakePendingMode(Target target) =>
+            new PendingMode { kind = target.kind, yaw = YawToward(target), stall = target.GetComponentInParent<Stall>(true) };
+
+        /// <summary>モードの的を撃った: すぐに始める (同時に撃った2番目以降は取り消す)。始めたモードを、今働いている機能付きの的として記録する (ActiveFeature)</summary>
+        void RequestMode(PendingMode p)
         {
             if (State != GameState.Playing) return;
-            if (Time.time < modeLockUntil) return; // 同時に撃った2番目以降 (と、前のモードの片付け待ちの間) は取り消す
-            var p = new PendingMode { kind = target.kind, yaw = YawToward(target), stall = target.GetComponentInParent<Stall>(true) };
+            // 同時に撃った2番目以降 (と、前のモードの片付け待ちの間) は取り消す。
+            // ただし別の世界の的は、チャレンジ・DELUXE より優先する (それらを始めたばかり / 始まるのを待っている間でも、別の世界へ移る)
+            bool overrides = IsWorldKind(p.kind) && !IsWorldKind(ActiveFeature);
+            if (Time.time < modeLockUntil && !overrides) return;
+
+            // 豪華タイムの途中に DELUXE の的を撃った: 入れ替え直さず (普通の屋台に戻さず)、豪華タイムの残りを延ばすだけ
+            if (p.kind == TargetKind.Deluxe && DeluxeActive)
+            {
+                ExtendDeluxe();
+                return;
+            }
+
+            ActiveFeature = p.kind;
 
             // 途中のチャレンジ・モード・DX・ボーナスステージを終わらせる。屋台が戻ってくる途中なら戻りきるのを待つ。
             // スナイパー・マシンガンのチャレンジは、豪華タイム (DX) はそのまま続ける (豪華版の屋台でも普通の屋台でも、その場所を引っ込めるだけ)
+            HideAllArrows(); // 別の世界・チャレンジへ行く: 床の矢印 (青・赤・緑) は、すぐしまい始める
             bool challenge = p.kind == TargetKind.Sniper || p.kind == TargetKind.MachineGunChallenge;
-            float wait = EndAllForNewMode(keepDeluxe: challenge);
+            // スナイパー・マシンガンのチャレンジと豪華タイム (DX) は、ボーナスステージ (床下の地下室) とも別々に動く: 開いていても閉じずに、すぐ始める
+            float wait = EndAllForNewMode(keepDeluxe: challenge, keepBonus: challenge || p.kind == TargetKind.Deluxe);
             if (StallsBusy) wait = Mathf.Max(wait, stallsReturnUntil - Time.time);
             if (wait <= 0f)
             {
@@ -71,7 +88,7 @@ namespace ShootingGallery
         /// 新しいモードを始めるために、途中のチャレンジ・モード・DX・ボーナスステージを全部終わらせる。
         /// 片付け (屋台が戻る・壁が下がるなど) が済むまでの秒数を返す (何もなければ 0)
         /// </summary>
-        float EndAllForNewMode(bool keepDeluxe = false)
+        float EndAllForNewMode(bool keepDeluxe = false, bool keepBonus = false)
         {
             float wait = 0f;
             if (SniperActive) { EndSniper(false, null); wait = Mathf.Max(wait, stallMoveDuration); }
@@ -91,7 +108,7 @@ namespace ShootingGallery
             if (UnknownActive) { EndUnknown(); wait = Mathf.Max(wait, unknownStage.CloseTime + 0.1f); }
             if (FestivalActive) { EndFestival(); wait = Mathf.Max(wait, festivalStage.CloseTime + stallMoveDuration); }
             if (DeluxeActive && !keepDeluxe) { EndDeluxe(); wait = Mathf.Max(wait, swapOutTime + swapInTime); }
-            if (bonusStage != null && bonusStage.IsBusy) { bonusStage.Close(); wait = Mathf.Max(wait, bonusStage.slideTime + 0.3f); }
+            if (!keepBonus && bonusStage != null && bonusStage.IsBusy) { bonusStage.Close(); wait = Mathf.Max(wait, bonusStage.slideTime + 0.3f); }
             return wait;
         }
 

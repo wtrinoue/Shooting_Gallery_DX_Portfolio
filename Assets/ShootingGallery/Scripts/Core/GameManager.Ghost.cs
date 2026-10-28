@@ -39,13 +39,13 @@ namespace ShootingGallery
         }
 
         /// <summary>
-        /// 幽霊モードの時間切れ: 上の部品から崩れて消え、土が足元へ縮んで平らな床に戻る。そのあと穴のふちとハッチが出て、屋台がせり上がる (OnGhostClosed)。
+        /// 幽霊モードの時間切れ: 組み上げを逆にたどってしまわれ (鬼火 → 月と雲 → お化け屋敷・木・お墓 → 土)、平らな床に戻る。そのあと穴のふちとハッチが出て、屋台がせり上がる (OnGhostClosed)。
         /// ラウンドの終わり・リセットの時は、その場ですぐ全部消す
         /// </summary>
         void EndGhost()
         {
             if (!GhostActive) return;
-            StopStageBgm(ghostBgm, State != GameState.Playing); // (ラウンドの終わり・リセットの時はすぐ止める)
+            StopStageBgmAfterStalls(ghostBgm, State != GameState.Playing); // 屋台が戻りきるまで曲は流し続ける (ラウンドの終わり・リセットの時はすぐ止める)
             int hits = ghostManor.Hits;
             ghostReturnStalls.Clear();
             ghostReturnStalls.AddRange(stageStalls);
@@ -70,11 +70,11 @@ namespace ShootingGallery
             if (State == GameState.Playing) ShowMessage("GHOST MODE!!\nSHOOT THE SPOOKS!", 3f, new Color(0.75f, 0.5f, 1f));
         }
 
-        // 崩れ始めた: 夜祭りの空と霧へだんだん戻していく
+        // しまわれ始めた: 夜祭りの空と霧の色へだんだん戻していく。
+        // 霧の距離は、全部しまい終わってから (OnGhostClosed) 戻す (いつもの霧は 30m で見えなくなるので、
+        // ここで戻すと 32m 先のお化け屋敷などが、しまわれる前に一瞬で霧に消えてしまっていた)
         void OnGhostLeft()
         {
-            RenderSettings.fogStartDistance = normalFogStart;
-            RenderSettings.fogEndDistance = normalFogEnd;
             float t = State == GameState.Playing ? ghostManor.CloseTime : 0.05f;
             FadeAmbience(normalFogColor, normalAmbient, normalSkyColor, t);
             FadeSun(sunIntensity, t);
@@ -84,6 +84,8 @@ namespace ShootingGallery
         // タイトルへ戻る途中なら床は平らなまま (屋台だけ戻す)
         void OnGhostClosed()
         {
+            RenderSettings.fogStartDistance = normalFogStart; // (もう遠くの物は残っていないので、ここで戻しても見た目は変わらない)
+            RenderSettings.fogEndDistance = normalFogEnd;
             if (State == GameState.Playing) SetFlatFloor(false);
             StartCoroutine(RiseStallsAfter(new List<Stall>(ghostReturnStalls), 0f));
             ghostReturnStalls.Clear();

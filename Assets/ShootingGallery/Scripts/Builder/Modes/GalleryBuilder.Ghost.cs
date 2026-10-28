@@ -982,28 +982,7 @@ namespace ShootingGallery
             return spook;
         }
 
-        /// <summary>おばけの的: 夜の紫の板に、白いお化けと黄色い月、「GHOST」の文字</summary>
-        GameObject GhostLook(Transform look)
-        {
-            var c = new Vector3(0f, TargetDiscY, 0f);
-            Prim(PrimitiveType.Cube, "Plate", look, c, new Vector3(0.3f, 0.3f, 0.04f), Mat("Ghost_Plate", new Color(0.22f, 0.08f, 0.32f), new Color(0.06f, 0.02f, 0.1f)));
-            Prim(PrimitiveType.Sphere, "Moon", look, c + new Vector3(0.09f, 0.09f, -0.022f), new Vector3(0.07f, 0.07f, 0.01f), Mat("Ghost_Moon", new Color(1f, 0.96f, 0.8f), new Color(2.6f, 2.4f, 1.7f)), false);
-            var ghost = Group(look, "Ghost");
-            ghost.localPosition = c + new Vector3(-0.02f, 0f, -0.03f);
-            var bob = ghost.gameObject.AddComponent<Oscillator>();
-            bob.offset = new Vector3(0f, 0.012f, 0f); // ふわふわ上下
-            bob.speed = 3f;
-            var white = Mat("Ghost_Sheet", new Color(0.95f, 0.95f, 1f), new Color(0.22f, 0.22f, 0.32f));
-            var black = Mat("Ghost_Black", new Color(0.03f, 0.02f, 0.05f));
-            Prim(PrimitiveType.Sphere, "Head", ghost, new Vector3(0f, 0.03f, 0f), new Vector3(0.13f, 0.13f, 0.02f), white, false);
-            Prim(PrimitiveType.Cube, "Sheet", ghost, new Vector3(0f, -0.03f, 0f), new Vector3(0.13f, 0.11f, 0.02f), white, false);
-            for (int k = 0; k < 3; k++)
-                Prim(PrimitiveType.Sphere, "Hem", ghost, new Vector3(-0.045f + k * 0.045f, -0.085f, 0f), new Vector3(0.045f, 0.05f, 0.02f), white, false);
-            foreach (float s in new[] { -1f, 1f })
-                Prim(PrimitiveType.Sphere, "Eye", ghost, new Vector3(s * 0.025f, 0.04f, -0.012f), new Vector3(0.02f, 0.032f, 0.005f), black, false);
-            Prim(PrimitiveType.Sphere, "Mouth", ghost, new Vector3(0f, 0.005f, -0.012f), new Vector3(0.025f, 0.032f, 0.005f), black, false);
-            MakeText(look, "Label", "GHOST", c + new Vector3(0f, -0.115f, -0.025f), 0.04f, new Color(0.85f, 0.65f, 1f));
-            return look.gameObject;
-        }
+        /// <summary>お化けの的: 月夜の洋館と大きなお化け (LookArt の絵のステッカー。はみ出して大胆に)</summary>
+        GameObject GhostLook(Transform look) => StickerLook(look, "Ghost", "GHOST", Color.white);
     }
 }

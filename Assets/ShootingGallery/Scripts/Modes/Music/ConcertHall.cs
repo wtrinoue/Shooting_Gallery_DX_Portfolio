@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Rendering.Universal;
 
 namespace ShootingGallery
 {
@@ -46,6 +47,9 @@ namespace ShootingGallery
         [Tooltip("客席を照らす明かり (演奏中はビルダーで決めた明るさの houseDuringPlay 倍。1 より小さいと、演奏中は客席が暗くなってステージが目立つ)")]
         public Light houseLight;
         public float houseDuringPlay = 0.35f; // 名前を変えて、シーンに保存された前の値 (housePlay 1.6) を使わない
+        [Tooltip("ステージの手前の縁 (Hall のローカル z)。これより奥の部品だけを、ステージの明かりで照らす (客席は照らさない)")]
+        public float stageFrontZ = 4.6f;
+        public const uint StageLightLayer = 1u << 1; // ステージの明かりだけが照らすレイヤー (Light Layer 1。ふだんの部品は Default = 1 << 0)
         [Tooltip("ソロの楽器を照らすスポットライトと、その光の筋 (光と同じ向きに伸ばす。長さ 1 の円すい)。ソロ1つに1台ずつ、その楽器の斜め上前に固定して照らす。ソロの数より少なければ、始める時に1台目を複製して足す")]
         public Light[] followSpots;
         public Transform[] followBeams;
@@ -63,6 +67,7 @@ namespace ShootingGallery
         public MusicInstrument[] instruments;
         [Tooltip("同時にソロを弾く楽器の数 / 1つの楽器がソロを続ける拍の数")]
         public int soloSlots = 5; // 名前を変えて、シーンに保存された前の値 (soloCount 2) を使わない
+        const int MaxBeams = 2; // 光の筋を出すスポットライトの数 (重さ対策)
         public float soloBeats = 16f;
         [Tooltip("ソロの楽器を撃ちやすいように当たり判定を消す範囲: ソロの楽器からの距離 (m) / プレイヤーからソロの楽器への視線からの距離 (m)")]
         public float blockRadius = 3f;
@@ -232,7 +237,7 @@ namespace ShootingGallery
         [Tooltip("ホールが出ている間は、外の明かりの影を切る")]
         public bool noShadowsInHall = true;
         [Tooltip("同時に出す五線譜の数の上限")]
-        public int maxStaffs = 3;
+        public int maxStaffs = 2; // (前は 3。五線譜は半透明の長い帯で、頭の上を通り過ぎて画面に広く重なり、GPU が重くなるので 2 本に)
 
         [Header("時間")]
         [Tooltip("音楽モードの長さ (秒。カーテンが閉まり始めてから)")]
@@ -282,21 +287,27 @@ namespace ShootingGallery
         void Awake()
         {
             Instance = this;
-            music = gameObject.AddComponent<AudioSource>();
+            // 曲は、目の前の楽団の真ん中から聞こえる (楽団の位置は UpdateMusicPosition で毎フレーム合わせる。ほかのモードの BGM は今まで通りどこでも同じ)
+            var band = new GameObject("BandMusic");
+            band.transform.SetParent(transform, false);
+            music = band.AddComponent<AudioSource>();
             music.playOnAwake = false;
             music.loop = true;
-            music.spatialBlend = 0f;
+            music.dopplerLevel = 0f;     // (プレイヤーが上下に動いても、音程を変えない)
+            music.rolloffMode = AudioRolloffMode.Linear;
+            music.minDistance = 25f;     // 楽団までの距離では、元の大きさのまま
+            music.maxDistance = 120f;
             for (int i = 0; i < 6; i++)
             {
                 var go = new GameObject($"Voice{i}");
                 go.transform.SetParent(transform, false);
                 var src = go.AddComponent<AudioSource>();
                 src.playOnAwake = false;
-                src.spatialBlend = 0.6f; // どの楽器が鳴ったか、少し方向が分かるように
                 src.minDistance = 4f;
                 src.maxDistance = 40f;
                 voicePool.Add(src);
             }
+            SetupSpatial();
             stageBase = new float[stageLights.Length];
             for (int i = 0; i < stageLights.Length; i++) stageBase[i] = stageLights[i] != null ? stageLights[i].intensity : 0f;
             if (lightweight)
@@ -311,9 +322,8 @@ namespace ShootingGallery
             LoadBeatMap();
             houseBase = houseLight != null ? houseLight.intensity : 0f;
             PrepareBaton();
-            int mergedParts = 0;
-            foreach (var inst in instruments) if (inst != null) { inst.Init(this); mergedParts += inst.MergedParts; }
-            Debug.Log($"[ConcertHall] 楽器の部品 {mergedParts} 個の見た目をまとめました (軽量化)");
+            foreach (var inst in instruments) if (inst != null) inst.Init(this);
+            SplitStageLighting(); // (楽器の見た目をまとめた後に。まとめてできた Renderer にも付ける)
             foreach (var s in staffs) if (s != null) s.Init();
             if (curtain != null) { curtain.Init(); curtain.HideInstant(); }
             SetTargets(false);
@@ -422,6 +432,8 @@ namespace ShootingGallery
                 yield return null;
             }
             SetLights(1f);
+            // 5. 明るくなりきってから、ソロの楽器が出始める (ユーザーの指定)
+            OpenSolos();
             anim = null;
         }
 
@@ -479,14 +491,24 @@ namespace ShootingGallery
             if (spotOwner != null) System.Array.Clear(spotOwner, 0, spotOwner.Length);
             soloUntil.Clear();
             passAt.Clear();
-            for (int i = 0; i < soloSlots; i++) PickSoloist();
+            solosOpen = false; // ソロは、ステージが明るくなりきってから (OpenSolos)
             SpawnStaff();
+        }
+
+        bool solosOpen; // ソロの楽器を出してよい (演奏が始まり、ステージが明るくなりきった後)
+
+        // ステージが明るくなりきった: ソロの楽器を出し始める
+        void OpenSolos()
+        {
+            if (!playing || solosOpen) return;
+            solosOpen = true;
+            for (int i = 0; i < soloSlots; i++) PickSoloist();
         }
 
         // BGM を流し始める (曲ができていれば)。演奏の途中から始める時は、今の拍の位置から鳴らして、楽器の揺れとずれないようにする
         // 今の BGM の音量: 演奏の始まりは introVolume、introFadeSeconds かけてなめらかに musicVolume へ下げる
         float CurrentMusicVolume() =>
-            Mathf.Lerp(introVolume, musicVolume, Mathf.SmoothStep(0f, 1f, (Time.time - playStartTime) / Mathf.Max(0.01f, introFadeSeconds)));
+            Mathf.Min(1f, Mathf.Lerp(introVolume, musicVolume, Mathf.SmoothStep(0f, 1f, (Time.time - playStartTime) / Mathf.Max(0.01f, introFadeSeconds))) * Sfx.BgmBoost);
 
         // 曲 1周の拍の数 (頭に戻った時に拍を数え続けるため)
         float LoopBeats(AudioClip clip) => Mathf.Max(1f, TimeToBeat(clip.length) - TimeToBeat(0f));
@@ -585,6 +607,7 @@ namespace ShootingGallery
         void StopPlaying(bool instant)
         {
             playing = false;
+            solosOpen = false;
             foreach (var s in soloists) if (s != null) s.SetSolo(false);
             soloists.Clear();
             if (spotOwner != null) System.Array.Clear(spotOwner, 0, spotOwner.Length); // スポットライトも全部消す
@@ -611,12 +634,45 @@ namespace ShootingGallery
             }
         }
 
+        // ステージの明かり (stageLights・ソロのスポットライト) が、客席を照らさないようにする (ライトレイヤー)。
+        // 影を落とさない明かりは壁を通り抜けるので、ステージの上の明かりでも客席の床・壁・バルコニーまで明るくしていた。
+        // ステージの手前の縁 (stageFrontZ) より奥にある部品だけに StageLightLayer を足し、ステージの明かりはそのレイヤーだけを照らす。
+        // (客席の明かり houseLight はそのまま全部を照らす)
+        void SplitStageLighting()
+        {
+            if (hall == null) return;
+            var hallT = hall.transform;
+            foreach (var r in hall.GetComponentsInChildren<Renderer>(true))
+            {
+                if (r.name.StartsWith("Combined_")) continue; // (組み立ての時に動かない部品をまとめた物は、まとめた時にステージ側か客席側かを決めてある)
+                var mf = r.GetComponent<MeshFilter>();
+                Vector3 center = mf != null && mf.sharedMesh != null ? r.transform.TransformPoint(mf.sharedMesh.bounds.center) : r.transform.position;
+                if (hallT.InverseTransformPoint(center).z > stageFrontZ) r.renderingLayerMask |= StageLightLayer;
+            }
+            foreach (var l in stageLights) SetStageOnly(l);
+            if (followSpots != null) foreach (var l in followSpots) SetStageOnly(l); // (指揮台のスポットライトは、これを複製するので同じになる)
+        }
+
+        static void SetStageOnly(Light l)
+        {
+            if (l == null) return;
+            var data = l.GetUniversalAdditionalLightData();
+            if (data != null) data.renderingLayers = StageLightLayer;
+            else l.renderingLayerMask = (int)StageLightLayer;
+        }
+
         // 照明の明るさ (0 = 演奏前の薄暗いステージ 〜 1 = 演奏中)
         void SetLights(float k)
         {
             for (int i = 0; i < stageLights.Length; i++)
                 if (stageLights[i] != null) stageLights[i].intensity = stageBase[i] * Mathf.Lerp(dimLevel, playBright, k);
-            if (houseLight != null) houseLight.intensity = houseBase * Mathf.Lerp(1f, houseDuringPlay, k);
+            if (houseLight != null)
+            {
+                houseLight.intensity = houseBase * Mathf.Lerp(1f, houseDuringPlay, k);
+                // 演奏中 (明るくなりきった後) は、客席の明かりを消す。点いていると、客席側の画面の点が全部この明かりを計算して GPU が重い。
+                // 演奏中の客席は暗くてよい (ステージが目立つ) ので、環境光だけで見せる
+                houseLight.enabled = k < 0.95f;
+            }
             if (showWhilePlaying != null)
                 foreach (var go in showWhilePlaying) if (go != null) go.SetActive(k > 0.3f);
             lightLevel = k;
@@ -647,7 +703,9 @@ namespace ShootingGallery
                     spot.name = spots[0].name + "_Copy";
                     spots.Add(spot);
                     Transform beam = null;
-                    if (beams[0] != null)
+                    // 光の筋 (半透明の大きな円すい) は、はじめの2本だけ。重なると画面を何度も塗って GPU が重くなるので、増やした分には付けない
+                    // (光の筋のないソロの楽器も、ソロの蛍光色で目立つ)
+                    if (beams[0] != null && beams.Count < MaxBeams)
                     {
                         beam = Instantiate(beams[0], beams[0].parent);
                         beam.name = beams[0].name + "_Copy";
@@ -745,7 +803,7 @@ namespace ShootingGallery
             soloUntil.Remove(inst);
             passAt.Remove(inst);
             UpdateBlockers();
-            if (playing) PickSoloist();
+            if (playing && solosOpen) PickSoloist();
         }
 
         // ソロの楽器を撃ちやすいように、ソロでない楽器のうち、ソロの楽器のまわり (blockRadius 以内) にある物と、
@@ -849,7 +907,7 @@ namespace ShootingGallery
             }
             inst.Jump(true);
             Hits++;
-            SpawnStaff();
+            // (前は、当てるたびに五線譜を追加で出していた。撃ちまくると上限の本数がいつも出ていて GPU が重くなったので、五線譜は時間で出るだけにした)
             PassSoloAfter(inst, 0.9f); // 少し見せてから、ソロが別の楽器へ移る
             return inst.points;
         }
@@ -929,6 +987,7 @@ namespace ShootingGallery
             int baseMidi = ConcertMusic.BaseMidi(voice);
             src.pitch = baseMidi > 0 ? Mathf.Clamp(ConcertMusic.Hz(midi) / ConcertMusic.Hz(baseMidi), 0.1f, 3f) : Random.Range(0.95f, 1.05f);
             src.transform.position = pos;
+            SetVoiceSpatial(src, true);
             src.clip = clip;
             src.volume = volume;
             src.Play();
@@ -941,13 +1000,80 @@ namespace ShootingGallery
             nextVoice = (nextVoice + 1) % voicePool.Count;
             src.pitch = 1f;
             src.transform.localPosition = Vector3.up * 2f; // プレイヤーのまわり (カーテンの音)
+            SetVoiceSpatial(src, false); // カーテンの音は方向を付けない
             src.clip = clip;
             src.volume = volume;
             src.Play();
         }
 
+        // 曲の音源を、楽団 (楽器の並び) の真ん中に置く。ステージがせり上がったり、プレイヤーが動いたりしても、いつも楽団の方から聞こえる
+        void UpdateMusicPosition()
+        {
+            if (music == null || !IsActive || instruments == null) return;
+            Vector3 sum = Vector3.zero;
+            int n = 0;
+            foreach (var inst in instruments)
+            {
+                if (inst == null || !inst.gameObject.activeInHierarchy) continue;
+                sum += inst.transform.position;
+                n++;
+            }
+            if (n > 0) music.transform.position = sum / n;
+        }
+
+        // ---- 立体音響 (Meta XR Audio の HRTF。Project Settings → Audio → Spatializer Plugin で選んである時だけ) ----
+        // プラグインの番号 (MetaXRAudioSource.NativeParameterIndex と同じ。WebGL ではプラグインが無いので、SDK の型は直接使わない)
+        const int SpGain = 0;        // 音量の上乗せ (0〜20dB)
+        const int SpRadius = 4;      // 音源の大きさ (m)。0 だと点、大きいと広がった音になる
+        const int SpDisableRoom = 5; // 1 = 部屋の反響を付けない (反響用の部屋の形は作っていないので切る)
+        [Tooltip("曲 (楽団) の音源の大きさ (m)。楽団の横幅くらいにすると、目の前に広がって聞こえる")]
+        public float bandRadius = 3.5f;
+        [Tooltip("曲の音量の上乗せ (dB)。立体音響にすると少し小さく聞こえるので、その分")]
+        public float bandGainDb = 3f;
+        bool spatialPlugin; // 立体音響のプラグインが選ばれているか
+
+        void SetupSpatial()
+        {
+            spatialPlugin = !string.IsNullOrEmpty(AudioSettings.GetSpatializerPluginName());
+            if (spatialPlugin)
+            {
+                // 曲は楽団の位置から、頭の向きに合わせて聞こえる (正面を向くと目の前、横を向くと横から)
+                music.spatialize = true;
+                music.spatialBlend = 1f;
+            }
+            else
+            {
+                // プラグインが無い時 (WebGL など): 今まで通り、ほとんど楽団の方から。少しだけ全体にも広げる
+                music.spatialBlend = 0.85f;
+                music.spread = 100f;
+            }
+        }
+
+        // 楽器の音: プラグインがあれば HRTF で鳴った楽器の方から。無ければ今まで通り、少し方向が分かる程度
+        void SetVoiceSpatial(AudioSource src, bool directional)
+        {
+            src.spatialize = directional && spatialPlugin;
+            src.spatialBlend = !directional ? 0f : spatialPlugin ? 1f : 0.6f;
+            if (src.spatialize)
+            {
+                src.SetSpatializerFloat(SpRadius, 0.3f);
+                src.SetSpatializerFloat(SpDisableRoom, 1f);
+            }
+        }
+
+        // 曲のプラグイン設定は、鳴っている間に毎フレーム渡す (鳴り始める前に渡すと効かないことがあるため。MetaXRAudioSource と同じやり方)
+        void UpdateSpatial()
+        {
+            if (!spatialPlugin || music == null || !music.isPlaying) return;
+            music.SetSpatializerFloat(SpGain, Mathf.Clamp(bandGainDb, 0f, 20f));
+            music.SetSpatializerFloat(SpRadius, Mathf.Max(0f, bandRadius));
+            music.SetSpatializerFloat(SpDisableRoom, 1f);
+        }
+
         void Update()
         {
+            UpdateMusicPosition();
+            UpdateSpatial();
             // 拍: 演奏中は曲の再生位置から (楽器の揺れが音とずれないように)。それ以外はゆっくり進める
             if (music != null && music.isPlaying && music.clip != null)
             {
@@ -995,7 +1121,7 @@ namespace ShootingGallery
                     var s = soloists[i];
                     if (soloUntil.TryGetValue(s, out var until) && Beat >= until && until < float.MaxValue) EndSolo(s);
                 }
-                while (soloists.Count < soloSlots && playing) { int before = soloists.Count; PickSoloist(); if (soloists.Count == before) break; }
+                while (soloists.Count < soloSlots && playing && solosOpen) { int before = soloists.Count; PickSoloist(); if (soloists.Count == before) break; }
             }
             // 五線譜を次々に出す (何本も出てきては途切れる)
             if (Time.time - lastStaffTime > staffEvery) SpawnStaff();

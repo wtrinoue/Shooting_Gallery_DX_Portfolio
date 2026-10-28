@@ -46,7 +46,8 @@ namespace ShootingGallery
             mainStall.PlaceAt(mainHomePos, mainHomeRot);
 
             StartFever(); // 6軒の輪 (正面の屋台は隠れたまま輪の場所へ。メイン屋台が沈みきってからせり上がる)
-            StartCoroutine(RiseGateMainAfter(stallMoveDuration));
+            // 前のメイン屋台の足元のハッチが閉じて消えきってから出す (同じ向きの場所なので、ハッチが重ならないように)
+            StartCoroutine(RiseGateMainAfter(Mathf.Max(stallMoveDuration, oldMain.HatchClearIn + 0.05f)));
             ShowMessage("WORLD GATE\nCHOOSE YOUR WORLD!\nSHOOT BACK : QUIT", 3.5f, new Color(0.7f, 0.6f, 1f));
         }
 
@@ -68,7 +69,10 @@ namespace ShootingGallery
             feverStalls = gimmickFeverStalls;
             normalFeverStalls = gimmickFeverStalls;
             mainStall.PlaceAt(mainHomePos, mainHomeRot);
-            StartCoroutine(RiseNormalMainAfter(stallMoveDuration));
+            // WORLD GATE の屋台の足元のハッチが閉じて消えきってから出す (ハッチが重ならないように)
+            float clear = 0f;
+            if (gateStalls != null) foreach (var s in gateStalls) if (s != null) clear = Mathf.Max(clear, s.HatchClearIn);
+            StartCoroutine(RiseNormalMainAfter(Mathf.Max(stallMoveDuration, clear + 0.05f)));
         }
 
         IEnumerator RiseNormalMainAfter(float delay)

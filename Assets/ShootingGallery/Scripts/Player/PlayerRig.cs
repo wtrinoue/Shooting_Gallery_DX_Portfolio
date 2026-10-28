@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.XR;
+using UnityEngine.InputSystem.Utilities; // (InputSystem.onAnyButtonPress.Call)
 
 namespace ShootingGallery
 {
@@ -8,7 +9,8 @@ namespace ShootingGallery
     /// プレイヤー。中心から移動せず、見回して撃つだけ。
     /// 右手トリガーで右の銃を撃つ。フィーバー中の左手の銃は左手トリガーで撃つ。
     /// 右手の A ボタンを長押しすると (インジケーターがたまりきると) 最初に戻る。B ボタンの長押しでエンドレスモード、左手の X ボタンの長押しでデバッグモードが始まる。
-    /// VRデバイスが無い時はマウスでテストできる (右ドラッグか WASD で視点, 左クリック/Spaceで右の銃, Fキーで左の銃, 1 キー長押しでデバッグ, 2 キー長押しでエンドレス, 3 キー長押しでリセット。VR のボタンと同じく長押しで発動)。
+    /// VRデバイスが無い時はマウスでテストできる (右ドラッグか WASD で視点, 左クリック/Spaceで撃つ (二丁拳銃の時は左右の銃をいっしょに。左の銃はカーソルの少し左を狙う), 1 キー長押しでデバッグ, 2 キー長押しでエンドレス, 3 キー長押しでリセット。VR のボタンと同じく長押しで発動)。
+    /// 長押しのボタンは1つずつ (最初に押し始めたボタンを離すまで、ほかはたまらない)。
     /// </summary>
     public class PlayerRig : MonoBehaviour
     {
@@ -34,6 +36,8 @@ namespace ShootingGallery
         public float mouseSensitivity = 0.15f;
         [Tooltip("PC: WASD キーで視点を回す速さ (度/秒)。A / D で左右、W / S で上下")]
         public float keyLookSpeed = 90f;
+        [Tooltip("PC: 左の銃 (二丁拳銃) がカーソルより左を狙う量 (狙う点までの距離に対する割合。0.035 で約 2°)")]
+        public float desktopLeftAimOffset = 0.035f;
 
         [Header("リセット (右手の A ボタン長押し)")]
         [Tooltip("最初に戻るまで押し続ける秒数")]
@@ -77,6 +81,7 @@ namespace ShootingGallery
         InputAction leftTrigger;
 
         WeaponType weapon = WeaponType.Handgun;
+        WeaponType leftWeapon = WeaponType.Handgun; // 二丁拳銃の左手の武器 (ふだんは右手と同じ。夏祭り・カジノでは、それぞれの手で狙った先の武器になる)
         float weaponTimeLeft;
         float weaponDuration;
         bool stageWeapon; // モード専用の武器 (時間が来ても自動では戻らない。GameManager が屋台が見えてから戻す)
@@ -86,10 +91,11 @@ namespace ShootingGallery
         bool? xrModeApplied;
         float yaw, pitch;
         TrackedPoseDriver rightPose, leftPose;
-        float handCheckAt = -1f; // VR になってから手の追跡を確かめる時刻 (ログ用)
 
         public bool DualWield => dualWield;
         public WeaponType Weapon => weapon;
+        /// <summary>左手の銃の武器 (狙った先で持ち替えるモードでは、右手と違うことがある)</summary>
+        public WeaponType LeftWeapon => leftWeapon;
 
         // ---- 視点を整える (どのモードでもない時の、いつもの立ち位置・大きさ・視点の高さに戻す) ----
         // 発掘・潜水艦・音楽モードはプレイヤーを上下に動かす。不具合や途中で止められたことで元に戻りきらなくても、
@@ -102,6 +108,25 @@ namespace ShootingGallery
 
         /// <summary>視点を元に戻している途中か</summary>
         public bool IsRestoringView => viewRoutine != null;
+
+        // ---- 今どちらの操作で遊んでいるか (タイトルの操作方法の看板で、最初にどちらの説明を見せるかに使う) ----
+
+        /// <summary>
+        /// VR のコントローラーで遊んでいるか (false = マウスとキーボード)。最後に押されたボタンの種類で決める。
+        /// VR が動いていない時はいつも false。VR に入った時は true から始める。
+        /// </summary>
+        public bool UsingVRControls { get; private set; }
+        System.IDisposable anyButtonListener; // InputSystem.onAnyButtonPress の登録 (ボタンが押された時だけ呼ばれる。毎フレーム調べない)
+
+        // 何かのボタンが押された: 今と違う種類 (VR のコントローラー ⇔ マウス・キーボード) の時だけ切り替える。
+        // 同じ種類なら何もしない (早期リターン)。ヘッドセットの位置・向きはボタンではないので数えない (置いてあるだけで切り替わらないように)
+        void OnAnyButton(InputControl control)
+        {
+            bool vr = control.device is XRController;
+            if (vr == UsingVRControls) return;
+            if (vr && !XRBridge.IsActive) return; // (VR が動いていない時は、マウスとキーボードのまま)
+            UsingVRControls = vr;
+        }
 
         // 今の視点の高さの元 (CameraOffset)。VR は身長に合わせた値 (まだなら床の取り方に応じた値)、VR でなければ 0
         Vector3 HomeCameraOffset()
@@ -175,8 +200,7 @@ namespace ShootingGallery
             rightTrigger.AddBinding("<Keyboard>/space");
 
             leftTrigger = new InputAction("LeftTrigger", InputActionType.Button);
-            leftTrigger.AddBinding("<XRController>{LeftHand}/trigger");
-            leftTrigger.AddBinding("<Keyboard>/f");
+            leftTrigger.AddBinding("<XRController>{LeftHand}/trigger"); // (PC には左の銃のボタンはない。二丁拳銃の時は左クリック / Space で両方撃つ)
 
             resetButton = new InputAction("Reset", InputActionType.Button);
             // ボタンは用途 ({PrimaryButton} など) でも指定する: WebXR のコントローラーは名前が buttonA / buttonB で、primaryButton では見つからない
@@ -206,11 +230,14 @@ namespace ShootingGallery
             resetButton.Enable();
             endlessButton.Enable();
             debugButton.Enable();
+            anyButtonListener = InputSystem.onAnyButtonPress.Call(OnAnyButton);
         }
 
         void OnDisable()
         {
             Application.onBeforeRender -= OnBeforeRender;
+            anyButtonListener?.Dispose();
+            anyButtonListener = null;
             rightTrigger.Disable();
             leftTrigger.Disable();
             resetButton.Disable();
@@ -238,6 +265,7 @@ namespace ShootingGallery
             // (手元がコントローラーの模型の間は、どちらの手からも撃たない)
             bool rPressed = !controllerView && rightTrigger.WasPressedThisFrame();
             bool rHeld = !controllerView && rightTrigger.IsPressed();
+            if (RightGunArriving) rPressed = rHeld = false; // (的から右手へ飛んでくる間は、まだ撃てない)
             rightGun.TriggerInput(rPressed, rHeld);
 
             // コントローラーの間は弾を撃たない代わりに、コントローラーの先から白い玉が出る (看板のボタン (CREDITS・ページ送り) だけを押せる。PointerBall)
@@ -247,9 +275,11 @@ namespace ShootingGallery
                 if (leftTrigger.WasPressedThisFrame()) ShootPointerBall(leftHand);
             }
 
-            if (dualWield && leftGun != null)
+            if (dualWield && leftGun != null && !LeftGunArriving) // (的から左手へ飛んでくる間は、まだ撃てない)
             {
-                leftGun.TriggerInput(!controllerView && leftTrigger.WasPressedThisFrame(), !controllerView && leftTrigger.IsPressed());
+                // VR は左手のトリガー、PC は右の銃と同じ左クリック / Space で、左右の銃をいっしょに撃つ
+                var leftInput = xr ? leftTrigger : rightTrigger;
+                leftGun.TriggerInput(!controllerView && leftInput.WasPressedThisFrame(), !controllerView && leftInput.IsPressed());
             }
 
             // 特殊武器の残り時間
@@ -267,24 +297,23 @@ namespace ShootingGallery
             else rightGun.SetInfo(rightGun.IsCharging ? "CHARGING..." : rightGun.NeedsReload ? $"RELOAD {rightGun.Loaded}/{def.magazine} : PULL TRIGGER" :rightGun.IsReloading ? (weapon == WeaponType.Poi ? "NEXT POI..." : "RELOADING...") : def.displayName); // 残りの弾は銃の上の弾の列で見せる
             if (leftGun != null) leftGun.SetInfo("");
 
+            // ゲージは手ごとに、その手の武器で出す (夏祭り・カジノでは左右で武器が違うことがある)
+            UpdateGauge(rightGun, weapon);
+            if (leftGun != null) UpdateGauge(leftGun, leftWeapon);
+        }
+
+        void UpdateGauge(GunController gun, WeaponType type)
+        {
             // 弾込めのゲージで見せる武器 (コルク銃・ポイ): 撃つと空になり、たまっていく。満タンになったら撃てる (武器の色に変わる)
-            if (def.reloadGauge)
+            if (Weapons.Get(type).reloadGauge)
             {
-                SetReloadGauge(rightGun);
-                if (leftGun != null) SetReloadGauge(leftGun);
+                float k = gun.ReloadProgress;
+                gun.SetGauge(Mathf.Max(0.02f, k), k >= 1f ? GaugeColor(type) : new Color(0.55f, 0.55f, 0.6f));
                 return;
             }
             // 残り時間はゲージで表示 (ハンドガンの時は非表示)
-            float ratio = weapon == WeaponType.Handgun || weaponDuration <= 0f ? 0f : weaponTimeLeft / weaponDuration;
-            Color gaugeColor = ratio < 0.3f ? new Color(1f, 0.25f, 0.2f) : GaugeColor(weapon);
-            rightGun.SetGauge(ratio, gaugeColor);
-            if (leftGun != null) leftGun.SetGauge(ratio, gaugeColor);
-        }
-
-        void SetReloadGauge(GunController gun)
-        {
-            float k = gun.ReloadProgress;
-            gun.SetGauge(Mathf.Max(0.02f, k), k >= 1f ? GaugeColor(weapon) : new Color(0.55f, 0.55f, 0.6f));
+            float ratio = type == WeaponType.Handgun || weapon == WeaponType.Handgun || weaponDuration <= 0f ? 0f : weaponTimeLeft / weaponDuration;
+            gun.SetGauge(ratio, ratio < 0.3f ? new Color(1f, 0.25f, 0.2f) : GaugeColor(type));
         }
 
         static Color GaugeColor(WeaponType type) => type switch
@@ -306,6 +335,7 @@ namespace ShootingGallery
             WeaponType.CorkGun => new Color(1f, 0.8f, 0.3f),
             WeaponType.Poi => new Color(0.4f, 0.8f, 1f),
             WeaponType.Coin => new Color(1f, 0.85f, 0.25f),
+            WeaponType.Ball => new Color(0.3f, 0.55f, 1f),
             WeaponType.Torpedo => new Color(0.35f, 0.9f, 1f),
             WeaponType.Trumpet => new Color(1f, 0.82f, 0.3f),
             WeaponType.Imagination => new Color(0.95f, 0.6f, 1f),
@@ -314,22 +344,34 @@ namespace ShootingGallery
         };
 
         /// <summary>モード専用の武器を持たせる (時間が来ても自動ではハンドガンに戻らない。戻すのは GameManager.ReleaseStageWeapon)</summary>
-        public void GiveStageWeapon(WeaponType type, float duration)
+        public void GiveStageWeapon(WeaponType type, float duration, Vector3? from = null)
         {
-            GiveWeapon(type, duration);
+            GiveWeapon(type, duration, from);
             stageWeapon = true;
             stageGaugeFresh = true;
         }
 
         /// <summary>
-        /// モード専用の武器を、別のモード専用の武器に持ち替える (狙った先で武器が変わる時)。ゲージ (残り時間と満タンの長さ) はそのまま続ける
+        /// モード専用の武器を、別のモード専用の武器に持ち替える (狙った先で武器が変わる時)。left なら左手の銃だけ、そうでなければ右手の銃だけ
+        /// (二丁拳銃の時は、それぞれの手で狙った先の武器になる)。ゲージ (残り時間と満タンの長さ) はそのまま続ける。
+        /// 夏祭り・カジノの持ち替えなので、たぐり寄せず、その手が少し震えるだけ
         /// </summary>
-        public void SwitchStageWeapon(WeaponType type)
+        public void SwitchStageWeapon(WeaponType type, bool left = false)
         {
-            float left = weaponTimeLeft, full = weaponDuration;
-            GiveWeapon(type, left);
-            weaponDuration = full;
+            if (left)
+            {
+                if (leftGun == null || type == leftWeapon) return;
+                leftWeapon = type;
+                leftGun.SetWeapon(type);
+                if (dualWield) XRBridge.Haptic(UnityEngine.XR.XRNode.LeftHand, 0.3f, 0.06f);
+                return;
+            }
             stageWeapon = true;
+            if (type == weapon) return;
+            weapon = type;
+            rightGun.SetWeapon(type);
+            if (!dualWield && leftGun != null) { leftWeapon = type; leftGun.SetWeapon(type); } // (左手の銃がない間は、右手に合わせておく)
+            XRBridge.Haptic(UnityEngine.XR.XRNode.RightHand, 0.3f, 0.06f);
         }
 
         /// <summary>
@@ -345,19 +387,30 @@ namespace ShootingGallery
             weaponTimeLeft = timeLeft;
         }
 
-        public void GiveWeapon(WeaponType type, float duration)
+        /// <summary>
+        /// 武器を持ち替える。銃が入れ替わる時は、手元へたぐり寄せる (PullGunsFrom): from = 持ち替えのもとになった的の場所。
+        /// 渡さない時は、目の前の少し先から (DefaultPullFrom)。いつもの銃 (ハンドガン) に戻る時は、たぐり寄せない
+        /// </summary>
+        public void GiveWeapon(WeaponType type, float duration, Vector3? from = null, bool pull = true)
         {
+            bool changed = type != weapon; // (銃が入れ替わる時だけ、たぐり寄せる)
             stageWeapon = false;
             weapon = type;
+            leftWeapon = type;
             weaponTimeLeft = duration;
             weaponDuration = duration;
             rightGun.SetWeapon(type);
             if (leftGun != null) leftGun.SetWeapon(type);
+            if (pull && changed && type != WeaponType.Handgun) PullGunsFrom(from ?? DefaultPullFrom());
         }
 
         public void ResetWeapon()
         {
+            // (いつもの銃に戻る時は、たぐり寄せない。飛んでくる途中だったら、その場で手の中に戻す)
+            StopFlight(rightGun, rightFlight);
+            StopFlight(leftGun, leftFlight);
             weapon = WeaponType.Handgun;
+            leftWeapon = WeaponType.Handgun;
             weaponTimeLeft = 0f;
             stageWeapon = false;
             rightGun.SetWeapon(weapon);
@@ -385,24 +438,130 @@ namespace ShootingGallery
             if (leftGun != null) leftGun.SetModelHidden(on);
         }
 
-        public void SetDualWield(bool value)
+        /// <summary>
+        /// 二丁拳銃にする / やめる。flyFrom を渡すと、左手の銃がその場所 (撃ったフィーバーの的) から手元へ飛んでくる (PullGun)
+        /// </summary>
+        public void SetDualWield(bool value, Vector3? flyFrom = null)
         {
+            bool added = value && !dualWield; // (銃が増える時だけ、たぐり寄せる)
             dualWield = value;
+            StopFlight(leftGun, leftFlight);
             if (leftGun != null) leftGun.gameObject.SetActive(value);
+            if (added) PullGun(leftGun, leftFlight, flyFrom ?? DefaultPullFrom(), UnityEngine.XR.XRNode.LeftHand, 0f);
+        }
+
+        /// <summary>
+        /// 武器を持ち替えさせた的の場所 (from) から、手元の銃をたぐり寄せる (武器の的・フィーバーの的・スナイパーなど、銃が増える / 変わる時の共通の演出)。
+        /// 右手の銃と、二丁拳銃の時は左手の銃も (少し遅れて) 飛んでくる。手元に着くまで、その手では撃てない
+        /// </summary>
+        public void PullGunsFrom(Vector3 from)
+        {
+            PullGun(rightGun, rightFlight, from, UnityEngine.XR.XRNode.RightHand, 0f);
+            if (dualWield && leftGun != null && leftGun.gameObject.activeInHierarchy)
+                PullGun(leftGun, leftFlight, from, UnityEngine.XR.XRNode.LeftHand, 0.08f);
+        }
+
+        // 飛んでくる途中の銃の状態 (手ごとに1つ)
+        class GunFlight
+        {
+            public Coroutine routine;
+            public bool arriving;   // 飛んでくる途中 (その手ではまだ撃てない)
+            public bool captured;   // 手の中での位置・向きを覚えたか
+            public Vector3 homePos;
+            public Quaternion homeRot;
+        }
+        readonly GunFlight rightFlight = new GunFlight(), leftFlight = new GunFlight();
+
+        // たぐり寄せる場所を渡されなかった時: 目の前の少し先 (見ている方の 2.5m 先、目より少し下) から
+        Vector3 DefaultPullFrom()
+        {
+            if (head == null) return transform.position + transform.forward * 2.5f + Vector3.up;
+            var fwd = head.transform.forward;
+            fwd.y = 0f;
+            if (fwd.sqrMagnitude < 0.001f) fwd = transform.forward;
+            return head.transform.position + fwd.normalized * 2.5f + Vector3.down * 0.3f;
+        }
+        const float GunFlyTime = 0.45f; // (飛んでくる秒数)
+
+        bool RightGunArriving => rightFlight.arriving;
+        bool LeftGunArriving => leftFlight.arriving;
+
+        void PullGun(GunController gun, GunFlight f, Vector3 from, UnityEngine.XR.XRNode node, float delay)
+        {
+            if (gun == null || !isActiveAndEnabled || !gun.gameObject.activeInHierarchy) return;
+            StopFlight(gun, f);
+            f.routine = StartCoroutine(Fly(gun, f, from, node, delay));
+        }
+
+        // 飛んでいる途中ならやめて、手の中の元の位置・向きに戻す
+        void StopFlight(GunController gun, GunFlight f)
+        {
+            if (f.routine != null) StopCoroutine(f.routine);
+            f.routine = null;
+            f.arriving = false;
+            if (gun != null) gun.LaserSuppressed = false;
+            if (gun != null && f.captured)
+            {
+                gun.transform.localPosition = f.homePos;
+                gun.transform.localRotation = f.homeRot;
+            }
+        }
+
+        // 的の場所から手元へ: 少し山なりに飛びながら、くるくる回って (だんだんゆっくり) 手の中に収まる
+        System.Collections.IEnumerator Fly(GunController gun, GunFlight f, Vector3 from, UnityEngine.XR.XRNode node, float delay)
+        {
+            var t = gun.transform;
+            if (!f.captured)
+            {
+                f.homePos = t.localPosition;
+                f.homeRot = t.localRotation;
+                f.captured = true;
+            }
+            f.arriving = true;
+            gun.LaserSuppressed = true; // (レーザーは手元に着いてから)
+            for (float k = -delay / GunFlyTime; k < 1f; k += Time.deltaTime / GunFlyTime)
+            {
+                float u = Mathf.Clamp01(k);
+                float e = 1f - (1f - u) * (1f - u) * (1f - u); // (速く飛び出して、手元でゆっくり)
+                var parent = t.parent;
+                Vector3 to = parent != null ? parent.TransformPoint(f.homePos) : f.homePos;
+                Quaternion toRot = parent != null ? parent.rotation * f.homeRot : f.homeRot;
+                t.position = Vector3.Lerp(from, to, e) + Vector3.up * (Mathf.Sin(u * Mathf.PI) * 0.35f);
+                t.rotation = toRot * Quaternion.AngleAxis((1f - e) * 720f, Vector3.up) * Quaternion.AngleAxis((1f - e) * 180f, Vector3.forward);
+                yield return null;
+            }
+            t.localPosition = f.homePos;
+            t.localRotation = f.homeRot;
+            f.arriving = false;
+            gun.LaserSuppressed = false; // 手元に着いた: レーザーを出す
+            f.routine = null;
+            Sfx.Play("click"); // 手元に着いた: これで撃てる
+            XRBridge.Haptic(node, 0.5f, 0.08f);
         }
 
         // A ボタン (リセット) / B ボタン (エンドレスモード) の長押し
         void UpdateReset()
         {
-            if (UpdateHold(resetButton, ref resetHeld, ref resetFired, resetHoldTime, resetIndicator)) ResetRequested?.Invoke();
-            if (UpdateHold(endlessButton, ref endlessHeld, ref endlessFired, endlessHoldTime, endlessIndicator)) EndlessRequested?.Invoke();
-            if (UpdateHold(debugButton, ref debugHeld, ref debugFired, debugHoldTime, debugIndicator)) DebugRequested?.Invoke();
+            // 長押しのボタンは1つずつ: 最初に押し始めたボタンを離すまで、ほかのボタンはたまらない (同時に押すと全部のゲージがたまっていたので)。
+            // 同じフレームに押し始めた時は リセット → エンドレス → デバッグ の順に優先
+            if (holdOwner != null && !holdOwner.IsPressed()) holdOwner = null;
+            if (holdOwner == null)
+            {
+                if (resetButton.IsPressed()) holdOwner = resetButton;
+                else if (endlessButton.IsPressed()) holdOwner = endlessButton;
+                else if (debugButton.IsPressed()) holdOwner = debugButton;
+            }
+            if (UpdateHold(resetButton, holdOwner == resetButton, ref resetHeld, ref resetFired, resetHoldTime, resetIndicator)) ResetRequested?.Invoke();
+            if (UpdateHold(endlessButton, holdOwner == endlessButton, ref endlessHeld, ref endlessFired, endlessHoldTime, endlessIndicator)) EndlessRequested?.Invoke();
+            if (UpdateHold(debugButton, holdOwner == debugButton, ref debugHeld, ref debugFired, debugHoldTime, debugIndicator)) DebugRequested?.Invoke();
         }
 
-        // 押している間たまっていき、holdTime 秒で発動する (発動したフレームだけ true)。離すと最初から
-        static bool UpdateHold(InputAction button, ref float held, ref bool fired, float holdTime, ResetIndicator indicator)
+        InputAction holdOwner; // 今たまっている長押しのボタン (離すまで、ほかの長押しのボタンは無効)
+
+        // 押している間たまっていき、holdTime 秒で発動する (発動したフレームだけ true)。離すと最初から。active = false の間は押していないのと同じ
+        static bool UpdateHold(InputAction button, bool active, ref float held, ref bool fired, float holdTime, ResetIndicator indicator)
         {
-            bool holding = button.IsPressed();
+            bool holding = active && button.IsPressed();
             bool fire = false;
             if (!holding)
             {
@@ -433,7 +592,6 @@ namespace ShootingGallery
             float eye = referenceHeightCm / 100f * eyeHeightRatio;
             calibratedOffsetY = eye - head.transform.localPosition.y; // head の localPosition は CameraOffset から見た、実際に追跡している頭の高さ
             cameraOffset.localPosition = Vector3.up * calibratedOffsetY.Value;
-            Debug.Log($"[PlayerRig] 身長 {referenceHeightCm}cm の人の視点に合わせました (目の高さ {eye:0.00}m, CameraOffset {calibratedOffsetY.Value:0.00}m)");
         }
 
         /// <summary>
@@ -452,12 +610,12 @@ namespace ShootingGallery
         void ApplyMode(bool xr)
         {
             xrModeApplied = xr;
+            UsingVRControls = xr; // VR に入ったらコントローラー、出たらマウスとキーボードから
             foreach (var tpd in GetComponentsInChildren<TrackedPoseDriver>(true))
                 tpd.enabled = xr;
 
             if (xr)
             {
-                handCheckAt = Time.unscaledTime + 3f;
                 xrStartedAt = Time.unscaledTime;
                 bool floor = XRBridge.TrySetFloorOrigin();
                 floorOrigin = floor;
@@ -486,14 +644,9 @@ namespace ShootingGallery
 
         void UpdateHandsFallback()
         {
-            bool rightOk = HandFallback(rightHand, rightPose, UnityEngine.XR.XRNode.RightHand);
-            bool leftOk = HandFallback(leftHand, leftPose, UnityEngine.XR.XRNode.LeftHand);
+            HandFallback(rightHand, rightPose, UnityEngine.XR.XRNode.RightHand);
+            HandFallback(leftHand, leftPose, UnityEngine.XR.XRNode.LeftHand);
 
-            if (handCheckAt > 0f && Time.unscaledTime >= handCheckAt)
-            {
-                handCheckAt = -1f;
-                LogHandTracking(rightOk, leftOk);
-            }
         }
 
         /// <summary>Input System で手が追えていれば何もしない。追えていなければ XR の標準の API から読んで置く。手が動いていれば true</summary>
@@ -510,22 +663,6 @@ namespace ShootingGallery
             hand.localPosition = pos;
             hand.localRotation = rot;
             return true;
-        }
-
-        // VR になって少したってから、手がどの方法で追えているかをコンソールに出す (手が動かない時の原因調べ用)
-        void LogHandTracking(bool rightOk, bool leftOk)
-        {
-            var sb = new System.Text.StringBuilder("[PlayerRig] 手の追跡: ");
-            sb.Append($"右 {Describe(rightPose, rightOk)} / 左 {Describe(leftPose, leftOk)}\n");
-            sb.Append("Input System の XR 機器: ");
-            foreach (var d in InputSystem.devices)
-                if (d is TrackedDevice) sb.Append($"[{d.layout} \"{d.displayName}\" {string.Join(",", d.usages)}] ");
-            var xrDevices = new System.Collections.Generic.List<UnityEngine.XR.InputDevice>();
-            UnityEngine.XR.InputDevices.GetDevices(xrDevices);
-            sb.Append("\nXR の機器: ");
-            foreach (var d in xrDevices) sb.Append($"[{d.name} {d.characteristics}] ");
-            if (rightOk && leftOk) Debug.Log(sb.ToString());
-            else Debug.LogWarning(sb.ToString());
         }
 
         static string Describe(TrackedPoseDriver tpd, bool ok)
@@ -568,7 +705,9 @@ namespace ShootingGallery
             Vector3 aimPoint = Physics.Raycast(ray, out var hit, 100f) ? hit.point : ray.GetPoint(30f);
 
             PlaceDesktopHand(rightHand, new Vector3(0.22f, -0.22f, 0.35f), aimPoint);
-            PlaceDesktopHand(leftHand, new Vector3(-0.22f, -0.22f, 0.35f), aimPoint);
+            // 左の銃はカーソルの少し左を狙う (2丁が同じ点に重ならないように。距離に比べて約 2°)
+            Vector3 leftAim = aimPoint - head.transform.right * (Vector3.Distance(head.transform.position, aimPoint) * desktopLeftAimOffset);
+            PlaceDesktopHand(leftHand, new Vector3(-0.22f, -0.22f, 0.35f), leftAim);
         }
 
         void PlaceDesktopHand(Transform hand, Vector3 localOffset, Vector3 aimPoint)

@@ -22,6 +22,15 @@ namespace ShootingGallery.EditorTools
                 bool exists = builder.transform.Find(GalleryBuilder.WorldName) != null;
                 if (GUILayout.Button(exists ? "作り直す (今の生成物は置き換わります)" : "シーンに生成", GUILayout.Height(32)))
                     builder.BuildIntoScene();
+
+                EditorGUILayout.Space();
+                EditorGUILayout.HelpBox(
+                    "「アセットだけ生成」は、材質・メッシュなどのアセットだけを作って保存し、シーンにはゲーム一式を残しません。\n" +
+                    "シーンには GalleryBuilder だけを置いておき、再生した時に組み立てる使い方の時に押します (ゲーム一式が大きく、シーンに入れると GitHub に送れないため)。\n" +
+                    "最後に、実機用のアセット一覧 (Resources/GalleryRuntimeAssets) もそろえます。",
+                    MessageType.None);
+                if (GUILayout.Button("アセットだけ生成 (シーンには残さない)", GUILayout.Height(28)))
+                    builder.GenerateAssetsOnly();
             }
 
             EditorGUILayout.Space();

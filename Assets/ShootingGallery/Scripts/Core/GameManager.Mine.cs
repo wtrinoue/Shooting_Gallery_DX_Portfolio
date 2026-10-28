@@ -8,8 +8,10 @@ namespace ShootingGallery
         // ---- 発掘モード ----
 
         bool mineStallsAway; // 降りていって、屋台を止めて沈めてあるか
-        bool mineFogWasOn;   // 発掘モードの間は霧を切る。始まる前に霧が出ていたか (上がり始めたら元に戻す)
+        bool mineFogWasOn;   // 地下にいる間は霧を切る。始まる前に霧が出ていたか (上がり始めたら元に戻す)
         bool mineFogOff;
+        bool mineRising;     // 上がり始めた (洞窟を抜けて縦穴に入ったら、いつもの明るさへ戻し始める)
+        const float MineBrightenTime = 5f; // 縦穴に入ってから、いつもの夜の明るさに戻るまでの秒数 (上がりきるまでに戻る)
 
         // 発掘モードの間は霧をなくす / 元に戻す
         void SetMineFog(bool off)
@@ -50,7 +52,7 @@ namespace ShootingGallery
             ResetView(true); // 下へ降りる前に、いつもの視点にそろえる (そこからの深さで動かすので)
             mineCave.Begin(player.transform);
             PlayStageBgm(mineBgm);
-            SetMineFog(true); // 霧なし (縦穴も洞窟も、くっきり見える)
+            // (霧は、地上が見えなくなってから OnMineDeep で切る。ここで切ると、遠くの屋台や景色が霧の色から一気に元の色へ変わってしまう)
             player.GiveStageWeapon(WeaponType.Pickaxe, mineCave.duration); // つるはしを回しながら投げる
             // 縦穴を降りる間に、だんだん暗くなる
             FadeAmbience(mineFogColor, mineAmbient * 0.6f, mineSkyColor, mineCave.descendTime * 0.7f);
@@ -59,11 +61,12 @@ namespace ShootingGallery
             ShowMessage("MINING MODE!!", 2f, new Color(1f, 0.75f, 0.35f));
         }
 
-        // 降りていって縦穴の口からも地上の屋台が見えなくなった: 屋台をその場で地下へ隠す
+        // 降りていって縦穴の口からも地上の屋台が見えなくなった: 屋台をその場で地下へ隠し、霧を切る (縦穴も洞窟も、くっきり見える)
         // (沈めると、縦穴の口から看板が地面へしまわれていくのが見えてしまう)
         void OnMineDeep()
         {
             if (!MineActive || mineStallsAway) return;
+            SetMineFog(true);
             mineStallsAway = true;
             PutAwayStalls(true); // 集めるだけ
             foreach (var s in stageStalls) s.HideImmediate();
@@ -76,21 +79,33 @@ namespace ShootingGallery
             if (State == GameState.Playing) ShowMessage("WELCOME TO THE MINE!\nSHOOT THE GEMS & MINE CARTS!", 3f, new Color(1f, 0.75f, 0.35f));
         }
 
-        // 上がり始めた: だんだんいつもの夜の明るさに戻す
+        // 上がり始めた: 洞窟の中はまだ暗いまま (ここで明るくし始めると、上がっている間に洞窟が明るくなってしまう)。
+        // 縦穴に入ったら OnMineNearSurface で、いつもの夜の明るさに戻し始める
         void OnMineRising()
+        {
+            mineRising = true;
+        }
+
+        // 縦穴に入った (洞窟はもう見えない): 霧を戻し、だんだんいつもの夜の明るさに戻す
+        void RestoreMineAmbience()
         {
             SetMineFog(false); // いつもの霧に戻す
             RenderSettings.fogStartDistance = normalFogStart;
             RenderSettings.fogEndDistance = normalFogEnd;
-            FadeAmbience(normalFogColor, normalAmbient, normalSkyColor, mineCave.ascendTime * 0.8f);
-            FadeSun(sunIntensity, mineCave.ascendTime * 0.8f);
+            FadeAmbience(normalFogColor, normalAmbient, normalSkyColor, MineBrightenTime);
+            FadeSun(sunIntensity, MineBrightenTime);
         }
 
-        // 上がってきて屋台が見えるくらいまで来た: 屋台はもう動いている (沈めておいた屋台をその場に並べる)。
+        // 上がってきて縦穴に入った (屋台が見えるくらいまで来た): いつもの明るさに戻し始め、屋台はもう動いている (沈めておいた屋台をその場に並べる)。
         // 的はまだ出さない (上がりきって穴が埋まってから OnMineClosed で出す)。
         // 待っている間にフィーバーが終わったフィーバー屋台は出さない
         void OnMineNearSurface()
         {
+            if (mineRising)
+            {
+                mineRising = false;
+                RestoreMineAmbience();
+            }
             if (!mineStallsAway) return;
             mineStallsAway = false;
             foreach (var s in stageStalls)
@@ -110,6 +125,7 @@ namespace ShootingGallery
             bool immediate = State != GameState.Playing;
             if (immediate)
             {
+                mineRising = false; // (すぐ戻すので、ゆっくり明るくはしない)
                 SetMineFog(false);
                 RenderSettings.fogStartDistance = normalFogStart;
                 RenderSettings.fogEndDistance = normalFogEnd;

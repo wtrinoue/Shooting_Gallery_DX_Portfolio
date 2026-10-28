@@ -68,7 +68,7 @@ namespace ShootingGallery
         void EndNinja()
         {
             if (!NinjaActive) return;
-            StopStageBgm(ninjaBgm, State != GameState.Playing); // (ラウンドの終わり・リセットの時はすぐ止める)
+            StopStageBgmAfterStalls(ninjaBgm, State != GameState.Playing); // 屋台が戻りきるまで曲は流し続ける (ラウンドの終わり・リセットの時はすぐ止める)
             int hits = ninjaDojo.Hits;
             ninjaDojo.End();
             ReleaseStageWeapon(WeaponType.Shuriken);

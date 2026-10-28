@@ -66,7 +66,7 @@ namespace ShootingGallery
         void EndKaiju()
         {
             if (!KaijuActive) return;
-            StopStageBgm(kaijuBgm, State != GameState.Playing); // (ラウンドの終わり・リセットの時はすぐ止める)
+            StopStageBgmAfterStalls(kaijuBgm, State != GameState.Playing); // 屋台が戻りきるまで曲は流し続ける (ラウンドの終わり・リセットの時はすぐ止める)
             int broken = kaijuCity.Destroyed;
             kaijuCity.End();
             ReleaseStageWeapon(WeaponType.FireBall);
@@ -108,6 +108,19 @@ namespace ShootingGallery
                     kaijuGroundPos[i] = ground[i].localPosition;
                     kaijuGroundScale[i] = ground[i].localScale;
                     kaijuGroundActive[i] = ground[i].gameObject.activeSelf;
+                    // 床下のハッチ・穴のふちは、ふくらむ / 縮む途中のことがある (別の世界から戻ってすぐ怪獣モードに入った時など)。
+                    // 途中の大きさを覚えると、戻った時に小さいまま (消えたように見える) になるので、本来の大きさを覚えて、途中の動きは止める
+                    if (bonusStage != null && ground[i] == bonusStage.transform && hatchScale != Vector3.zero)
+                    {
+                        if (hatchRoutine != null) { StopCoroutine(hatchRoutine); hatchRoutine = null; }
+                        kaijuGroundScale[i] = hatchScale;
+                        kaijuGroundActive[i] = !hatchHidden && hatchWasActive;
+                    }
+                    else if (pitRim != null && ground[i] == pitRim && rimScale != Vector3.zero)
+                    {
+                        if (flatRoutine != null) { StopCoroutine(flatRoutine); flatRoutine = null; }
+                        kaijuGroundScale[i] = rimScale;
+                    }
                 }
             }
             var moving = new List<Stall>();

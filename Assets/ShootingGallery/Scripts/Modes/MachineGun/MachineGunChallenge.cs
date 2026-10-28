@@ -62,7 +62,7 @@ namespace ShootingGallery
         /// <summary>マシンガンを渡す秒数 (カップが現れる時間 + 撃てる時間)</summary>
         public float ShootDuration => appearSpread + timeLimit;
         /// <summary>チャレンジ全体の最長の秒数 (屋台の入れ替え + 撃つ時間)</summary>
-        public float Duration => riseDuration + ShootDuration;
+        public float Duration => riseDuration + ShootDuration + 1.5f; // (+ 引っ込める屋台のハッチが消えるのを待つ分)
         /// <summary>撃てる残り時間。屋台がせり上がる前は減らない</summary>
         public float TimeLeft => !IsActive ? 0f : IsReady ? Mathf.Max(0f, ShootDuration - (Time.time - readyTime)) : ShootDuration;
         /// <summary>今回の並べ方の名前</summary>
@@ -73,6 +73,8 @@ namespace ShootingGallery
         /// <summary>Hide してから横長の屋台が沈み始めるまでの秒数 (元の屋台はこの時に同時にせり上げる)</summary>
         public float SwapBackDelay => HideWait;
         const float HideWait = 0.3f; // 最後のカップが落ちるのを少し見せる
+        /// <summary>しまう時に沈む秒数 (出てくる時より速く。元の屋台がハッチの消えた所からすぐ戻れるように)</summary>
+        public const float SinkTime = 0.7f;
 
         float readyTime;
         Coroutine anim;
@@ -95,9 +97,9 @@ namespace ShootingGallery
 
         /// <summary>
         /// 横長の屋台を出す。center = 輪の中心 (プレイヤーの足元, ワールド座標), direction = 屋台を出す向き (水平),
-        /// radius = 中心から屋台までの距離。
+        /// radius = 中心から屋台までの距離。 delay = せり上がり始めるまでの秒数。
         /// </summary>
-        public void Show(Vector3 center, Vector3 direction, float radius)
+        public void Show(Vector3 center, Vector3 direction, float radius, float delay = 0f)
         {
             direction.y = 0f;
             if (direction.sqrMagnitude < 0.0001f) direction = Vector3.forward;
@@ -116,7 +118,7 @@ namespace ShootingGallery
             ChooseLayout();
             foreach (var t in current.targets) if (t != null) t.SetAvailable(true); // manualControl なので隠れたまま Raise を待つ
             PlaceBombs();
-            Play(ShowRoutine());
+            Play(ShowRoutine(delay));
         }
 
         /// <summary>並べ方をランダムに選び、その台とカップだけを表示する</summary>
@@ -135,8 +137,9 @@ namespace ShootingGallery
                 if (layouts[k].root != null) layouts[k].root.SetActive(k == i);
         }
 
-        IEnumerator ShowRoutine()
+        IEnumerator ShowRoutine(float delay)
         {
+            if (delay > 0f) yield return new WaitForSeconds(delay); // 引っ込める屋台の足元のハッチが閉じて消えきるのを待つ (ハッチが重ならないように)
             stall.Rise(riseDuration, false);
             yield return new WaitForSeconds(riseDuration);
 
@@ -198,8 +201,8 @@ namespace ShootingGallery
         IEnumerator HideRoutine()
         {
             yield return new WaitForSeconds(HideWait);
-            stall.Sink(riseDuration);
-            yield return new WaitForSeconds(riseDuration + 0.1f);
+            stall.Sink(SinkTime); // (しまう時は、テンポよく一気に沈む)
+            yield return new WaitForSeconds(SinkTime + 0.1f);
             foreach (var t in current.targets) if (t != null) t.SetAvailable(false);
             ClearBombs();
             anim = null;

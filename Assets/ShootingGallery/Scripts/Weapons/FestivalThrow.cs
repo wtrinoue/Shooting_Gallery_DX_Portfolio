@@ -8,11 +8,12 @@ namespace ShootingGallery
     ///   コルク: 当たった景品 (FestivalPrize の的) が後ろへ倒れて落ちる。
     ///   ポイ : 水面に入ったら、夏祭りの舞台 (FestivalStage) が近くの金魚をすくえたか / 破れたかを決める。
     ///   お金 : 当たった料理 (FestivalFood の的) を買う (お金 = スコアが足りるか FestivalStage が確かめる)。
+    ///   球   : カジノのボールのルーレットに投げる青い球。当たった的をそのまま撃つ (お金と同じ)。
     /// 見た目は投げるたびに作らず、FxPool で使い回す。
     /// </summary>
     public class FestivalThrow : MonoBehaviour
     {
-        public enum Kind { Ring, Cork, Poi, Coin }
+        public enum Kind { Ring, Cork, Poi, Coin, Ball }
 
         const float MaxLifetime = 5f;
         const float RingCatchRadius = 0.24f; // 輪が落ちた所から、杭の軸までこの距離以内の杭にかかったことにする
@@ -86,6 +87,9 @@ namespace ShootingGallery
                     Part(PrimitiveType.Cube, t.spin, new Vector3(0f, 0.002f, -0.1f), new Vector3(0.018f, 0.006f, 0.1f), Quaternion.identity, gun.poiFrameMaterial);
                     t.spinAxis = Vector3.up;
                     t.spinSpeed = 160f;
+                    break;
+                case Kind.Ball: // カジノのボールのルーレットに投げる、青い球
+                    Part(PrimitiveType.Sphere, t.spin, Vector3.zero, Vector3.one * 0.05f, Quaternion.identity, gun.ballMaterial);
                     break;
                 default: // 金色の硬貨。縦にくるくる回って飛ぶ
                     Part(PrimitiveType.Cylinder, t.spin, Vector3.zero, new Vector3(0.05f, 0.003f, 0.05f), Quaternion.Euler(90f, 0f, 0f), gun.coinMaterial);
@@ -177,7 +181,7 @@ namespace ShootingGallery
                 default:
                     if (target != null && target.IsUp && target.kind == TargetKind.FestivalFood && stage != null) stage.TryBuy(target, hit.point);
                     else if (target != null && target.IsUp) target.Hit(hit.point);
-                    else Sfx.Play("coin");
+                    else Sfx.Play(kind == Kind.Ball ? "thunk" : "coin"); // (外れた: 球はぽこっ、お金はちゃりん)
                     FxPool.Release(poolKey, gameObject);
                     return;
             }

@@ -163,7 +163,7 @@ namespace ShootingGallery
         IEnumerator Enter()
         {
             yield return new WaitForSeconds(dropDelay);
-            yield return Storm(() => { SetOnTrain(true); Arrived?.Invoke(); }, "whistle");
+            yield return Storm(() => { SetOnTrain(true); Arrived?.Invoke(); }, null); // (汽笛は鳴らさない。ユーザーの指定)
             anim = null;
         }
 

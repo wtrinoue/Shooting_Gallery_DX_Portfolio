@@ -12,14 +12,28 @@ namespace ShootingGallery
         public readonly int W, H;
         public readonly Color[] px;
         readonly System.Random rng;
+        readonly bool transparent; // 透明なキャンバス (塗った所だけ不透明になる。的の絵のステッカー用)
 
-        public Painter(int w, int h, int seed)
+        /// <summary>
+        /// 描く位置をまとめて縮めて動かす (ピクセル = 座標 × Scale + Offset)。四角・だ円・光・多角形・線 (折れ線・筆も) に効く。
+        /// 的の絵では、絵全体を少し縮めてまわりに余白を作り、黒いふちがキャンバスの端で切れないようにする。ふつうは 1 と 0 (そのまま)
+        /// </summary>
+        public float Scale = 1f;
+        public Vector2 Offset;
+        float TX(float x) => x * Scale + Offset.x;
+        float TY(float y) => y * Scale + Offset.y;
+
+        public Painter(int w, int h, int seed) : this(w, h, seed, false) { }
+
+        /// <summary>transparent = 透明なキャンバスから描く (塗った所だけが見え、アルファに形が入る)</summary>
+        public Painter(int w, int h, int seed, bool transparent)
         {
             W = w;
             H = h;
             px = new Color[w * h];
             rng = new System.Random(seed);
-            Fill(Color.white);
+            this.transparent = transparent;
+            Fill(transparent ? Color.clear : Color.white);
         }
 
         public static Color C(float r, float g, float b) => new Color(r, g, b, 1f);
@@ -36,7 +50,52 @@ namespace ShootingGallery
             int i = y * W + x;
             var d = px[i];
             if (a >= 1f) { px[i] = new Color(c.r, c.g, c.b, 1f); return; }
+            if (transparent)
+            {   // 透明なキャンバス: 下の色の不透明さも考えて重ねる
+                float outA = a + d.a * (1f - a);
+                if (outA <= 0f) return;
+                float k = d.a * (1f - a);
+                px[i] = new Color((c.r * a + d.r * k) / outA, (c.g * a + d.g * k) / outA, (c.b * a + d.b * k) / outA, outA);
+                return;
+            }
             px[i] = new Color(d.r + (c.r - d.r) * a, d.g + (c.g - d.g) * a, d.b + (c.b - d.b) * a, 1f);
+        }
+
+        /// <summary>
+        /// 透明なキャンバスの絵のまわりに、太さ width ピクセルのふち (ステッカーの黒いふち) を付ける。
+        /// 塗った所 (アルファ 0.5 以上) から width 以内の透明な所を c で塗る (ふちの外側は少しぼかす)
+        /// </summary>
+        public void Outline(float width, Color c)
+        {
+            int r = Mathf.CeilToInt(width + 1f);
+            var src = (Color[])px.Clone();
+            for (int y = 0; y < H; y++)
+                for (int x = 0; x < W; x++)
+                {
+                    int i = y * W + x;
+                    if (src[i].a >= 0.99f) continue;
+                    float best = float.MaxValue;
+                    for (int dy = -r; dy <= r; dy++)
+                    {
+                        int yy = y + dy;
+                        if ((uint)yy >= (uint)H) continue;
+                        for (int dx = -r; dx <= r; dx++)
+                        {
+                            int xx = x + dx;
+                            if ((uint)xx >= (uint)W || src[yy * W + xx].a < 0.5f) continue;
+                            float d2 = dx * dx + dy * dy;
+                            if (d2 < best) best = d2;
+                        }
+                    }
+                    if (best == float.MaxValue) continue;
+                    float cov = Mathf.Clamp01(width + 0.5f - Mathf.Sqrt(best));
+                    if (cov <= 0f) continue;
+                    // ふちを、もとの (半透明の) ふちの下に敷く
+                    var top = src[i];
+                    float outA = top.a + cov * (1f - top.a);
+                    float k = cov * (1f - top.a);
+                    px[i] = new Color((top.r * top.a + c.r * k) / outA, (top.g * top.a + c.g * k) / outA, (top.b * top.a + c.b * k) / outA, outA);
+                }
         }
 
         public Color Get(int x, int y) => px[Mathf.Clamp(y, 0, H - 1) * W + Mathf.Clamp(x, 0, W - 1)];
@@ -59,6 +118,7 @@ namespace ShootingGallery
 
         public void Rect(float x0, float y0, float x1, float y1, Color c, float a = 1f)
         {
+            x0 = TX(x0); x1 = TX(x1); y0 = TY(y0); y1 = TY(y1);
             int xa = Mathf.Max(0, Mathf.RoundToInt(Mathf.Min(x0, x1))), xb = Mathf.Min(W - 1, Mathf.RoundToInt(Mathf.Max(x0, x1)) - 1);
             int ya = Mathf.Max(0, Mathf.RoundToInt(Mathf.Min(y0, y1))), yb = Mathf.Min(H - 1, Mathf.RoundToInt(Mathf.Max(y0, y1)) - 1);
             for (int y = ya; y <= yb; y++)
@@ -68,6 +128,7 @@ namespace ShootingGallery
         /// <summary>だ円 (rot = 傾き 度)。ふちは soft ピクセルだけぼかす</summary>
         public void Ellipse(float cx, float cy, float rx, float ry, Color c, float a = 1f, float rot = 0f, float soft = 1.2f)
         {
+            cx = TX(cx); cy = TY(cy); rx *= Scale; ry *= Scale;
             rx = Mathf.Max(0.5f, rx);
             ry = Mathf.Max(0.5f, ry);
             float r = Mathf.Max(rx, ry) + soft;
@@ -90,6 +151,7 @@ namespace ShootingGallery
         /// <summary>まわりへ向かって薄くなる丸い光</summary>
         public void Glow(float cx, float cy, float radius, Color c, float a)
         {
+            cx = TX(cx); cy = TY(cy); radius *= Scale;
             int xa = Mathf.Max(0, Mathf.FloorToInt(cx - radius)), xb = Mathf.Min(W - 1, Mathf.CeilToInt(cx + radius));
             int ya = Mathf.Max(0, Mathf.FloorToInt(cy - radius)), yb = Mathf.Min(H - 1, Mathf.CeilToInt(cy + radius));
             for (int y = ya; y <= yb; y++)
@@ -103,6 +165,7 @@ namespace ShootingGallery
         /// <summary>多角形 (中が塗られる。ふちのぼかしなし)</summary>
         public void Poly(IList<Vector2> pts, Color c, float a = 1f)
         {
+            if (Scale != 1f || Offset != Vector2.zero) { var moved = new List<Vector2>(pts.Count); foreach (var q in pts) moved.Add(new Vector2(TX(q.x), TY(q.y))); pts = moved; }
             if (pts.Count < 3) return;
             float minY = float.MaxValue, maxY = float.MinValue;
             foreach (var p in pts) { minY = Mathf.Min(minY, p.y); maxY = Mathf.Max(maxY, p.y); }
@@ -130,6 +193,7 @@ namespace ShootingGallery
         /// <summary>太さ w の線 (両端は丸い)</summary>
         public void Line(float x0, float y0, float x1, float y1, float w, Color c, float a = 1f)
         {
+            x0 = TX(x0); x1 = TX(x1); y0 = TY(y0); y1 = TY(y1); w *= Scale;
             float hw = w * 0.5f;
             int xa = Mathf.Max(0, Mathf.FloorToInt(Mathf.Min(x0, x1) - hw - 1)), xb = Mathf.Min(W - 1, Mathf.CeilToInt(Mathf.Max(x0, x1) + hw + 1));
             int ya = Mathf.Max(0, Mathf.FloorToInt(Mathf.Min(y0, y1) - hw - 1)), yb = Mathf.Min(H - 1, Mathf.CeilToInt(Mathf.Max(y0, y1) + hw + 1));

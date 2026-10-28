@@ -36,7 +36,6 @@ namespace ShootingGallery
             }
             viewOffTime += Time.deltaTime;
             if (viewOffTime < viewGuardDelay) return;
-            Debug.LogWarning("[GameManager] 視点がずれたままだったので、元に戻しました");
             ResetView();
         }
     }

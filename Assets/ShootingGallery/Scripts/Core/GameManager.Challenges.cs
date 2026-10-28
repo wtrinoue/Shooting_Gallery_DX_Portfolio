@@ -29,7 +29,6 @@ namespace ShootingGallery
         bool CanOfferChallenge(Target target, float lifetime, float challengeTime)
         {
             if (target == null || State != GameState.Playing || ChallengeActive) return false;
-            if (bonusStage != null && bonusStage.IsBusy) return false;
             var stall = target.GetComponentInParent<Stall>();
             if (stall == null || !stall.IsSettled) return false;
 
@@ -66,12 +65,12 @@ namespace ShootingGallery
             if (sniper == null || ChallengeActive || stall == null) return;
 
             sniperStall = stall;
-            stall.Sink(stallMoveDuration);
+            if (!LeaveFeverEntry(stall, stallMoveDuration)) stall.Sink(stallMoveDuration); // (フィーバーの屋台が出てくる途中なら、列から外して自分の場所の地下へ)
             Vector3 eye = player.head != null ? player.head.transform.position : player.transform.position + Vector3.up * 1.6f;
             sniper.Show(stall.transform.position - player.transform.position, eye);
 
             player.SetDualWield(false); // ライフルは右手の1丁だけ
-            player.GiveWeapon(WeaponType.Sniper, sniper.timeLimit);
+            player.GiveWeapon(WeaponType.Sniper, sniper.timeLimit, stall.transform.position + Vector3.up * 1.4f); // (スナイパーの的があった屋台から、ライフルが手元へ飛んでくる)
             SniperShotsLeft = Mathf.Max(1, sniper.shots);
             Sfx.Play("sniperready");
             ShowMessage($"SNIPER CHALLENGE!  {SniperShotsLeft} SHOTS\n{sniper.Tier.name} {sniper.Tier.distance:0}m  CENTER {sniper.MaxPoints} PTS", 3f, new Color(1f, 0.3f, 0.35f));
@@ -112,7 +111,7 @@ namespace ShootingGallery
 
             // 屋台を戻す: 引っ込めた場所に今並んでいる版 (豪華版 / 普通版) を出す (チャレンジ中にフィーバーが終わったフィーバー屋台の場所は戻さない)
             var cur = CurrentStallAt(stall);
-            if (cur != null) cur.Rise(stallMoveDuration, State == GameState.Playing);
+            if (cur != null) RiseAfterChallenge(cur);
 
             if (player.Weapon == WeaponType.Sniper) player.ResetWeapon(); // 外した1発で別の武器の的を取った時はそのまま
             player.SetDualWield(IsFever);
@@ -144,13 +143,20 @@ namespace ShootingGallery
                 foreach (var s in new[] { ring[(i + ring.Count - 1) % ring.Count], ring[(i + 1) % ring.Count] })
                     if (!machineGunStalls.Contains(s)) machineGunStalls.Add(s);
             }
-            foreach (var s in machineGunStalls) s.Sink(stallMoveDuration);
+            // 引っ込める屋台は、テンポよく一気に沈める。横長の屋台は、その足元のハッチが閉じて消えきってから出す (ハッチが重ならないように)
+            float clear = 0f;
+            foreach (var s in machineGunStalls)
+            {
+                // フィーバーの屋台が出てくる途中 (まだ出ていない / 列で回っている) なら、列から外して自分の場所の地下に控えさせる (チャレンジ中は出さない)
+                if (!LeaveFeverEntry(s, MachineGunChallenge.SinkTime)) s.Sink(MachineGunChallenge.SinkTime);
+                clear = Mathf.Max(clear, s.HatchClearIn);
+            }
 
             MachineGunChallengeActive = true;
             Vector3 center = player.transform.position;
             Vector3 dir = stall.transform.position - center;
             dir.y = 0f;
-            machineGunChallenge.Show(center, dir, dir.magnitude);
+            machineGunChallenge.Show(center, dir, dir.magnitude, clear + 0.05f);
             machineGunGiven = false;
 
             Sfx.Play("sniperready");
@@ -161,7 +167,9 @@ namespace ShootingGallery
         void GiveChallengeMachineGun()
         {
             machineGunGiven = true;
-            player.GiveWeapon(WeaponType.MachineGun, machineGunChallenge.ShootDuration);
+            // マシンガンを持っていなければ、せり上がった横長の屋台から手元へ飛んでくる (もう持っていれば、そのまま)
+            Vector3? from = player.Weapon != WeaponType.MachineGun ? (machineGunChallenge.stall != null ? machineGunChallenge.stall.transform.position : machineGunChallenge.transform.position) + Vector3.up * 1.3f : (Vector3?)null;
+            player.GiveWeapon(WeaponType.MachineGun, machineGunChallenge.ShootDuration, from);
             Sfx.Play("pickup");
             ShowMessage($"SHOOT ALL {machineGunChallenge.Total} CUPS!\nBOMBS INSIDE!", 2f, new Color(1f, 0.85f, 0.2f));
         }
@@ -175,8 +183,8 @@ namespace ShootingGallery
             int hits = machineGunChallenge.Hits, total = machineGunChallenge.Total;
             machineGunChallenge.Hide();
 
-            // 最後のカップが落ちるのを少し見せてから、横長の屋台が沈むのと同時に元の屋台を戻す
-            StartCoroutine(RiseStallsAfter(new List<Stall>(machineGunStalls), machineGunChallenge.SwapBackDelay));
+            // 最後のカップが落ちるのを少し見せてから横長の屋台が沈み、その足元のハッチが閉じて消えきったら元の屋台を戻す (ハッチが重ならないように)
+            StartCoroutine(RiseStallsAfterMachineGunStall(new List<Stall>(machineGunStalls)));
             machineGunStalls.Clear();
 
             if (machineGunGiven && player.Weapon == WeaponType.MachineGun) player.ResetWeapon();
@@ -191,6 +199,16 @@ namespace ShootingGallery
                 Sfx.Play("snipermiss");
                 ShowMessage($"TIME UP!\n{hits} / {total} CUPS", 2f, new Color(0.7f, 0.7f, 0.8f));
             }
+        }
+
+        // 横長の屋台が沈みきり、足元のハッチが閉じて消えきるのを待ってから、引っ込めた屋台を戻す
+        IEnumerator RiseStallsAfterMachineGunStall(List<Stall> stalls)
+        {
+            yield return new WaitForSeconds(machineGunChallenge.SwapBackDelay + 0.05f);
+            var mg = machineGunChallenge.stall;
+            for (float t = 0f; mg != null && t < 4f && (mg.gameObject.activeInHierarchy || mg.HatchClearIn > 0f); t += Time.deltaTime)
+                yield return null;
+            yield return RiseStallsAfter(stalls, 0f);
         }
 
         // 引っ込めた屋台を戻す。待っている間に豪華版 ⇔ 普通版に入れ替わっていたら、その場所の今の版を戻す
@@ -209,7 +227,7 @@ namespace ShootingGallery
                 if (cur == null || done.Contains(cur) || IsChallengeSpot(cur)) continue; // 念のため: もう次のチャレンジで引っ込めている場所
                 done.Add(cur);
                 if (bring != null) bring(cur, done.Count - 1);
-                else cur.Rise(stallMoveDuration, State == GameState.Playing);
+                else RiseAfterChallenge(cur);
             }
         }
 

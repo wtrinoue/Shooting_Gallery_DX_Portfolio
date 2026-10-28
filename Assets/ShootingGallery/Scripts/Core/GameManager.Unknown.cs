@@ -98,7 +98,7 @@ namespace ShootingGallery
             RenderSettings.fogEndDistance = normalFogEnd;
             if (ambienceRoutine != null) { StopCoroutine(ambienceRoutine); ambienceRoutine = null; }
             RenderSettings.fogColor = normalFogColor;
-            RenderSettings.ambientLight = normalAmbient;
+            SceneEnvironment.SetAmbient(normalAmbient);
             if (player != null && player.head != null) player.head.backgroundColor = normalSkyColor;
             if (State == GameState.Playing) ShowHatch(true);
             foreach (var s in stageStalls)

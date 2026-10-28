@@ -42,12 +42,13 @@ namespace ShootingGallery
             list.Add(BowedString(orchestra, "VIOLA", 30f, RViola, 0.82f, 1, 400, 57));
             list.Add(BowedString(orchestra, "CELLO", 56f, 2.7f, 1.4f, 2, 300, 50));
             list.Add(BowedString(orchestra, "CELLO", 84f, 2.7f, 1.4f, 2, 300, 48));
-            list.Add(BowedString(orchestra, "CELLO", 70f, 4.2f, 1.4f, 2, 300, 45));
+            list.Add(BowedString(orchestra, "CELLO", 73f, 4.2f, 1.4f, 2, 300, 45)); // (ひな壇の端 65° から離す。前は 70°)
             list.Add(BowedString(orchestra, "CELLO", 59f, 5.7f, 1.4f, 2, 300, 43));
             list.Add(BowedString(orchestra, "CELLO", 82f, 5.7f, 1.4f, 2, 300, 41));
-            list.Add(BowedString(orchestra, "CONTRABASS", 67f, 7.5f, 2.1f, 3, 200, 36));
-            list.Add(BowedString(orchestra, "CONTRABASS", 84f, 7.5f, 2.1f, 3, 200, 33));
-            list.Add(BowedString(orchestra, "CONTRABASS", 76f, 9.1f, 2.1f, 3, 200, 31));
+            // コントラバスは床の上 (ひな壇の端 RiserMaxDeg 65° より外)。段の側面にめり込まないよう、端から 1m 以上離す (前は 67° で 0.26m しかなく当たっていた)
+            list.Add(BowedString(orchestra, "CONTRABASS", 74f, 7.5f, 2.1f, 3, 200, 36));
+            list.Add(BowedString(orchestra, "CONTRABASS", 86f, 7.5f, 2.1f, 3, 200, 33));
+            list.Add(BowedString(orchestra, "CONTRABASS", 80f, 9.1f, 2.1f, 3, 200, 31));
 
             // ---- 木管楽器 (内側の輪: フルート | オーボエ、外側の輪: クラリネット | ファゴット) ----
             list.Add(Flute(orchestra, "PICCOLO", -40f, RFlute, 0.36f, 800, 86));

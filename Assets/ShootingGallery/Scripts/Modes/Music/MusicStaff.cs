@@ -167,10 +167,6 @@ namespace ShootingGallery
                     default: if (c.length > 0) candidates.Add(c); break;
                 }
             }
-            if (candidates.Count == 0)
-                Debug.LogWarning($"{name}: 音符の長さ (MusicNote.length32) がありません。ShootingGallery を「作り直す」してください");
-            else if (templates.Count == 1 && notes.Length > 1) // 作り直す前の音符は種類がみな 0 (4分音符) になり、見た目と長さが合わない
-                Debug.LogWarning($"{name}: 音符の種類 (MusicNote.kind) が入っていません。小節の長さが合わなくなるので、ShootingGallery を「作り直す → 貼り直し」してください");
             stock = new MeasureStock(candidates, wholeRest, wholeRestChance, fermata, fermataChance, BarLen - 2f * barPadding, stockRefill, stockLow);
             foreach (int len in TimeSigLength) stock.Prepare(len);
         }

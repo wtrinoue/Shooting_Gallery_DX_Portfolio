@@ -61,8 +61,10 @@ namespace ShootingGallery
             concert.curtain = curtain;
             concert.stageLights = lights.stage;
             concert.houseLight = lights.house;
+            concert.stageFrontZ = HallFront; // これより奥の部品だけを、ステージの明かりで照らす
             concert.followSpots = lights.follow;
             concert.followBeams = lights.beams;
+            concert.maxStaffs = 2; // 同時に出す五線譜は 2 本まで (重さ対策。シーンに前の値が残っていても上書きする)
             concert.showWhilePlaying = lights.showWhilePlaying;
             concert.instruments = instruments.ToArray();
             concert.baton = baton;
@@ -81,6 +83,12 @@ namespace ShootingGallery
             concert.staffLowY = StageTop + 1.3f;                 //   ステージの床のすぐ上 (ト音記号が床に埋まらない)
             concert.staffHighY = OpeningTop - 2.1f;              //   〜 天井の反響板 (8.35m) より 1.2m 以上下 (ト音記号の頭も当たらない)
 
+            // 動かない部品 (客席・壁・飾りなど) をまとめる。ステージの明かりはステージ側の部品だけを照らすので、ステージ側と客席側は分けてまとめ、
+            // ステージ側にはここで StageLightLayer を付けておく (実行中の ConcertHall.SplitStageLighting は、まとめた部品を飛ばす)
+            var hallT = hall;
+            CombineStatic(rootGo.transform, "Concert", 8f, null,
+                c => hallT.InverseTransformPoint(c).z > HallFront ? 1 : 0,
+                (mr, part) => { if (part == 1) mr.renderingLayerMask |= ConcertHall.StageLightLayer; });
             hall.gameObject.SetActive(false);
             curtain.gameObject.SetActive(false);
             platform.SetActive(false);
@@ -152,11 +160,10 @@ namespace ShootingGallery
             var showWhilePlaying = new List<GameObject>();
             foreach (float s in new[] { -1f, 1f })
                 stage.Add(HallSpot(hall, "StageWash", new Vector3(s * 6f, HallH - 1.2f, 1.5f), new Vector3(s * 1.5f, StageTop + 0.5f, 10.5f), 80f, 50f, 36f, new Color(1f, 0.93f, 0.8f), black));
-            // 楽器の形が分かるように、ステージの上から左右2つの明かりで全体を照らす
-            foreach (float s in new[] { -1f, 1f })
-                stage.Add(HallPoint(hall, "StageFill", new Vector3(s * 4.5f, 7.4f, 10.5f), new Color(1f, 0.92f, 0.8f), 16f, 16f));
-            stage.Add(HallPoint(hall, "StageFront", new Vector3(0f, 5f, HallFront + 1.5f), new Color(1f, 0.93f, 0.82f), 12f, 13f)); // 手前の楽器を正面から
-            var house = HallPoint(hall, "HouseLight", new Vector3(0f, HallH - 3f, -5f), new Color(1f, 0.85f, 0.7f), 1.6f, 24f);
+            // 楽器の形が分かるように、ステージの上の真ん中から1つの明かりで全体を照らす (前は左右2つ。明かりが多いと Quest で重くなるので1つにまとめた)
+            stage.Add(HallPoint(hall, "StageFill", new Vector3(0f, 7.4f, 10.5f), new Color(1f, 0.92f, 0.8f), 24f, 18f));
+            // (前は手前の楽器を正面から照らす明かりもあったが、GPU が重くなるのでやめた。ステージは真上の明かりと環境光で照らす)
+            var house = HallPoint(hall, "HouseLight", new Vector3(0f, HallH - 3f, -5f), new Color(1f, 0.85f, 0.7f), 1.6f, 15f); // (客席だけを照らす広さ。ステージまで届くと、ステージの物が明かりを1つ多く計算して重くなる)
             var follow = new List<Light>();
             var beams = new List<Transform>();
             var beamMat = TransparentMat("Concert_Beam", new Color(1f, 0.95f, 0.8f, 0.1f));
@@ -1302,23 +1309,7 @@ namespace ShootingGallery
         // 四分音符の的 (普通の的が化ける)
         // ------------------------------------------------------------------
 
-        GameObject MusicLook(Transform look)
-        {
-            var c = new Vector3(0f, TargetDiscY, 0f);
-            Prim(PrimitiveType.Cube, "Plate", look, c, new Vector3(0.3f, 0.3f, 0.04f), Mat("Music_Plate", new Color(0.35f, 0.06f, 0.12f), new Color(0.08f, 0.01f, 0.03f)));
-            var note = Group(look, "QuarterNote");
-            note.localPosition = c + new Vector3(-0.02f, -0.02f, -0.04f);
-            var bob = note.gameObject.AddComponent<Oscillator>(); // 拍に乗るように、ぴょこぴょこ跳ねる
-            bob.offset = new Vector3(0f, 0.015f, 0f);
-            bob.speed = 7f;
-            var gold = Mat("Note_Gold", new Color(1f, 0.82f, 0.25f), new Color(1.8f, 1.3f, 0.3f));
-            var head = Prim(PrimitiveType.Sphere, "Head", note, new Vector3(0f, -0.05f, 0f), new Vector3(0.1f, 0.07f, 0.04f), gold, false);
-            head.transform.localRotation = Quaternion.Euler(0f, 0f, 22f);
-            Prim(PrimitiveType.Cube, "Stem", note, new Vector3(0.045f, 0.035f, 0f), new Vector3(0.013f, 0.17f, 0.013f), gold, false);
-            for (int k = 0; k < 2; k++)
-                Prim(PrimitiveType.Sphere, "Sparkle", look, c + new Vector3(0.09f - k * 0.17f, 0.09f - k * 0.03f, -0.04f), Vector3.one * 0.025f, Mat("Clef_Orb", new Color(1f, 0.85f, 0.4f), new Color(1.6f, 1.2f, 0.4f), true), false);
-            MakeText(look, "Label", "MUSIC", c + new Vector3(0f, -0.115f, -0.025f), 0.04f, new Color(1f, 0.85f, 0.3f));
-            return look.gameObject;
-        }
+        /// <summary>音楽の的: 大きな八分音符とコントラバスとトランペット (LookArt の絵のステッカー。はみ出して大胆に)</summary>
+        GameObject MusicLook(Transform look) => StickerLook(look, "Music", "MUSIC", new Color(1f, 0.88f, 0.4f));
     }
 }

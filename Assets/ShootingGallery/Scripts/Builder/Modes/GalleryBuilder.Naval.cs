@@ -689,38 +689,7 @@ namespace ShootingGallery
         // 錨の的の見た目
         // ------------------------------------------------------------------
 
-        /// <summary>錨の的: 紺の板に金の錨と「SEA BATTLE」の文字。まわりを白い波の輪が回る</summary>
-        GameObject NavalLook(Transform look)
-        {
-            var c = new Vector3(0f, TargetDiscY, 0f);
-            var gold = Mat("Gold", new Color(1f, 0.78f, 0.25f), new Color(0.3f, 0.2f, 0f));
-            Prim(PrimitiveType.Cube, "Plate", look, c, new Vector3(0.3f, 0.3f, 0.04f), Mat("Naval_Plate", new Color(0.05f, 0.15f, 0.4f), new Color(0.02f, 0.06f, 0.2f)));
-            // 錨: 縦棒・横棒・下の弧・上の輪
-            Prim(PrimitiveType.Cube, "Shank", look, c + new Vector3(0f, 0.02f, -0.024f), new Vector3(0.022f, 0.15f, 0.008f), gold, false);
-            Prim(PrimitiveType.Cube, "Stock", look, c + new Vector3(0f, 0.075f, -0.024f), new Vector3(0.1f, 0.018f, 0.008f), gold, false);
-            for (int k = -3; k <= 3; k++)
-            {
-                float a = k * 18f * Mathf.Deg2Rad;
-                var seg = Prim(PrimitiveType.Cube, "Arm", look, c + new Vector3(Mathf.Sin(a) * 0.075f, -0.035f - Mathf.Cos(a) * 0.03f, -0.024f), new Vector3(0.026f, 0.016f, 0.008f), gold, false);
-                seg.transform.localRotation = Quaternion.Euler(0f, 0f, k * 18f);
-            }
-            var ring = Group(look, "AnchorRing");
-            ring.localPosition = c + new Vector3(0f, 0.11f, -0.024f);
-            RingSegments(ring, "Ring", 0.022f, 10, 0.008f, gold);
-            MakeText(look, "Label", "SEA BATTLE", c + new Vector3(0f, -0.115f, -0.025f), 0.035f, Color.white);
-
-            var waves = Group(look, "Waves");
-            waves.localPosition = c + Vector3.back * 0.03f;
-            var spin = waves.gameObject.AddComponent<Rotator>();
-            spin.axis = Vector3.forward;
-            spin.speed = -90f;
-            var foam = Mat("Foam", new Color(0.85f, 0.92f, 1f), new Color(0.15f, 0.2f, 0.28f));
-            for (int i = 0; i < 8; i++)
-            {
-                float a = i * Mathf.PI * 2f / 8;
-                Prim(PrimitiveType.Sphere, "Drop", waves, new Vector3(Mathf.Cos(a), Mathf.Sin(a), 0f) * 0.2f, Vector3.one * (i % 2 == 0 ? 0.03f : 0.02f), foam, false);
-            }
-            return look.gameObject;
-        }
+        /// <summary>海戦の的: 堂々とした帆船と錨と縄、下に波 (LookArt の絵のステッカー。はみ出して大胆に)</summary>
+        GameObject NavalLook(Transform look) => StickerLook(look, "Naval", "SEA BATTLE", Color.white);
     }
 }

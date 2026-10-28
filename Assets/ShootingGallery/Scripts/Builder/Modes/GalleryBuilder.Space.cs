@@ -441,24 +441,7 @@ namespace ShootingGallery
             return o;
         }
 
-        /// <summary>宇宙の的: 紺色の板に、輪のある惑星と小さな星々、「SPACE」の文字。惑星がゆっくり回る</summary>
-        GameObject SpaceLook(Transform look)
-        {
-            var c = new Vector3(0f, TargetDiscY, 0f);
-            Prim(PrimitiveType.Cube, "Plate", look, c, new Vector3(0.3f, 0.3f, 0.04f), Mat("Space_Plate", new Color(0.05f, 0.06f, 0.2f), new Color(0.02f, 0.02f, 0.08f)));
-            var star = Mat("Space_Sparkle_White", Color.white, null, true);
-            for (int i = 0; i < 9; i++)
-                Prim(PrimitiveType.Sphere, "Star", look, c + new Vector3(Random.Range(-0.13f, 0.13f), Random.Range(-0.08f, 0.13f), -0.022f), Vector3.one * Random.Range(0.008f, 0.016f), star, false);
-            var spin = Group(look, "Planet");
-            spin.localPosition = c + new Vector3(0f, 0.02f, -0.05f);
-            spin.localRotation = Quaternion.Euler(-20f, 0f, 18f);
-            var rot = spin.gameObject.AddComponent<Rotator>();
-            rot.axis = Vector3.up;
-            rot.speed = 60f;
-            Prim(PrimitiveType.Sphere, "Globe", spin, Vector3.zero, Vector3.one * 0.1f, Mat("Planet_Tan", new Color(0.9f, 0.78f, 0.5f), new Color(0.15f, 0.12f, 0.06f)), false);
-            FlatRing(spin, "Ring", 0.085f, 0f, 0.025f, 0.003f, 24, Mat("Planet_Ring", new Color(0.95f, 0.88f, 0.7f), new Color(0.2f, 0.18f, 0.12f)));
-            MakeText(look, "Label", "SPACE", c + new Vector3(0f, -0.115f, -0.025f), 0.04f, new Color(0.6f, 0.8f, 1f));
-            return look.gameObject;
-        }
+        /// <summary>宇宙の的: 宇宙を背景に、輪のある惑星と炎を吹いて飛ぶロケット (LookArt の絵のステッカー。はみ出して大胆に)</summary>
+        GameObject SpaceLook(Transform look) => StickerLook(look, "Space", "SPACE", new Color(0.75f, 0.88f, 1f));
     }
 }

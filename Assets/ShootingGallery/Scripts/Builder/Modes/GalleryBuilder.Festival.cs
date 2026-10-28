@@ -10,7 +10,7 @@ namespace ShootingGallery
     /// </summary>
     public partial class GalleryBuilder
     {
-        const float FestivalStallDistance = 4.6f; // プレイヤーから屋台の原点まで
+        const float FestivalStallDistance = 4.9f; // プレイヤーから屋台の原点まで (隣の屋台の足元のハッチと重ならない距離)
         const float FestivalStallWidth = 6.4f;
         const float FestivalFrontZ = -1.0f;       // 屋台のローカルで、いちばん手前 (カウンター) の位置
         const float FestivalRoofY = 3.3f;
@@ -26,6 +26,7 @@ namespace ShootingGallery
             var ringToss = BuildRingTossStall(root);
             var goldfish = BuildGoldfishStall(root, out var water, out var fish, out var scoopPoi, out var bowl);
             var food = BuildFoodStall(root, out var slots, out var balance);
+            LayoutFestivalStalls(new[] { shateki, ringToss, goldfish, food });
             var lanterns = BuildFestivalLanterns(root);
 
             var stage = go.AddComponent<FestivalStage>();
@@ -95,6 +96,36 @@ namespace ShootingGallery
             t.localPosition = rot * new Vector3(0f, 0f, FestivalStallDistance);
             t.localRotation = rot;
             return t;
+        }
+
+        /// <summary>
+        /// 4軒の屋台を、足元のハッチ (StallHatch) が隣と重ならない、いちばん近い距離に並べ直す。
+        /// 屋台ごとに部品のメッシュから外形 (横幅の半分と手前の端) を測り、ハッチの枠の外側の手前の角が、
+        /// 隣との境目 (45度の線) より自分の側にあるようにする: (R + 手前の端)·sin45 ≥ 幅の半分·cos45 → R ≥ 幅の半分 − 手前の端
+        /// </summary>
+        void LayoutFestivalStalls(Stall[] stalls)
+        {
+            const float Clearance = 0.02f; // 隣のハッチとのすき間 (片側)
+            float radius = 0f;
+            foreach (var s in stalls)
+            {
+                float half = 0f, front = 0f;
+                foreach (var mf in s.GetComponentsInChildren<MeshFilter>(true))
+                {
+                    if (mf.sharedMesh == null) continue;
+                    var b = mf.sharedMesh.bounds;
+                    for (int i = 0; i < 8; i++)
+                    {
+                        var c = b.center + Vector3.Scale(b.extents, new Vector3((i & 1) == 0 ? -1 : 1, (i & 2) == 0 ? -1 : 1, (i & 4) == 0 ? -1 : 1));
+                        var p = s.transform.InverseTransformPoint(mf.transform.TransformPoint(c));
+                        half = Mathf.Max(half, Mathf.Abs(p.x));
+                        front = Mathf.Min(front, p.z);
+                    }
+                }
+                radius = Mathf.Max(radius, (half + StallHatch.Outset) - (front - StallHatch.Outset) + Clearance * Mathf.Sqrt(2f));
+            }
+            foreach (var s in stalls)
+                s.transform.localPosition = s.transform.localRotation * new Vector3(0f, 0f, radius);
         }
 
         Stall FinishFestivalStall(Transform t, List<Target> targets)
@@ -1260,31 +1291,8 @@ namespace ShootingGallery
         // 提灯の的 / 輪の形
         // ------------------------------------------------------------------
 
-        /// <summary>提灯の的: 紺の夜空の板に赤い提灯と小さな花火、「MATSURI」の文字</summary>
-        GameObject FestivalLook(Transform look)
-        {
-            var c = new Vector3(0f, TargetDiscY, 0f);
-            Prim(PrimitiveType.Cube, "Plate", look, c, new Vector3(0.3f, 0.3f, 0.04f), Mat("Festival_Plate", new Color(0.05f, 0.05f, 0.18f), new Color(0.02f, 0.02f, 0.08f)));
-            // 小さな花火 (光の粒の輪) を左上と右上に
-            var sparkA = Mat("Hanabi_Pink", new Color(2.6f, 0.8f, 2f), null, true);
-            var sparkB = Mat("Hanabi_Gold", new Color(2.6f, 1.8f, 0.6f), null, true);
-            foreach (var (center, mat) in new[] { (new Vector3(-0.08f, 0.08f, -0.022f), sparkA), (new Vector3(0.085f, 0.09f, -0.022f), sparkB) })
-                for (int i = 0; i < 8; i++)
-                {
-                    float a = i * Mathf.PI / 4f;
-                    Prim(PrimitiveType.Sphere, "Spark", look, c + center + new Vector3(Mathf.Cos(a), Mathf.Sin(a), 0f) * 0.035f, Vector3.one * 0.012f, mat, false);
-                }
-            // ゆらゆら揺れる提灯
-            var lantern = Group(look, "Lantern");
-            lantern.localPosition = c + new Vector3(0f, -0.01f, -0.035f);
-            var sway = lantern.gameObject.AddComponent<Oscillator>();
-            sway.offset = new Vector3(0.01f, 0f, 0f);
-            sway.speed = 2.5f;
-            Chochin(lantern, Vector3.zero, 0.1f, true);
-            Prim(PrimitiveType.Cube, "LanternBand", lantern, new Vector3(0f, 0f, -0.05f), new Vector3(0.06f, 0.012f, 0.002f), Mat("Chochin_Cap", new Color(0.08f, 0.06f, 0.05f)), false);
-            MakeText(look, "Label", "MATSURI", c + new Vector3(0f, -0.115f, -0.025f), 0.04f, new Color(1f, 0.6f, 0.35f));
-            return look.gameObject;
-        }
+        /// <summary>夏祭りの的: 花火と提灯と射的のコルク銃 (LookArt の絵のステッカー。はみ出して大胆に)</summary>
+        GameObject FestivalLook(Transform look) => StickerLook(look, "Festival", "MATSURI", Color.white);
 
         /// <summary>輪投げの輪 (ドーナツ形)。外の直径がだいたい 1.16 (太さ 0.16)。水平 (XZ 面) に寝ている</summary>
         Mesh TorusMesh()
