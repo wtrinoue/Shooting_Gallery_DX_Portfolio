@@ -1047,9 +1047,12 @@ namespace ShootingGallery
                 return mesh;
             }
             existing.Clear();
+            existing.indexFormat = mesh.indexFormat; // (頂点が 65,000 個を超える形 (まとめた部品など) も書き込めるように)
             existing.vertices = mesh.vertices;
             existing.triangles = mesh.triangles;
             existing.normals = mesh.normals;
+            if (mesh.uv.Length == mesh.vertexCount) existing.uv = mesh.uv;
+            if (mesh.colors.Length == mesh.vertexCount) existing.colors = mesh.colors;
             existing.RecalculateBounds();
             UnityEditor.EditorUtility.SetDirty(existing);
             DestroyImmediate(mesh);

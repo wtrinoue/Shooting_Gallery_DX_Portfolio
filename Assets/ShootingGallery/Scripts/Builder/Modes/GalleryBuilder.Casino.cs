@@ -77,7 +77,7 @@ namespace ShootingGallery
                         step.localPosition = rot * new Vector3(0f, 0f, CasinoR - 1.6f);
                         var roulette = BuildBallRoulette(step);
                         roulettes.Add(roulette);
-                        SpotFixture(step, new Vector3(0f, CasinoH - 1.2f, -2.4f), new Vector3(0f, 1.4f, 0f), 1.3f);
+                        SpotFixture(step, new Vector3(0f, CasinoH - 1.2f, -2.4f), new Vector3(0f, 1.4f, 0f), 1.3f, false);
                         CasinoShootHint(step, new Vector3(0f, 2.75f, 0f), roulette.target, null, roulette);
                         break;
                     }
@@ -86,7 +86,7 @@ namespace ShootingGallery
                         step.localPosition = rot * new Vector3(0f, 0f, CasinoR - 1.05f);
                         var machine = BuildSlotMachine(step, Vector3.zero, 0.75f);
                         sideSlots.Add(machine);
-                        SpotFixture(step, new Vector3(0f, CasinoH - 1.2f, -2.4f), new Vector3(0f, 1.6f, -0.5f), 1.4f);
+                        SpotFixture(step, new Vector3(0f, CasinoH - 1.2f, -2.4f), new Vector3(0f, 1.6f, -0.5f), 1.4f, false);
                         CasinoShootHint(machine.leverHint, Vector3.zero, machine.target, machine, null, 1.1f); // (レバーの玉を指す)
                         break;
                     }
@@ -235,7 +235,7 @@ namespace ShootingGallery
                 }
             }
             AddPointLight(chand, "ChandelierLight", new Vector3(0f, -0.8f, 0f), new Color(1f, 0.8f, 0.58f), 3f, 16f);
-            AddPointLight(lux, "SlotSpot", new Vector3(0f, 5f, 2.8f), new Color(1f, 0.8f, 0.62f), 2.5f, 9f);
+            // (正面のスロットを照らしていた明かりはやめた。正面の壇のスポットライトと、シャンデリアで照らす。重さ対策)
 
             // 壁ぎわの大きなサイコロとチップの山
             var dieMat = Mat("Casino_Die", new Color(0.9f, 0.1f, 0.12f), new Color(0.15f, 0f, 0f), false, 0.7f);
@@ -288,14 +288,15 @@ namespace ShootingGallery
         {
             var halo = Prim(PrimitiveType.Cylinder, "SpotHalo", parent, center, new Vector3(radius * 2f, 0.002f, radius * 2f), TransparentMat("Spot_Halo", new Color(1f, 0.95f, 0.7f, 0.28f)), false);
             halo.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-            SpotFixture(parent, new Vector3(center.x, CasinoH - 1f, center.z - 2.6f), center, radius);
+            SpotFixture(parent, new Vector3(center.x, CasinoH - 1f, center.z - 2.6f), center, radius, false);
         }
 
         /// <summary>
         /// 天井から吊ったスポットライト: 黒い筒と光るレンズ、レンズから照らす所へ広がる薄い光の円すい、本物のスポットライト (影なし)。
         /// lampPos = 器具の位置、aim = 照らす所、radius = 照らす丸の半径 (どれも parent のローカル)
         /// </summary>
-        void SpotFixture(Transform parent, Vector3 lampPos, Vector3 aim, float radius)
+        // castLight = false なら、光の筋 (円すい) と照明器具だけで、まわりを照らす明かりは置かない (壁ぎわのゲームの分。明かりが多いと Quest で重くなるので)
+        void SpotFixture(Transform parent, Vector3 lampPos, Vector3 aim, float radius, bool castLight = true)
         {
             var black = Mat("Dx_Black", new Color(0.05f, 0.05f, 0.06f), null, false, 0.6f);
             var gold = Mat("Gold", new Color(1f, 0.78f, 0.25f), new Color(0.3f, 0.2f, 0f));
@@ -318,6 +319,7 @@ namespace ShootingGallery
             beamRenderer.sharedMaterial = TransparentMat("Spot_Cone", new Color(1f, 0.95f, 0.75f, 0.06f));
             beamRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
 
+            if (!castLight) return;
             var lightGo = new GameObject("SpotLight");
             lightGo.transform.SetParent(fixture, false);
             lightGo.transform.localPosition = Vector3.forward * 0.1f;

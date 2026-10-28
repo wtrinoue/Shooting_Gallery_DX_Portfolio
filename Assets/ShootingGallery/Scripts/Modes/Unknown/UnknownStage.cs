@@ -600,7 +600,7 @@ namespace ShootingGallery
         void SetAmbienceGray(float k, Color fogTo, Color ambientTo, Color skyTo)
         {
             RenderSettings.fogColor = Color.Lerp(fogTo, gray.Gray(fogTo), k);
-            RenderSettings.ambientLight = Color.Lerp(ambientTo, gray.Gray(ambientTo), k);
+            SceneEnvironment.SetAmbient(Color.Lerp(ambientTo, gray.Gray(ambientTo), k));
             var cam = Camera.main;
             if (cam != null) cam.backgroundColor = Color.Lerp(skyTo, gray.Gray(skyTo), k);
         }

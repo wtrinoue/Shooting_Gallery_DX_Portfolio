@@ -49,7 +49,7 @@ namespace ShootingGallery
         public float houseDuringPlay = 0.35f; // 名前を変えて、シーンに保存された前の値 (housePlay 1.6) を使わない
         [Tooltip("ステージの手前の縁 (Hall のローカル z)。これより奥の部品だけを、ステージの明かりで照らす (客席は照らさない)")]
         public float stageFrontZ = 4.6f;
-        const uint StageLightLayer = 1u << 1; // ステージの明かりだけが照らすレイヤー (Light Layer 1。ふだんの部品は Default = 1 << 0)
+        public const uint StageLightLayer = 1u << 1; // ステージの明かりだけが照らすレイヤー (Light Layer 1。ふだんの部品は Default = 1 << 0)
         [Tooltip("ソロの楽器を照らすスポットライトと、その光の筋 (光と同じ向きに伸ばす。長さ 1 の円すい)。ソロ1つに1台ずつ、その楽器の斜め上前に固定して照らす。ソロの数より少なければ、始める時に1台目を複製して足す")]
         public Light[] followSpots;
         public Transform[] followBeams;
@@ -67,6 +67,7 @@ namespace ShootingGallery
         public MusicInstrument[] instruments;
         [Tooltip("同時にソロを弾く楽器の数 / 1つの楽器がソロを続ける拍の数")]
         public int soloSlots = 5; // 名前を変えて、シーンに保存された前の値 (soloCount 2) を使わない
+        const int MaxBeams = 2; // 光の筋を出すスポットライトの数 (重さ対策)
         public float soloBeats = 16f;
         [Tooltip("ソロの楽器を撃ちやすいように当たり判定を消す範囲: ソロの楽器からの距離 (m) / プレイヤーからソロの楽器への視線からの距離 (m)")]
         public float blockRadius = 3f;
@@ -645,6 +646,7 @@ namespace ShootingGallery
             var hallT = hall.transform;
             foreach (var r in hall.GetComponentsInChildren<Renderer>(true))
             {
+                if (r.name.StartsWith("Combined_")) continue; // (組み立ての時に動かない部品をまとめた物は、まとめた時にステージ側か客席側かを決めてある)
                 var mf = r.GetComponent<MeshFilter>();
                 Vector3 center = mf != null && mf.sharedMesh != null ? r.transform.TransformPoint(mf.sharedMesh.bounds.center) : r.transform.position;
                 if (hallT.InverseTransformPoint(center).z > stageFrontZ) r.renderingLayerMask |= StageLightLayer;
@@ -697,7 +699,9 @@ namespace ShootingGallery
                     spot.name = spots[0].name + "_Copy";
                     spots.Add(spot);
                     Transform beam = null;
-                    if (beams[0] != null)
+                    // 光の筋 (半透明の大きな円すい) は、はじめの2本だけ。重なると画面を何度も塗って GPU が重くなるので、増やした分には付けない
+                    // (光の筋のないソロの楽器も、ソロの蛍光色で目立つ)
+                    if (beams[0] != null && beams.Count < MaxBeams)
                     {
                         beam = Instantiate(beams[0], beams[0].parent);
                         beam.name = beams[0].name + "_Copy";

@@ -380,6 +380,7 @@ namespace ShootingGallery
             mine.flickerLights = flicker.ToArray();
             mine.flames = flames.ToArray();
             mine.motes = motes.ToArray();
+            CombineStatic(root, "Mine"); // 動かない部品を、いっしょに動く単位・材質・場所ごとにまとめる (部品が数千個あって Quest で重かった)
             // 発掘モードの時だけ出る (シーンに生成した時も隠しておく)
             cover.gameObject.SetActive(false);
             foreach (var g in shown) g.SetActive(false);
@@ -999,8 +1000,8 @@ namespace ShootingGallery
                     .transform.localRotation = Quaternion.LookRotation(away);
                 Prim(PrimitiveType.Sphere, "GalleryLantern", g, lp, new Vector3(0.14f, 0.2f, 0.14f), lantern, false);
             }
-            // (明かりは穴から見える所だけ。両はしへ行くほど暗くなって、奥の暗闇へ続いているのが分かる)
-            foreach (float off in new[] { -0.6f, 0f, 0.6f })
+            // (明かりは穴から見える所の真ん中に1つだけ。両はしへ行くほど暗くなって、奥の暗闇へ続いているのが分かる。前は3つだったが重さ対策で1つに)
+            foreach (float off in new[] { 0f })
             {
                 float want = spec.yaw + off * openDeg; // (穴の左寄り・真ん中・右寄り)
                 int best = 0;
@@ -1012,7 +1013,7 @@ namespace ShootingGallery
                 lg.transform.localPosition = centers[best] + away * 0.5f + Vector3.up * 0.5f;
                 var l = lg.AddComponent<Light>();
                 l.type = LightType.Point;
-                l.range = 6f;
+                l.range = 9f; // (1つで穴から見える所を照らせる広さ)
                 l.intensity = 2.4f;
                 l.color = new Color(1f, 0.72f, 0.42f);
                 l.shadows = LightShadows.None;
@@ -1109,7 +1110,7 @@ namespace ShootingGallery
                 zz += Random.Range(2.2f, 3.6f);
             }
             // トンネルの中の明かり (手前と奥の2つ。奥のほうが暗めで、奥行きが分かる)
-            foreach (var (z, intensity) in new[] { (Z0 + len * 0.3f, 2.4f), (Z0 + len * 0.7f, 1.4f) })
+            foreach (var (z, intensity) in new[] { (Z0 + len * 0.35f, 2.6f) }) // (前は手前と奥の2つ。重さ対策で1つに。奥はランタンの光る材質と暗闇で奥行きを見せる)
             {
                 var lg = new GameObject("TunnelLight");
                 lg.transform.SetParent(portal, false);
@@ -1366,7 +1367,7 @@ namespace ShootingGallery
                     Rock("LanternWallRock", g, new Vector3(0f, h * 0.6f, -0.9f), new Vector3(2.2f, h * 1.4f, 1.4f), rockMat, false);
                     Prim(PrimitiveType.Cube, "LanternArm", g, new Vector3(0f, h, -0.15f), new Vector3(0.12f, 0.12f, 1.1f), woodDark, false);
                     Prim(PrimitiveType.Cube, "LanternBrace", g, new Vector3(0f, h - 0.3f, -0.4f), new Vector3(0.08f, 0.08f, 0.7f), woodDark, false).transform.localRotation = Quaternion.Euler(-45f, 0f, 0f);
-                    HurricaneLantern(g, new Vector3(0f, h - 0.2f, 0.3f), 1.3f, 0f, flicker);
+                    HurricaneLantern(g, new Vector3(0f, h - 0.2f, 0.3f), 1.3f, 0f, null); // (壁ぎわのランタンは光るだけ。まわりを照らす明かりは付けない。重さ対策)
                 }
                 else
                 {
@@ -1378,7 +1379,7 @@ namespace ShootingGallery
                         Prim(PrimitiveType.Cube, "LanternCrateBand", g, new Vector3(0f, 0.35f, 0f), new Vector3(0.72f, 0.1f, 0.72f), woodDark, false);
                     }
                     else Rock("LanternRock", g, new Vector3(0f, 0.3f, 0f), new Vector3(1f, 0.7f, 0.9f), rockMat, false);
-                    HurricaneLantern(g, new Vector3(0f, crate ? 0.92f : 0.82f, 0f), 1.3f, 0f, flicker);
+                    HurricaneLantern(g, new Vector3(0f, crate ? 0.92f : 0.82f, 0f), 1.3f, 0f, null); // (同上)
                 }
                 placed++;
             }
@@ -1440,7 +1441,7 @@ namespace ShootingGallery
                 float a = (i * 60f + 10f) * Mathf.Deg2Rad, r = 17f;
                 var p = new Vector3(Mathf.Sin(a) * r, 0f, Mathf.Cos(a) * r);
                 for (int k = 0; k < 8 && NearTrack(p, 1.8f); k++) p *= 1.08f; // (線路にかかる時は、少し外へずらす)
-                StandingTorch(lights, OnFloor(p), flicker, flames);
+                StandingTorch(lights, OnFloor(p), i % 2 == 0 ? flicker : null, flames); // (明かりを付けるのは1つおき。残りは炎が光るだけ。重さ対策)
             }
             // 結晶の色の明かり (紫・青・緑・水色。壁を色づかせる)
             Color[] glows = { new Color(0.7f, 0.35f, 1f), new Color(0.3f, 0.5f, 1f), new Color(0.3f, 1f, 0.5f), new Color(0.4f, 0.9f, 1f) };
@@ -1448,15 +1449,18 @@ namespace ShootingGallery
             {
                 float a = (i * 90f + Random.Range(-15f, 15f)) * Mathf.Deg2Rad;
                 for (int k = 0; k < 12 && InTunnel(new Vector3(Mathf.Sin(a) * 23.5f, 0f, Mathf.Cos(a) * 23.5f), 2.5f); k++) a += 10f * Mathf.Deg2Rad; // (トンネルの前はよける)
-                var lg = new GameObject("CrystalLight");
-                lg.transform.SetParent(lights, false);
-                lg.transform.localPosition = OnFloor(new Vector3(Mathf.Sin(a) * 22f, 0f, Mathf.Cos(a) * 22f)) + Vector3.up * 2f;
-                var l = lg.AddComponent<Light>();
-                l.type = LightType.Point;
-                l.range = 14f;
-                l.intensity = 2.2f; // 結晶のまわりの壁を、宝石の色にほんのり染める
-                l.color = glows[i];
-                l.shadows = LightShadows.None;
+                if (i % 2 == 0) // (明かりは4つのうち2つだけ。残りは光る結晶だけ。重さ対策)
+                {
+                    var lg = new GameObject("CrystalLight");
+                    lg.transform.SetParent(lights, false);
+                    lg.transform.localPosition = OnFloor(new Vector3(Mathf.Sin(a) * 22f, 0f, Mathf.Cos(a) * 22f)) + Vector3.up * 2f;
+                    var l = lg.AddComponent<Light>();
+                    l.type = LightType.Point;
+                    l.range = 14f;
+                    l.intensity = 2.2f; // 結晶のまわりの壁を、宝石の色にほんのり染める
+                    l.color = glows[i];
+                    l.shadows = LightShadows.None;
+                }
                 var c = Group(lights, "GlowCrystals");
                 c.localPosition = OnFloor(new Vector3(Mathf.Sin(a) * 23.5f, 0f, Mathf.Cos(a) * 23.5f));
                 c.localRotation = Quaternion.LookRotation(-c.localPosition);
@@ -1544,6 +1548,7 @@ namespace ShootingGallery
             Prim(PrimitiveType.Sphere, "FlameOuter", flame, new Vector3(0f, 0.17f, 0f), new Vector3(0.24f, 0.42f, 0.24f), Mat("Mine_FlameOuter", new Color(2.6f, 0.9f, 0.2f), null, true), false);
             Prim(PrimitiveType.Sphere, "FlameInner", flame, new Vector3(0f, 0.12f, 0f), new Vector3(0.13f, 0.24f, 0.13f), Mat("Mine_FlameInner", new Color(3f, 2.4f, 0.9f), null, true), false);
             flames.Add(flame);
+            if (flicker == null) return; // (明かりなし: 炎が光るだけ)
             // まわりを広く照らす、赤みのある明かり
             var lg = new GameObject("TorchLight");
             lg.transform.SetParent(g, false);
@@ -1681,19 +1686,7 @@ namespace ShootingGallery
                 var bar = Prim(PrimitiveType.Cube, "CageBar", lamp, Quaternion.Euler(0f, 0f, a) * new Vector3(0.1f, 0f, 0f) + new Vector3(0f, 0f, 0.11f), new Vector3(0.008f, 0.008f, 0.15f), lampMetal, false);
                 bar.transform.localRotation = Quaternion.Euler(0f, 0f, a) * Quaternion.Euler(0f, -12f, 0f);
             }
-            if (flicker != null)
-            {
-                var lg = new GameObject("CartLampLight");
-                lg.transform.SetParent(lamp, false);
-                lg.transform.localPosition = new Vector3(0f, 0.05f, 0.3f);
-                var l = lg.AddComponent<Light>();
-                l.type = LightType.Point;
-                l.range = 5f;
-                l.intensity = 2.2f;
-                l.color = new Color(1f, 0.82f, 0.5f);
-                l.shadows = LightShadows.None;
-                flicker.Add(l);
-            }
+            // (トロッコのランプは光る材質だけ。前は小さな明かりも付けていたが、走るトロッコの数だけ明かりが増えて Quest で重くなったのでやめた)
 
             // 荷 (的)
             var mount = Group(body, "Load");

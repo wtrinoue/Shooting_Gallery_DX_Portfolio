@@ -1440,12 +1440,12 @@ namespace ShootingGallery
             for (float t = 0f; t < 1f; t += Time.deltaTime / duration)
             {
                 RenderSettings.fogColor = Color.Lerp(fogFrom, fog, t);
-                RenderSettings.ambientLight = Color.Lerp(ambientFrom, ambient, t);
+                SceneEnvironment.SetAmbient(Color.Lerp(ambientFrom, ambient, t));
                 if (cam != null && sky.HasValue) cam.backgroundColor = Color.Lerp(skyFrom, sky.Value, t);
                 yield return null;
             }
             RenderSettings.fogColor = fog;
-            RenderSettings.ambientLight = ambient;
+            SceneEnvironment.SetAmbient(ambient);
             if (cam != null && sky.HasValue) cam.backgroundColor = sky.Value;
             ambienceRoutine = null;
         }

@@ -82,6 +82,12 @@ namespace ShootingGallery
             concert.staffLowY = StageTop + 1.3f;                 //   ステージの床のすぐ上 (ト音記号が床に埋まらない)
             concert.staffHighY = OpeningTop - 2.1f;              //   〜 天井の反響板 (8.35m) より 1.2m 以上下 (ト音記号の頭も当たらない)
 
+            // 動かない部品 (客席・壁・飾りなど) をまとめる。ステージの明かりはステージ側の部品だけを照らすので、ステージ側と客席側は分けてまとめ、
+            // ステージ側にはここで StageLightLayer を付けておく (実行中の ConcertHall.SplitStageLighting は、まとめた部品を飛ばす)
+            var hallT = hall;
+            CombineStatic(rootGo.transform, "Concert", 8f, null,
+                c => hallT.InverseTransformPoint(c).z > HallFront ? 1 : 0,
+                (mr, part) => { if (part == 1) mr.renderingLayerMask |= ConcertHall.StageLightLayer; });
             hall.gameObject.SetActive(false);
             curtain.gameObject.SetActive(false);
             platform.SetActive(false);
@@ -153,11 +159,10 @@ namespace ShootingGallery
             var showWhilePlaying = new List<GameObject>();
             foreach (float s in new[] { -1f, 1f })
                 stage.Add(HallSpot(hall, "StageWash", new Vector3(s * 6f, HallH - 1.2f, 1.5f), new Vector3(s * 1.5f, StageTop + 0.5f, 10.5f), 80f, 50f, 36f, new Color(1f, 0.93f, 0.8f), black));
-            // 楽器の形が分かるように、ステージの上から左右2つの明かりで全体を照らす
-            foreach (float s in new[] { -1f, 1f })
-                stage.Add(HallPoint(hall, "StageFill", new Vector3(s * 4.5f, 7.4f, 10.5f), new Color(1f, 0.92f, 0.8f), 16f, 16f));
-            stage.Add(HallPoint(hall, "StageFront", new Vector3(0f, 5f, HallFront + 1.5f), new Color(1f, 0.93f, 0.82f), 12f, 13f)); // 手前の楽器を正面から
-            var house = HallPoint(hall, "HouseLight", new Vector3(0f, HallH - 3f, -5f), new Color(1f, 0.85f, 0.7f), 1.6f, 24f);
+            // 楽器の形が分かるように、ステージの上の真ん中から1つの明かりで全体を照らす (前は左右2つ。明かりが多いと Quest で重くなるので1つにまとめた)
+            stage.Add(HallPoint(hall, "StageFill", new Vector3(0f, 7.4f, 10.5f), new Color(1f, 0.92f, 0.8f), 24f, 18f));
+            // (前は手前の楽器を正面から照らす明かりもあったが、GPU が重くなるのでやめた。ステージは真上の明かりと環境光で照らす)
+            var house = HallPoint(hall, "HouseLight", new Vector3(0f, HallH - 3f, -5f), new Color(1f, 0.85f, 0.7f), 1.6f, 15f); // (客席だけを照らす広さ。ステージまで届くと、ステージの物が明かりを1つ多く計算して重くなる)
             var follow = new List<Light>();
             var beams = new List<Transform>();
             var beamMat = TransparentMat("Concert_Beam", new Color(1f, 0.95f, 0.8f, 0.1f));

@@ -123,6 +123,50 @@ namespace ShootingGallery
                 editMode = false;
             }
         }
+
+        /// <summary>
+        /// 材質・メッシュなどのアセットだけを作って保存し、シーンにはゲーム一式を残さない (インスペクターのボタンから呼ばれる)。
+        /// ゲーム一式はとても大きく、シーンに入れると GitHub に送れないので、シーンには GalleryBuilder だけを置いておき、再生した時に組み立てる。
+        /// その時に使う材質 (描き方の組み合わせごとビルドに入るように) や、作り置きの形を、ここで保存しておく。
+        /// 一度シーンの中に組み立てて (アセットを保存して)、組み立てた物はすぐに消す
+        /// </summary>
+        [ContextMenu("Generate Assets Only (アセットだけ生成)")]
+        public void GenerateAssetsOnly()
+        {
+            if (Application.isPlaying)
+            {
+                UnityEngine.Debug.LogWarning("[GalleryBuilder] 再生中は使えません。再生を止めてから押してください。");
+                return;
+            }
+
+            var scene = gameObject.scene;
+            var rootsBefore = new HashSet<GameObject>(scene.GetRootGameObjects());
+            var total = Stopwatch.StartNew();
+            editMode = true;
+            try
+            {
+                Prepare();
+                world = new GameObject(WorldName).transform;
+                world.SetParent(transform, false);
+
+                var routine = BuildRoutine();
+                while (routine.MoveNext()) { } // 編集中は1フレームで最後まで作る
+
+                UnityEditor.AssetDatabase.SaveAssets();
+            }
+            finally
+            {
+                editMode = false;
+                // 組み立てた物は消す (途中で作られて、シーンの一番上に残った物も)
+                if (world != null) DestroyImmediate(world.gameObject);
+                world = null;
+                foreach (var go in scene.GetRootGameObjects())
+                    if (!rootsBefore.Contains(go)) DestroyImmediate(go);
+            }
+            // 実機用のアセット一覧 (Resources/GalleryRuntimeAssets) に、保存した材質などを入れる
+            UnityEditor.EditorApplication.ExecuteMenuItem("ShootingGallery/実機用のアセット一覧をそろえる (GalleryRuntimeAssets)");
+            UnityEngine.Debug.Log($"[GalleryBuilder] アセットだけを生成しました ({total.ElapsedMilliseconds / 1000f:0.0} 秒)。シーンには何も残していません");
+        }
 #endif
 
         // ==================================================================

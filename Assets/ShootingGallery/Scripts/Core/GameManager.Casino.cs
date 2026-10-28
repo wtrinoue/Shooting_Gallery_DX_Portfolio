@@ -48,7 +48,7 @@ namespace ShootingGallery
         // ダーツを渡す (手元のゲージがゲームの残り時間)
         void OnCasinoOpened()
         {
-            RenderSettings.ambientLight = new Color(1.5f, 1.15f, 0.85f);
+            SceneEnvironment.SetAmbient(new Color(1.5f, 1.15f, 0.85f));
             FadeAmbience(normalFogColor, casinoAmbient, null, 1.6f);
             if (State != GameState.Playing) return;
             player.GiveStageWeapon(WeaponType.Dart, casinoHall.TimeLeft);

@@ -50,6 +50,7 @@ namespace ShootingGallery
             dojo.doorSlide = DojoR; // 左右の壁の向こうへ滑り込む
             dojo.innerRoom = inner;
             dojo.panels = panels.ToArray();
+            CombineStatic(go.transform, "Ninja"); // 動かない部品 (畳・枠・格子・欄間・梁など) を、いっしょに動く単位 (壁・天井・ふすま・跳ね上がる畳など) ごとにまとめる
             // 部屋は忍者モードの時だけ出る (シーンに生成した時も隠しておき、Begin で表示する)
             foreach (var w in walls) w.gameObject.SetActive(false);
             ceiling.gameObject.SetActive(false);
@@ -324,6 +325,7 @@ namespace ShootingGallery
                     Prim(PrimitiveType.Cube, "AndonStand", room, new Vector3(s * (DojoR - 0.45f), 0.3f, z), new Vector3(0.08f, 0.5f, 0.08f), DojoWoodDark, false);
                     Prim(PrimitiveType.Cube, "Andon", room, new Vector3(s * (DojoR - 0.45f), 0.8f, z), new Vector3(0.3f, 0.5f, 0.3f), andon, false);
                 }
+                if (z < z0 + 9f * DepthK || z > z0 + 11f * DepthK) continue; // (明かりは奥座敷の真ん中の1つだけ。重さ対策。行灯は光る材質で、部屋は環境光で明るい)
                 var lightGo = new GameObject("InnerLight");
                 lightGo.transform.SetParent(room, false);
                 lightGo.transform.localPosition = new Vector3(0f, DojoH - 0.5f, z);
@@ -331,7 +333,7 @@ namespace ShootingGallery
                 light.type = LightType.Point;
                 light.color = new Color(1f, 0.78f, 0.5f);
                 light.intensity = 2f;
-                light.range = 8f;
+                light.range = 15f; // (1つで奥座敷の手前から奥まで届くように)
                 light.shadows = LightShadows.None;
             }
             return room.gameObject;

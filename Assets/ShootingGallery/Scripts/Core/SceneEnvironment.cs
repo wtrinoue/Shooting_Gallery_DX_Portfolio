@@ -17,13 +17,26 @@ namespace ShootingGallery
         [Tooltip("このオブジェクトの子以外のカメラ (元からある Main Camera など) を止める")]
         public bool disableOtherCameras = true;
 
+        /// <summary>
+        /// 環境光 (まわりの明るさ) を変える。ambientLight を変えるだけだと、エディタでは自動で計算し直されて効くが、
+        /// ビルドしたアプリ (Quest) では計算し直されず、元の明るさのまま残る (発掘モードの洞窟が明るく見えた原因)。
+        /// そのため、明かりの計算に実際に使われる環境光のデータ (ambientProbe) も、同じ色で作り直す
+        /// </summary>
+        public static void SetAmbient(Color color)
+        {
+            RenderSettings.ambientLight = color;
+            var sh = new UnityEngine.Rendering.SphericalHarmonicsL2();
+            sh.AddAmbientLight(QualitySettings.activeColorSpace == ColorSpace.Linear ? color.linear : color);
+            RenderSettings.ambientProbe = sh;
+        }
+
         void Awake()
         {
             WarnMissingMaterials();
 
             RenderSettings.skybox = null;
             RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
-            RenderSettings.ambientLight = ambientColor;
+            SetAmbient(ambientColor);
             RenderSettings.fog = fog;
             RenderSettings.fogMode = FogMode.Linear;
             RenderSettings.fogColor = fogColor;
