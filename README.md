@@ -46,7 +46,10 @@
    別世界に飛んだ時に、的を認識するまで時間がかかる場合がありました。「これが的！？」という驚きを狙っている節もあるので、微調整が必要なところだと感じました。  
 
 　ここで痛感したのは自分がデバッカーとして一番機能していない点でした。開発をし続ける中で蓄えられた文脈や知識が邪魔して、初めてプレイする人の感覚というのがわからなくなってしまっていました。それも踏まえて、多くの人に遊んでもらうことの重要性を改めて感じる機会になりました。
-### :iphone:ゲームアプリ本体
+### :triangular_flag_on_post:UnityRoom
+### :package:ゲームアプリ本体
+[zipファイルをダウンロードする](https://raw.githubusercontent.com/wtrinoue/Shooting_Gallery_DX_Portfolio/main/new_docs/shooting_gallary_dx.zip)  
+以上のリンクからapkファイルをダウンロードし、オキュラスクエストにインストールするとプレイすることができます。
 ### :page_facing_up:ライセンス・使用素材
 https://github.com/wtrinoue/Shooting_Gallery_DX_Portfolio/blob/main/LICENSE.md  
 ↑ここにまとめてあります。
