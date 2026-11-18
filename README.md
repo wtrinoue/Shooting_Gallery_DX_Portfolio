@@ -1,4 +1,7 @@
 # Shooting_Gallery_DX
+## デモ動画(画像をクリックするとYoutubeに飛びます)
+[![サービス紹介動画](https://github.com/user-attachments/assets/28681c9d-f553-4825-94cf-b5b47926cea3)](https://www.youtube.com/watch?v=cCUkP4uJUdchttps://www.youtube.com/watch?v=cCUkP4uJUdc)
+
 ## :fire:ゲーム内容
 　このゲームはVRで遊べる**射的ゲーム**です。コントローラーのトリガーを引くだけで遊べて、「2分間」「100,000点」「WorldGate」の三つのモードで遊ぶことができます。一応クリック操作でもプレイすることができます。（WebXRは両目のディスプレイの演算を並列に行えない関係で処理が重く、快適に遊ぶことはできないです。）
 - 2MINモード  
